@@ -173,6 +173,7 @@ function main(): void {
     { name: "lint-status", args: ["lint", "examples/order-status.ears.md"] },
     { name: "lint-chain", args: ["lint", "examples/order-chain.ears.md"] },
     { name: "lint-redundant", args: ["lint", "examples/order-redundant.ears.md"] },
+    { name: "lint-checkout", args: ["lint", "examples/checkout.ears.md"] },
     { name: "scenarios", args: ["scenarios", "examples/order.ears.md"] },
     { name: "scenarios-json", args: ["scenarios", "--json", "examples/order.ears.md"] },
     { name: "scenarios-status", args: ["scenarios", "examples/order-status.ears.md"] },

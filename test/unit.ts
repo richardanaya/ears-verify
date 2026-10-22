@@ -659,6 +659,64 @@ check(
 );
 check("status scenarios dedupe", statusRows[5].sameAs === "R6 rejected, trigger true" && statusRows[5].found === true);
 
+let manyText = 'event a: Bool "A happens." phrase "a happens"\n';
+manyText += 'event b: Bool "B happens." phrase "b happens"\n';
+manyText += 'output o: Bool "O holds." phrase "o holds"\n';
+manyText += 'output p: Bool "P holds." phrase "p holds"\n\n';
+manyText += "R1 When a happens, the Box shall o holds.\n";
+manyText += "R2 When a happens, the Box shall not o holds.\n";
+manyText += "R3 When b happens, the Box shall p holds.\n";
+manyText += "R4 When b happens, the Box shall not p holds.\n";
+for (let extra = 5; extra <= 13; extra++) manyText += "R" + String(extra) + " The Box shall true.\n";
+const many = lintSpec(mustSpec(manyText));
+check("thirteen requirements ran", many.kind === "report");
+if (many.kind === "report") {
+  let pairO = false;
+  let pairP = false;
+  let onlyCores = many.report.conflicts.length === 2;
+  for (let i = 0; i < many.report.conflicts.length; i++) {
+    const ids = many.report.conflicts[i].ids;
+    if (!many.report.conflicts[i].minimal || ids.length !== 2) onlyCores = false;
+    if (ids.length === 2 && ids[0] === "R1" && ids[1] === "R2") pairO = true;
+    if (ids.length === 2 && ids[0] === "R3" && ids[1] === "R4") pairP = true;
+  }
+  check("thirteen requirements keep both pairs", pairO && pairP && onlyCores && many.report.redundant.length === 0);
+}
+
+const checkout = mustSpec(readFileSync("examples/checkout.ears.md", "utf8"));
+check("checkout size", checkout.requirements.length === 50 && spaceSize(checkout) === 196608);
+const checkoutLint = lintSpec(checkout);
+check("checkout ran", checkoutLint.kind === "report");
+if (checkoutLint.kind === "report") {
+  const groups = checkoutLint.report.conflicts;
+  let accept = false;
+  let seats = false;
+  let triple = false;
+  let shaped = groups.length === 3;
+  for (let i = 0; i < groups.length; i++) {
+    const ids = groups[i].ids;
+    if (!groups[i].minimal) shaped = false;
+    if (ids.length === 2 && ids[0] === "R1" && ids[1] === "R4") accept = true;
+    if (ids.length === 2 && ids[0] === "R15" && ids[1] === "R16") seats = true;
+    if (ids.length === 3 && ids[0] === "R8" && ids[1] === "R12" && ids[2] === "R14") triple = true;
+  }
+  const gapNames: string[] = [];
+  for (let i = 0; i < checkoutLint.report.gaps.length; i++) gapNames.push(checkoutLint.report.gaps[i].output);
+  check(
+    "checkout conflicts and gaps",
+    accept &&
+      seats &&
+      triple &&
+      shaped &&
+      gapNames.length === 2 &&
+      gapNames[0] === "receipt_sent" &&
+      gapNames[1] === "billed_seats" &&
+      checkoutLint.report.misuse.length === 0 &&
+      checkoutLint.report.wording.length === 0 &&
+      checkoutLint.report.redundant.length === 0,
+  );
+}
+
 const soundnessSpecs = runSoundness();
 check("soundness specs", soundnessSpecs === 1008);
 console.log("soundness specs: " + String(soundnessSpecs));

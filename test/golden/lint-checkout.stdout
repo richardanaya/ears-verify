@@ -1,0 +1,126 @@
+spec: examples/checkout.ears.md
+conflicts: 3
+gaps: 2
+misuse: 0
+wording: 0
+redundant: 0
+
+conflict {R8, R12, R14}
+R8, R12, and R14 cannot all hold.
+
+R8 line 32
+When the customer is subscribing and not the customer is cancelling and the customer is signed in, the Checkout shall start the subscription.
+
+R12 line 36
+When start the subscription, the Checkout shall the lane is fulfill.
+
+R14 line 38
+When the customer is subscribing, the Checkout shall the lane is hold.
+
+They clash when the cart was not open, an item was not added, checkout was not started, payment was not submitted, payment was not declined, the address was not confirmed, the customer was subscribing, the customer was not cancelling, the customer was signed in, a card was not saved, and stock was not available.
+R8 requires that the subscription was started.
+R14 requires that the lane was hold.
+
+Example scenario:
+{
+  "cart_opened": false,
+  "item_added": false,
+  "checkout_started": false,
+  "payment_submitted": false,
+  "payment_declined": false,
+  "address_confirmed": false,
+  "subscribe_clicked": true,
+  "cancel_requested": false,
+  "signed_in": true,
+  "card_saved": false,
+  "stock_ok": false,
+  "order_accepted": false,
+  "order_rejected": false,
+  "subscription_started": true,
+  "receipt_sent": false,
+  "lane": "fulfill",
+  "billed_seats": 1
+}
+This scenario keeps R8 and R12 and breaks R14.
+
+Suggested fix: ask which requirement should win. Removing any one of R8, R12, and R14 leaves the rest consistent.
+
+conflict {R1, R4}
+R1 and R4 cannot both hold.
+
+R1 line 25
+When payment is submitted and the address is confirmed, the Checkout shall accept the order.
+
+R4 line 28
+When payment is submitted and the address is confirmed, the Checkout shall not accept the order.
+
+They clash when the cart was not open, an item was not added, checkout was not started, payment was submitted, payment was not declined, the address was confirmed, the customer was not subscribing, the customer was not cancelling, the customer was not signed in, a card was not saved, and stock was not available.
+R1 requires that the order was accepted.
+R4 requires that the order was not accepted.
+
+Example scenario:
+{
+  "cart_opened": false,
+  "item_added": false,
+  "checkout_started": false,
+  "payment_submitted": true,
+  "payment_declined": false,
+  "address_confirmed": true,
+  "subscribe_clicked": false,
+  "cancel_requested": false,
+  "signed_in": false,
+  "card_saved": false,
+  "stock_ok": false,
+  "order_accepted": true,
+  "order_rejected": false,
+  "subscription_started": false,
+  "receipt_sent": false,
+  "lane": "hold",
+  "billed_seats": 1
+}
+This scenario keeps R1 and breaks R4.
+
+Suggested fix: ask which requirement should win. To keep R1, remove R4. To keep R4, remove R1.
+
+conflict {R15, R16}
+R15 and R16 cannot both hold.
+
+R15 line 39
+When checkout is started and stock is available, the Checkout shall the billed seats is at most 2.
+
+R16 line 40
+When checkout is started and stock is available, the Checkout shall the billed seats is 3.
+
+They clash when the cart was not open, an item was not added, checkout was started, payment was not submitted, payment was not declined, the address was not confirmed, the customer was not subscribing, the customer was not cancelling, the customer was not signed in, a card was not saved, and stock was available.
+R15 requires that the billed seats was at most 2.
+R16 requires that the billed seats was 3.
+
+Example scenario:
+{
+  "cart_opened": false,
+  "item_added": false,
+  "checkout_started": true,
+  "payment_submitted": false,
+  "payment_declined": false,
+  "address_confirmed": false,
+  "subscribe_clicked": false,
+  "cancel_requested": false,
+  "signed_in": false,
+  "card_saved": false,
+  "stock_ok": true,
+  "order_accepted": false,
+  "order_rejected": false,
+  "subscription_started": false,
+  "receipt_sent": false,
+  "lane": "hold",
+  "billed_seats": 1
+}
+This scenario keeps R15 and breaks R16.
+
+Suggested fix: ask which requirement should win. To keep R15, remove R16. To keep R16, remove R15.
+
+gap receipt_sent
+Nothing says whether a receipt was sent when the cart was open, an item was added, checkout was started, payment was submitted, payment was declined, the address was not confirmed, the customer was subscribing, the customer was cancelling, the customer was signed in, a card was saved, and stock was available.
+
+gap billed_seats
+Nothing covers the billed seats when the cart was open, an item was added, checkout was started, payment was submitted, payment was declined, the address was confirmed, the customer was subscribing, the customer was cancelling, the customer was signed in, a card was saved, and stock was not available.
