@@ -1,0 +1,498 @@
+{
+  "ok": false,
+  "spec": "examples/plan-to-problems/generated.ears.md",
+  "conflicts": [
+    {
+      "ids": [
+        "R1",
+        "R2"
+      ],
+      "minimal": true,
+      "everySituation": false,
+      "summary": "R1 and R2 cannot both hold.",
+      "clash": "They clash when a member asks to take a copy home, not a member asks to renew a copy, not a member brings a copy back, the copy was in the building, the copy was out on loan, a fine was not owed, the loan was not overdue, and the loan length was 1.",
+      "requirements": [
+        {
+          "id": "R1",
+          "line": 16,
+          "sentence": "While the copy is in the building, when a member asks to take a copy home, the Fall Desk shall allow the loan."
+        },
+        {
+          "id": "R2",
+          "line": 17,
+          "sentence": "While the copy is out on loan, when a member asks to take a copy home, the Fall Desk shall not allow the loan."
+        }
+      ],
+      "situation": [
+        {
+          "name": "borrow_requested",
+          "value": "true"
+        },
+        {
+          "name": "renew_requested",
+          "value": "false"
+        },
+        {
+          "name": "copy_returned",
+          "value": "false"
+        },
+        {
+          "name": "copy_in_building",
+          "value": "true"
+        },
+        {
+          "name": "copy_on_loan",
+          "value": "true"
+        },
+        {
+          "name": "fine_owed",
+          "value": "false"
+        },
+        {
+          "name": "loan_overdue",
+          "value": "false"
+        },
+        {
+          "name": "loan_days",
+          "value": "1"
+        }
+      ],
+      "requires": [
+        {
+          "id": "R1",
+          "text": "that the loan was allowed"
+        },
+        {
+          "id": "R2",
+          "text": "that the loan was not allowed"
+        }
+      ],
+      "example": [
+        {
+          "name": "borrow_requested",
+          "value": "true"
+        },
+        {
+          "name": "renew_requested",
+          "value": "false"
+        },
+        {
+          "name": "copy_returned",
+          "value": "false"
+        },
+        {
+          "name": "copy_in_building",
+          "value": "true"
+        },
+        {
+          "name": "copy_on_loan",
+          "value": "true"
+        },
+        {
+          "name": "fine_owed",
+          "value": "false"
+        },
+        {
+          "name": "loan_overdue",
+          "value": "false"
+        },
+        {
+          "name": "loan_days",
+          "value": "1"
+        },
+        {
+          "name": "loan_allowed",
+          "value": "true"
+        },
+        {
+          "name": "renewal_allowed",
+          "value": "false"
+        },
+        {
+          "name": "reminder_sent",
+          "value": "false"
+        },
+        {
+          "name": "loan_closed",
+          "value": "false"
+        }
+      ],
+      "keeps": [
+        "R1"
+      ],
+      "breaks": "R2",
+      "fix": "Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1."
+    },
+    {
+      "ids": [
+        "R2",
+        "R3"
+      ],
+      "minimal": true,
+      "everySituation": false,
+      "summary": "R2 and R3 cannot both hold.",
+      "clash": "They clash when a member asks to take a copy home, not a member asks to renew a copy, not a member brings a copy back, the copy was not in the building, the copy was out on loan, a fine was not owed, the loan was not overdue, and the loan length was 1.",
+      "requirements": [
+        {
+          "id": "R2",
+          "line": 17,
+          "sentence": "While the copy is out on loan, when a member asks to take a copy home, the Fall Desk shall not allow the loan."
+        },
+        {
+          "id": "R3",
+          "line": 18,
+          "sentence": "While the copy is out on loan, when a member asks to take a copy home, the Fall Desk shall allow the loan."
+        }
+      ],
+      "situation": [
+        {
+          "name": "borrow_requested",
+          "value": "true"
+        },
+        {
+          "name": "renew_requested",
+          "value": "false"
+        },
+        {
+          "name": "copy_returned",
+          "value": "false"
+        },
+        {
+          "name": "copy_in_building",
+          "value": "false"
+        },
+        {
+          "name": "copy_on_loan",
+          "value": "true"
+        },
+        {
+          "name": "fine_owed",
+          "value": "false"
+        },
+        {
+          "name": "loan_overdue",
+          "value": "false"
+        },
+        {
+          "name": "loan_days",
+          "value": "1"
+        }
+      ],
+      "requires": [
+        {
+          "id": "R2",
+          "text": "that the loan was not allowed"
+        },
+        {
+          "id": "R3",
+          "text": "that the loan was allowed"
+        }
+      ],
+      "example": [
+        {
+          "name": "borrow_requested",
+          "value": "true"
+        },
+        {
+          "name": "renew_requested",
+          "value": "false"
+        },
+        {
+          "name": "copy_returned",
+          "value": "false"
+        },
+        {
+          "name": "copy_in_building",
+          "value": "false"
+        },
+        {
+          "name": "copy_on_loan",
+          "value": "true"
+        },
+        {
+          "name": "fine_owed",
+          "value": "false"
+        },
+        {
+          "name": "loan_overdue",
+          "value": "false"
+        },
+        {
+          "name": "loan_days",
+          "value": "1"
+        },
+        {
+          "name": "loan_allowed",
+          "value": "false"
+        },
+        {
+          "name": "renewal_allowed",
+          "value": "false"
+        },
+        {
+          "name": "reminder_sent",
+          "value": "false"
+        },
+        {
+          "name": "loan_closed",
+          "value": "false"
+        }
+      ],
+      "keeps": [
+        "R2"
+      ],
+      "breaks": "R3",
+      "fix": "Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2."
+    },
+    {
+      "ids": [
+        "R5",
+        "R6"
+      ],
+      "minimal": true,
+      "everySituation": false,
+      "summary": "R5 and R6 cannot both hold.",
+      "clash": "They clash when not a member asks to take a copy home, a member asks to renew a copy, not a member brings a copy back, the copy was not in the building, the copy was not out on loan, a fine was owed, the loan was not overdue, and the loan length was 1.",
+      "requirements": [
+        {
+          "id": "R5",
+          "line": 20,
+          "sentence": "While a fine is owed, when a member asks to renew a copy, the Fall Desk shall not allow the renewal."
+        },
+        {
+          "id": "R6",
+          "line": 21,
+          "sentence": "While a fine is owed, when a member asks to renew a copy, the Fall Desk shall allow the renewal."
+        }
+      ],
+      "situation": [
+        {
+          "name": "borrow_requested",
+          "value": "false"
+        },
+        {
+          "name": "renew_requested",
+          "value": "true"
+        },
+        {
+          "name": "copy_returned",
+          "value": "false"
+        },
+        {
+          "name": "copy_in_building",
+          "value": "false"
+        },
+        {
+          "name": "copy_on_loan",
+          "value": "false"
+        },
+        {
+          "name": "fine_owed",
+          "value": "true"
+        },
+        {
+          "name": "loan_overdue",
+          "value": "false"
+        },
+        {
+          "name": "loan_days",
+          "value": "1"
+        }
+      ],
+      "requires": [
+        {
+          "id": "R5",
+          "text": "that the renewal was not allowed"
+        },
+        {
+          "id": "R6",
+          "text": "that the renewal was allowed"
+        }
+      ],
+      "example": [
+        {
+          "name": "borrow_requested",
+          "value": "false"
+        },
+        {
+          "name": "renew_requested",
+          "value": "true"
+        },
+        {
+          "name": "copy_returned",
+          "value": "false"
+        },
+        {
+          "name": "copy_in_building",
+          "value": "false"
+        },
+        {
+          "name": "copy_on_loan",
+          "value": "false"
+        },
+        {
+          "name": "fine_owed",
+          "value": "true"
+        },
+        {
+          "name": "loan_overdue",
+          "value": "false"
+        },
+        {
+          "name": "loan_days",
+          "value": "1"
+        },
+        {
+          "name": "loan_allowed",
+          "value": "false"
+        },
+        {
+          "name": "renewal_allowed",
+          "value": "false"
+        },
+        {
+          "name": "reminder_sent",
+          "value": "false"
+        },
+        {
+          "name": "loan_closed",
+          "value": "false"
+        }
+      ],
+      "keeps": [
+        "R5"
+      ],
+      "breaks": "R6",
+      "fix": "Suggested fix: ask which requirement should win. To keep R5, remove R6. To keep R6, remove R5."
+    }
+  ],
+  "gaps": [
+    {
+      "output": "loan_allowed",
+      "situation": [
+        {
+          "name": "borrow_requested",
+          "value": "true"
+        },
+        {
+          "name": "renew_requested",
+          "value": "true"
+        },
+        {
+          "name": "copy_returned",
+          "value": "true"
+        },
+        {
+          "name": "copy_in_building",
+          "value": "false"
+        },
+        {
+          "name": "copy_on_loan",
+          "value": "false"
+        },
+        {
+          "name": "fine_owed",
+          "value": "true"
+        },
+        {
+          "name": "loan_overdue",
+          "value": "true"
+        },
+        {
+          "name": "loan_days",
+          "value": "21"
+        }
+      ],
+      "text": "Nothing says whether the loan was allowed when a member asks to take a copy home, a member asks to renew a copy, a member brings a copy back, the copy was not in the building, the copy was not out on loan, a fine was owed, the loan was overdue, and the loan length was 21. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response."
+    },
+    {
+      "output": "renewal_allowed",
+      "situation": [
+        {
+          "name": "borrow_requested",
+          "value": "true"
+        },
+        {
+          "name": "renew_requested",
+          "value": "false"
+        },
+        {
+          "name": "copy_returned",
+          "value": "true"
+        },
+        {
+          "name": "copy_in_building",
+          "value": "true"
+        },
+        {
+          "name": "copy_on_loan",
+          "value": "true"
+        },
+        {
+          "name": "fine_owed",
+          "value": "true"
+        },
+        {
+          "name": "loan_overdue",
+          "value": "true"
+        },
+        {
+          "name": "loan_days",
+          "value": "21"
+        }
+      ],
+      "text": "Nothing says whether the renewal was allowed when a member asks to take a copy home, not a member asks to renew a copy, a member brings a copy back, the copy was in the building, the copy was out on loan, a fine was owed, the loan was overdue, and the loan length was 21. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response."
+    },
+    {
+      "output": "reminder_sent",
+      "situation": [
+        {
+          "name": "borrow_requested",
+          "value": "true"
+        },
+        {
+          "name": "renew_requested",
+          "value": "true"
+        },
+        {
+          "name": "copy_returned",
+          "value": "true"
+        },
+        {
+          "name": "copy_in_building",
+          "value": "true"
+        },
+        {
+          "name": "copy_on_loan",
+          "value": "true"
+        },
+        {
+          "name": "fine_owed",
+          "value": "true"
+        },
+        {
+          "name": "loan_overdue",
+          "value": "false"
+        },
+        {
+          "name": "loan_days",
+          "value": "21"
+        }
+      ],
+      "text": "Nothing says whether a reminder was sent when a member asks to take a copy home, a member asks to renew a copy, a member brings a copy back, the copy was in the building, the copy was out on loan, a fine was owed, the loan was not overdue, and the loan length was 21. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response."
+    }
+  ],
+  "misuse": [],
+  "wording": [],
+  "redundant": [],
+  "vacuous": [
+    {
+      "id": "R9",
+      "line": 24,
+      "sentence": "When a member asks to take a copy home and the loan length is at least 40, the Fall Desk shall allow the loan.",
+      "text": "R9 can never trigger. Its condition is impossible for every allowed value.",
+      "fix": "Suggested fix: rewrite the condition in R9 so a real situation can make it true, or remove the requirement. Do not invent a response."
+    }
+  ],
+  "unused": []
+}
