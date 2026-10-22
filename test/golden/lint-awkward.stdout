@@ -2,8 +2,9 @@ spec: examples/order-awkward.ears.md
 conflicts: 0
 gaps: 0
 misuse: 0
-wording: 4
+wording: 5
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -21,4 +22,8 @@ When not start the subscription, the Checkout shall the lane is hold.
 
 wording line 8
 "When" needs a condition with "is", not a bare verb. "When the subscription is started" is the form.
+When not start the subscription, the Checkout shall the lane is hold.
+
+wording line 8
+The trigger is a bare negation. Write a positive condition, such as "When a non-member asks", or declare a positive event.
 When not start the subscription, the Checkout shall the lane is hold.

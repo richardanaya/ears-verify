@@ -1,0 +1,38 @@
+spec: examples/order-repeat.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 1
+duplicate: 0
+vacuous: 0
+unused: 0
+
+conflict {R1, R2}
+R1 and R2 cannot both hold.
+
+R1 line 8
+When an order is submitted, the Order System shall fulfill the order.
+
+R2 line 9
+When an order is submitted, the Order System shall not fulfill the order.
+
+They clash when an order was submitted and inventory was not available.
+R1 requires that the order was fulfilled.
+R2 requires that the order was not fulfilled.
+
+Example scenario:
+{
+  "order_submitted": true,
+  "inventory_available": false,
+  "order_fulfilled": true,
+  "order_closed": false
+}
+This scenario keeps R1 and breaks R2.
+
+Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1.
+
+redundant R5 line 12
+R5 adds nothing. Whenever the requirements outside a conflict hold, R5 holds too.
+When an order is submitted and inventory is available, the Order System shall close the order.
+Suggested fix: remove R5, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.

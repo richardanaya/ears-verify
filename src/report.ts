@@ -1,15 +1,15 @@
 /**
  * Plain-language list of logical problems.
- * Contradictions, uncovered situations, and impossible conditions come from
- * lint. A requirement that only repeats a stricter case of another is named
- * here even when the spec already conflicts, because lint then leaves
- * redundancy blank. A contradiction asks which requirement should win and
- * does not choose one.
+ * Contradictions, uncovered situations, impossible conditions, repeats, and
+ * exact duplicates come from lint. A stricter repeat is still explained
+ * here by naming the wider requirement. A contradiction asks which
+ * requirement should win and does not choose one.
  */
 
-import type { Conflict, Gap, LintReport, Redundant, Vacuous } from "./lint.ts";
+import type { Conflict, Duplicate, Gap, LintReport, Redundant, Vacuous } from "./lint.ts";
 import type { Requirement, Spec, Term } from "./spec.ts";
 import { satisfiable } from "./decide.ts";
+import { termsEqual } from "./term.ts";
 import { displayQuote, englishList, formatInt } from "./text.ts";
 
 export interface ProblemDocument {
@@ -30,7 +30,8 @@ interface Repeated {
 
 export function buildProblems(specPath: string, spec: Spec, report: LintReport): ProblemDocument {
   const repeated = collectRepeated(spec, report);
-  const count = report.conflicts.length + report.gaps.length + report.vacuous.length + repeated.length;
+  const count =
+    report.conflicts.length + report.gaps.length + report.vacuous.length + repeated.length + report.duplicate.length;
   const lines: string[] = [];
   lines.push("# Logical problems");
   lines.push("");
@@ -58,6 +59,10 @@ export function buildProblems(specPath: string, spec: Spec, report: LintReport):
   }
   for (let i = 0; i < repeated.length; i++) {
     pushRepeated(lines, repeated[i], n);
+    n++;
+  }
+  for (let i = 0; i < report.duplicate.length; i++) {
+    pushDuplicate(lines, spec, report.duplicate[i], n);
     n++;
   }
   return { text: lines.join("\n"), count: count };
@@ -142,6 +147,31 @@ function pushVacuous(lines: string[], item: Vacuous, index: number): void {
   lines.push(item.fix);
 }
 
+function pushDuplicate(lines: string[], spec: Spec, item: Duplicate, index: number): void {
+  lines.push("");
+  lines.push("## " + formatInt(index) + ". " + item.id + " duplicates " + item.sameAs);
+  lines.push("");
+  lines.push(item.id + " line " + formatInt(item.line));
+  lines.push(displayQuote(item.sentence));
+  lines.push("");
+  lines.push(item.text);
+  const prior = requirementById(spec, item.sameAs);
+  if (prior !== null) {
+    lines.push("");
+    lines.push(prior.id + " line " + formatInt(prior.line));
+    lines.push(displayQuote(prior.sentence));
+  }
+  lines.push("");
+  lines.push(item.fix);
+}
+
+function requirementById(spec: Spec, id: string): Requirement | null {
+  for (let i = 0; i < spec.requirements.length; i++) {
+    if (spec.requirements[i].id === id) return spec.requirements[i];
+  }
+  return null;
+}
+
 function pushRepeated(lines: string[], item: Repeated, index: number): void {
   lines.push("");
   lines.push("## " + formatInt(index) + ". " + item.id + " adds nothing");
@@ -220,7 +250,7 @@ function repeatedRequirements(spec: Spec): Repeated[] {
     for (let i = 0; i < reqs.length; i++) {
       if (i === j) continue;
       const wider = reqs[i];
-      if (!termEqual(wider.consequent, narrower.consequent)) continue;
+      if (!termsEqual(wider.consequent, narrower.consequent)) continue;
       const wideGuard = guardOf(wider);
       if (!holdsTerm(spec, wideGuard)) continue;
       if (!strictlyWider(spec, wideGuard, narrowGuard)) continue;
@@ -271,25 +301,3 @@ function holdsTerm(spec: Spec, term: Term): boolean {
   return satisfiable(spec, holds);
 }
 
-function termEqual(left: Term, right: Term): boolean {
-  if (left.kind === "bool" && right.kind === "bool") return left.value === right.value;
-  if (left.kind === "int" && right.kind === "int") return left.value === right.value;
-  if (left.kind === "enum" && right.kind === "enum") return left.enumName === right.enumName && left.index === right.index;
-  if (left.kind === "sym" && right.kind === "sym") return left.index === right.index;
-  if (left.kind === "not" && right.kind === "not") return termEqual(left.term, right.term);
-  if (left.kind === "and" && right.kind === "and") return samePair(left.left, left.right, right.left, right.right);
-  if (left.kind === "or" && right.kind === "or") return samePair(left.left, left.right, right.left, right.right);
-  if (left.kind === "eq" && right.kind === "eq") return samePair(left.left, left.right, right.left, right.right);
-  if (left.kind === "neq" && right.kind === "neq") return samePair(left.left, left.right, right.left, right.right);
-  if (left.kind === "lt" && right.kind === "lt") return samePair(left.left, left.right, right.left, right.right);
-  if (left.kind === "le" && right.kind === "le") return samePair(left.left, left.right, right.left, right.right);
-  if (left.kind === "gt" && right.kind === "gt") return samePair(left.left, left.right, right.left, right.right);
-  if (left.kind === "ge" && right.kind === "ge") return samePair(left.left, left.right, right.left, right.right);
-  if (left.kind === "add" && right.kind === "add") return samePair(left.left, left.right, right.left, right.right);
-  if (left.kind === "sub" && right.kind === "sub") return samePair(left.left, left.right, right.left, right.right);
-  return false;
-}
-
-function samePair(a: Term, b: Term, c: Term, d: Term): boolean {
-  return termEqual(a, c) && termEqual(b, d);
-}

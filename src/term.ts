@@ -281,6 +281,29 @@ export function mentionedIndexes(antecedent: Term | null, consequent: Term): num
   return sorted;
 }
 
+export function termsEqual(left: Term, right: Term): boolean {
+  if (left.kind === "bool" && right.kind === "bool") return left.value === right.value;
+  if (left.kind === "int" && right.kind === "int") return left.value === right.value;
+  if (left.kind === "enum" && right.kind === "enum") return left.enumName === right.enumName && left.index === right.index;
+  if (left.kind === "sym" && right.kind === "sym") return left.index === right.index;
+  if (left.kind === "not" && right.kind === "not") return termsEqual(left.term, right.term);
+  if (left.kind === "and" && right.kind === "and") return termsSamePair(left.left, left.right, right.left, right.right);
+  if (left.kind === "or" && right.kind === "or") return termsSamePair(left.left, left.right, right.left, right.right);
+  if (left.kind === "eq" && right.kind === "eq") return termsSamePair(left.left, left.right, right.left, right.right);
+  if (left.kind === "neq" && right.kind === "neq") return termsSamePair(left.left, left.right, right.left, right.right);
+  if (left.kind === "lt" && right.kind === "lt") return termsSamePair(left.left, left.right, right.left, right.right);
+  if (left.kind === "le" && right.kind === "le") return termsSamePair(left.left, left.right, right.left, right.right);
+  if (left.kind === "gt" && right.kind === "gt") return termsSamePair(left.left, left.right, right.left, right.right);
+  if (left.kind === "ge" && right.kind === "ge") return termsSamePair(left.left, left.right, right.left, right.right);
+  if (left.kind === "add" && right.kind === "add") return termsSamePair(left.left, left.right, right.left, right.right);
+  if (left.kind === "sub" && right.kind === "sub") return termsSamePair(left.left, left.right, right.left, right.right);
+  return false;
+}
+
+function termsSamePair(a: Term, b: Term, c: Term, d: Term): boolean {
+  return termsEqual(a, c) && termsEqual(b, d);
+}
+
 function collectIndexes(term: Term, found: number[]): void {
   if (term.kind === "sym") {
     found.push(term.index);

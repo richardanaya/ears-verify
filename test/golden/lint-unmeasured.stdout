@@ -1,0 +1,13 @@
+spec: examples/order-unmeasured.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 1
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+
+wording line 4
+"as needed" is too vague to test. Replace it with something a scenario can check.
+output order_fulfilled: Bool "Handle it as needed." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"

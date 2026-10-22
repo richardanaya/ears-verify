@@ -34,6 +34,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -91,6 +92,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -138,6 +140,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 ```
@@ -190,6 +193,7 @@ gaps: 1
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -211,6 +215,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 ```
@@ -337,7 +342,7 @@ examples/order-fail.json
 }
 ```
 
-`lint` is `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `vacuous`, and `unused`. A conflict is `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements` (`id`, `line`, `sentence`), `situation` and `example` (`name`, `value`), `requires` (`id`, `text`), `keeps`, `breaks`, and `fix`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. A vacuous requirement has the same fields. An unused entry is `name`, `kind` (`state`, `input`, `output`, or `variant`), `text`, and `fix`.
+`lint` is `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `duplicate`, `vacuous`, and `unused`. A conflict is `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements` (`id`, `line`, `sentence`), `situation` and `example` (`name`, `value`), `requires` (`id`, `text`), `keeps`, `breaks`, and `fix`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. `kind` is `vague`, `solution`, `form`, or `negation`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. An exact duplicate is `id`, `line`, `sameAs`, `sentence`, `text`, and `fix`. A vacuous requirement has the same fields as a redundant requirement. An unused entry is `name`, `kind` (`state`, `input`, `output`, or `variant`), `text`, and `fix`.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -408,6 +413,7 @@ examples/order-conflict.ears.md
   "misuse": [],
   "wording": [],
   "redundant": [],
+  "duplicate": [],
   "vacuous": [],
   "unused": []
 }
@@ -535,13 +541,14 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 ```
 
 A comparison that ties two wide integers together is still decided, by splitting the range. A boolean combination of those comparisons can take longer than a single bound.
 
-There are no strings in the logic. Descriptions and phrases stay next to the names. Vague words (`quickly`, `appropriate`, `user-friendly`) and solution words (`database`, `api`, `microservice`) are caught in descriptions and in requirement sentences.
+There are no strings in the logic. Descriptions and phrases stay next to the names. Vague words (`as needed`, `quickly`, `appropriate`, `user-friendly`, `fast`, `slow`, `large`, `small`, `easy`, `robust`, `flexible`, `efficient`) and solution words (`database`, `api`, `algorithm`, `microservice`, `server`, `class`, `function`) are caught in descriptions and in requirement sentences. A word that sits inside a declared phrase or action is already bound to a schema item, so that use is not a wording finding.
 
 Lint also reports an event no requirement handles, an error condition with no response, an unwanted event written with `when`, and vague words. An integer cap can clash with a larger accepted quantity, and an enum can be pinned to two variants at once. The fix still asks which requirement should win. A condition that can never be true, a state or input no requirement mentions, an enum variant no requirement mentions, and an output no response sets are reported on their own. An output no requirement mentions at all stays a gap. An event nobody handles stays a gap. A free input that some requirement already mentions is not a finding: the environment is allowed to choose it.
 
@@ -557,6 +564,7 @@ gaps: 1
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -576,6 +584,7 @@ gaps: 1
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -595,6 +604,7 @@ gaps: 0
 misuse: 1
 wording: 0
 redundant: 1
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -620,6 +630,7 @@ gaps: 0
 misuse: 0
 wording: 3
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -636,6 +647,31 @@ wording line 4
 output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
 ```
 
+## A word that is not bound
+
+`examples/order-unmeasured.ears.md` says "as needed" in a description. That phrase is not a schema item. The requirements also say "respond quickly", and that phrase is declared, so "quickly" is bound and is not a finding.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-unmeasured.ears.md
+-->
+```text
+spec: examples/order-unmeasured.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 1
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+
+wording line 4
+"as needed" is too vague to test. Replace it with something a scenario can check.
+output order_fulfilled: Bool "Handle it as needed." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
+```
+
 <!-- verify stdout 1
 build/ears-verify
 lint
@@ -648,6 +684,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -690,6 +727,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 1
 
@@ -819,6 +857,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -851,7 +890,7 @@ Suggested fix: ask which requirement should win. Removing any one of R1, R2, and
 
 ## A requirement that adds nothing
 
-`examples/order-redundant.ears.md` says a submitted order is fulfilled, and also that a submitted order with inventory is fulfilled. The second one is already required by the first. Lint names it and asks. It does not delete it. If the whole spec already conflicts, nothing is marked redundant.
+`examples/order-redundant.ears.md` says a submitted order is fulfilled, and also that a submitted order with inventory is fulfilled. The second one is already required by the first. Lint names it and asks. It does not delete it. A conflict does not hide a repeat that sits outside that conflict. Lint checks redundancy on the requirements that are not part of any conflict.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -865,6 +904,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 1
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -874,9 +914,135 @@ When an order is submitted and inventory is available, the Order System shall fu
 Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 ```
 
+## A repeat next to a conflict
+
+`examples/order-repeat.ears.md` conflicts on whether a submitted order is fulfilled. Separately, closing a submitted order already requires closing it when inventory is available. `R5` is not part of the conflict, so lint still names it.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-repeat.ears.md
+-->
+```text
+spec: examples/order-repeat.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 1
+duplicate: 0
+vacuous: 0
+unused: 0
+
+conflict {R1, R2}
+R1 and R2 cannot both hold.
+
+R1 line 8
+When an order is submitted, the Order System shall fulfill the order.
+
+R2 line 9
+When an order is submitted, the Order System shall not fulfill the order.
+
+They clash when an order was submitted and inventory was not available.
+R1 requires that the order was fulfilled.
+R2 requires that the order was not fulfilled.
+
+Example scenario:
+{
+  "order_submitted": true,
+  "inventory_available": false,
+  "order_fulfilled": true,
+  "order_closed": false
+}
+This scenario keeps R1 and breaks R2.
+
+Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1.
+
+redundant R5 line 12
+R5 adds nothing. Whenever the requirements outside a conflict hold, R5 holds too.
+When an order is submitted and inventory is available, the Order System shall close the order.
+Suggested fix: remove R5, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+```
+
+## The same condition and the same response
+
+`examples/order-duplicate.ears.md` states the fulfilled-order rule twice. That is a duplicate, not a redundant requirement: the two lines are the same condition and the same response. Lint names the later line and the earlier id. It does not call it redundant.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-duplicate.ears.md
+-->
+```text
+spec: examples/order-duplicate.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 1
+vacuous: 0
+unused: 0
+
+duplicate R2 line 7
+R2 duplicates R1. The condition and the response are the same.
+When an order is submitted, the Order System shall fulfill the order.
+Suggested fix: remove R2, or ask whether it was meant to differ from R1. Do not delete it until the PM agrees.
+```
+
+<!-- verify stdout 1
+build/ears-verify
+report
+examples/order-duplicate.ears.md
+-->
+```text
+# Logical problems
+
+Spec: examples/order-duplicate.ears.md
+
+These are the logical problems in the requirements. For a contradiction, which requirement should win? This report does not choose.
+
+## 1. R2 duplicates R1
+
+R2 line 7
+"When an order is submitted, the Order System shall fulfill the order."
+
+R2 duplicates R1. The condition and the response are the same.
+
+R1 line 6
+"When an order is submitted, the Order System shall fulfill the order."
+
+Suggested fix: remove R2, or ask whether it was meant to differ from R1. Do not delete it until the PM agrees.
+```
+
+## A trigger that starts with not
+
+`examples/order-negation.ears.md` says `When not a member asks`. The trigger is a bare negation. Lint asks for a positive condition, such as `When a non-member asks`, or a positive event. `is not` stays the normal way to negate a phrase that contains `is`.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-negation.ears.md
+-->
+```text
+spec: examples/order-negation.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 1
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+
+wording line 6
+The trigger is a bare negation. Write a positive condition, such as "When a non-member asks", or declare a positive event.
+When not a member asks to take a copy home, the Desk shall not allow the loan.
+```
+
 ## A condition that can never be true
 
-`examples/order-vacuous.ears.md` has a condition that contradicts itself, and a quantity comparison outside the declared range. The response is never demanded. Lint names each one. When the rest of the spec can be satisfied, the same requirements are also redundant, because a condition that is never true cannot add a constraint. The vacuous line says to rewrite the condition. It does not pick a response.
+`examples/order-vacuous.ears.md` has a condition that contradicts itself, and a quantity comparison outside the declared range. The response is never demanded. Lint names each one as vacuous. It does not also call that requirement redundant or a duplicate, because a condition that can never be true is implied by anything. The vacuous line says to rewrite the condition. It does not pick a response.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -889,19 +1055,10 @@ conflicts: 0
 gaps: 0
 misuse: 0
 wording: 0
-redundant: 2
+redundant: 0
+duplicate: 0
 vacuous: 2
 unused: 0
-
-redundant R1 line 7
-R1 adds nothing. Whenever the other requirements hold, R1 holds too.
-When the cart is open and the cart is not open, the Checkout shall accept the order.
-Suggested fix: remove R1, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
-
-redundant R2 line 8
-R2 adds nothing. Whenever the other requirements hold, R2 holds too.
-When the quantity is at least 9, the Checkout shall accept the order.
-Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 
 vacuous R1 line 7
 R1 can never trigger. Its condition is impossible for every allowed value.
@@ -930,6 +1087,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 4
 
@@ -965,6 +1123,7 @@ examples/order-unused.ears.md
   "misuse": [],
   "wording": [],
   "redundant": [],
+  "duplicate": [],
   "vacuous": [],
   "unused": [
     {

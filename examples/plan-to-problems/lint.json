@@ -483,8 +483,32 @@
     }
   ],
   "misuse": [],
-  "wording": [],
-  "redundant": [],
+  "wording": [
+    {
+      "line": 19,
+      "word": "not",
+      "kind": "negation",
+      "text": "The trigger is a bare negation. Write a positive condition, such as \"When a non-member asks\", or declare a positive event.",
+      "context": "When not a member asks to take a copy home, the Fall Desk shall not allow the loan."
+    },
+    {
+      "line": 27,
+      "word": "not",
+      "kind": "negation",
+      "text": "The trigger is a bare negation. Write a positive condition, such as \"When a non-member asks\", or declare a positive event.",
+      "context": "When not a member brings a copy back, the Fall Desk shall not close the loan."
+    }
+  ],
+  "redundant": [
+    {
+      "id": "R11",
+      "line": 26,
+      "sentence": "When a member brings a copy back and the loan is overdue, the Fall Desk shall close the loan.",
+      "text": "R11 adds nothing. Whenever the requirements outside a conflict hold, R11 holds too.",
+      "fix": "Suggested fix: remove R11, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees."
+    }
+  ],
+  "duplicate": [],
   "vacuous": [
     {
       "id": "R9",

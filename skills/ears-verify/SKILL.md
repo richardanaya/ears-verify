@@ -26,7 +26,7 @@ usage:
   ears-verify help
 ```
 
-`report <spec>` prints the logical problems in plain language: contradictions, uncovered situations, conditions that can never be true, and requirements that add nothing. For a contradiction it asks which requirement should win and does not choose. A requirement that only repeats a stricter case of another is named even when other requirements already conflict, which is when lint itself leaves redundancy blank.
+`report <spec>` prints the logical problems in plain language: contradictions, uncovered situations, conditions that can never be true, requirements that add nothing, and exact duplicates. For a contradiction it asks which requirement should win and does not choose. Lint itself names a repeat that sits outside every conflict. The report still explains a stricter repeat by naming the wider requirement.
 
 `policy` searches the same finite domain as lint. With no property it prints one scenario the requirements allow and one they forbid. With a property file it looks for a scenario the requirements allow and the property forbids. Do not treat either scenario as the behavior the PM agreed to, and do not pick a winning requirement.
 
@@ -121,7 +121,7 @@ A condition or a response is a boolean expression. This is the whole language. T
 
 `shall the quantity` is rejected, because the response has to be a boolean. `shall the quantity is 1` still parses, and lint flags it. Bind `as "accept {value} units"` and write `shall accept 1 unit`. `+` and `-` expect integers.
 
-`examples/order-awkward.ears.md` is the shape to stop writing. The trigger is a bare verb, and the response is `shall the lane is fulfill`. Lint names both. It does not pick a lane.
+`examples/order-awkward.ears.md` is the shape to stop writing. The trigger is a bare verb, and the response is `shall the lane is fulfill`. `When not start the subscription` is also a bare negation. Lint names each of those. It does not pick a lane.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -133,8 +133,9 @@ spec: examples/order-awkward.ears.md
 conflicts: 0
 gaps: 0
 misuse: 0
-wording: 4
+wording: 5
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -153,6 +154,10 @@ When not start the subscription, the Checkout shall the lane is hold.
 wording line 8
 "When" needs a condition with "is", not a bare verb. "When the subscription is started" is the form.
 When not start the subscription, the Checkout shall the lane is hold.
+
+wording line 8
+The trigger is a bare negation. Write a positive condition, such as "When a non-member asks", or declare a positive event.
+When not start the subscription, the Checkout shall the lane is hold.
 ```
 
 `examples/order-clear.ears.md` is the same lane, written so the sentence can be read aloud. `as "route the order to the {value} lane"` binds the verb phrase, and `says` is what a later explanation uses. Lint is clean.
@@ -169,6 +174,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 ```
@@ -196,7 +202,7 @@ Each requirement with at least one clause becomes one implication. The clauses a
 
 An unwanted event is written with `if` ... `then`. `when` is the normal trigger. Lint flags an unwanted event used in `when` without an `if`.
 
-The line has to be something a scenario can make true or false. Lint rejects these whole words as too vague to test: `fast`, `slow`, `large`, `small`, `appropriate`, `quickly`, `easy`, `robust`, `flexible`, `user-friendly`, `efficient`. It also rejects solution words: `database`, `api`, `algorithm`, `microservice`, `server`, `class`, `function`. Put the PM's phrasing in the description only after those words are gone, or say the testable fact in the requirement. Lint also flags an awkward response (`shall the lane is fulfill`), a `When` that is a bare verb (`When start the subscription`), and a `not` that sits in front of a phrase containing `is` (`not the customer is cancelling`). The finding kind is `form`. Show the sentence and the wording line, and ask the PM to use the verb phrase and `is not`.
+The line has to be something a scenario can make true or false. Lint rejects these whole words as too vague to test: `as needed`, `fast`, `slow`, `large`, `small`, `appropriate`, `quickly`, `easy`, `robust`, `flexible`, `user-friendly`, `efficient`. It also rejects solution words: `database`, `api`, `algorithm`, `microservice`, `server`, `class`, `function`. A word that sits inside a declared phrase or action is already bound to a schema item, so that use is not a wording finding. Put the PM's phrasing in the description only after those words are gone, or say the testable fact in the requirement. Lint also flags an awkward response (`shall the lane is fulfill`), a `When` that is a bare verb (`When start the subscription`), and a `not` that sits in front of a phrase containing `is` (`not the customer is cancelling`). Those findings have kind `form`. A trigger or state that starts with bare `not`, such as `When not a member asks` or `While not a member asks`, has kind `negation`. Ask for a positive condition, such as `When a non-member asks`, or a positive event. Show the sentence and the wording line.
 
 ## Workflow
 
@@ -204,7 +210,7 @@ The line has to be something a scenario can make true or false. Lint rejects the
 2. Add or reuse declarations. If they describe something you already named, use that name and its phrase. Bind a new phrase to the words they keep using.
 3. Write one EARS line per requirement, using the phrases. Normal triggers use `when`. Unwanted conditions use `if` ... `then`.
 4. Run `build/ears-verify lint <spec>`. Run `build/ears-verify report <spec>` for the logical problems in one plain-language list. Run `build/ears-verify scenarios <spec>` when you want an accepted and a rejected example of each trigger.
-5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Stop until they answer. Do not choose. If a requirement adds nothing, ask whether they meant something the others do not already require. Do not delete it. If a condition can never be true, show the suggested fix and ask them to rewrite the condition. Do not invent a response. If a state, an input, an enum variant, or an output is unused, ask whether to use it or remove it. For a gap, read the suggested fix and ask what the system shall do in that situation. Do not choose the response.
+5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Stop until they answer. Do not choose. If a requirement adds nothing, including a repeat that sits outside a conflict, ask whether they meant something the others do not already require. Do not delete it. If two requirements are the same condition and the same response, show the duplicate and ask whether the later line was meant to differ. Do not delete it. If a trigger starts with bare `not`, ask for a positive condition or a positive event. If a condition can never be true, show the suggested fix and ask them to rewrite the condition. Do not invent a response. If a state, an input, an enum variant, or an output is unused, ask whether to use it or remove it. For a gap, read the suggested fix and ask what the system shall do in that situation. Do not choose the response.
 6. When they describe a concrete story, write a flat JSON scenario with every declared name and run `build/ears-verify check <spec> --input <scenario>`. When they hope something is always true, write that hope as a property file of `P` requirements and run `build/ears-verify policy <spec> --property <file>`. A counterexample is a scenario the requirements allow and the property forbids. If you have no property yet, `policy <spec>` prints one allowed scenario and one forbidden scenario. The search tries false before true, so the first hit is not a recommendation.
 7. Report every check violation by requirement ID, line, and sentence, then the values. A passing check can still leave a gap. If lint reported one, say which output is uncovered and in what situation.
 
@@ -236,7 +242,7 @@ examples/order-fail.json
 }
 ```
 
-`lint` returns `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `vacuous`, and `unused`. A conflict carries `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements`, `situation`, `requires`, `example`, `keeps`, `breaks`, and `fix`. Situation and example entries are `name` and `value`. Requirements are `id`, `line`, and `sentence`. Requires entries are `id` and `text`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. A vacuous requirement has those same fields. An unused entry is `name`, `kind`, `text`, and `fix`. `kind` is `state`, `input`, `output`, or `variant`. Do not delete a redundant requirement until the PM agrees. Do not invent a response for a condition that can never be true.
+`lint` returns `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `duplicate`, `vacuous`, and `unused`. A conflict carries `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements`, `situation`, `requires`, `example`, `keeps`, `breaks`, and `fix`. Situation and example entries are `name` and `value`. Requirements are `id`, `line`, and `sentence`. Requires entries are `id` and `text`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. Wording `kind` is `vague`, `solution`, `form`, or `negation`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. An exact duplicate is `id`, `line`, `sameAs`, `sentence`, `text`, and `fix`. A vacuous requirement has the same fields as a redundant requirement. An unused entry is `name`, `kind`, `text`, and `fix`. Unused `kind` is `state`, `input`, `output`, or `variant`. Do not delete a redundant requirement, or an exact duplicate, until the PM agrees. Do not invent a response for a condition that can never be true.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -307,6 +313,7 @@ examples/order-conflict.ears.md
   "misuse": [],
   "wording": [],
   "redundant": [],
+  "duplicate": [],
   "vacuous": [],
   "unused": []
 }
@@ -449,6 +456,7 @@ gaps: 1
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -470,6 +478,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 ```
@@ -520,6 +529,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -550,9 +560,9 @@ Tell the PM: when an order was submitted, R2 says the order was fulfilled and R3
 
 ## Unwanted events use if, then
 
-`examples/payment-if.ears.md` writes a declined payment with `if` ... `then`. Lint is clean:
+`examples/payment-if.ears.md` writes a declined payment with `if` ... `then`. That shape is right for an unwanted event. `If not payment fails` is still a bare negation, so lint asks for a positive condition or a positive event.
 
-<!-- verify stdout 0
+<!-- verify stdout 1
 build/ears-verify
 lint
 examples/payment-if.ears.md
@@ -562,10 +572,15 @@ spec: examples/payment-if.ears.md
 conflicts: 0
 gaps: 0
 misuse: 0
-wording: 0
+wording: 1
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
+
+wording line 7
+The trigger is a bare negation. Write a positive condition, such as "When a non-member asks", or declare a positive event.
+If not payment fails, then the Order System shall not reject the order.
 ```
 
 `examples/order-misuse.ears.md` uses `when` for that unwanted event. Show the finding and rewrite it with the PM as `If payment fails, then the Order System shall reject the order.`
@@ -582,6 +597,7 @@ gaps: 0
 misuse: 1
 wording: 0
 redundant: 1
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -611,6 +627,7 @@ gaps: 0
 misuse: 0
 wording: 2
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 1
 
@@ -643,6 +660,7 @@ gaps: 1
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -666,6 +684,7 @@ gaps: 1
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -689,6 +708,7 @@ gaps: 0
 misuse: 0
 wording: 3
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -721,6 +741,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -763,6 +784,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 1
 
@@ -935,6 +957,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -981,6 +1004,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 1
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -990,9 +1014,121 @@ When an order is submitted and inventory is available, the Order System shall fu
 Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 ```
 
+A conflict does not hide a repeat that sits outside it. Show that requirement too. An exact duplicate is a separate finding: same condition, same response. Ask whether the later line was meant to differ. A bare `not` at the start of a trigger is wording kind `negation`. Ask for a positive condition or a positive event. `as needed` is too vague to test unless those words are the declared phrase.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-repeat.ears.md
+-->
+```text
+spec: examples/order-repeat.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 1
+duplicate: 0
+vacuous: 0
+unused: 0
+
+conflict {R1, R2}
+R1 and R2 cannot both hold.
+
+R1 line 8
+When an order is submitted, the Order System shall fulfill the order.
+
+R2 line 9
+When an order is submitted, the Order System shall not fulfill the order.
+
+They clash when an order was submitted and inventory was not available.
+R1 requires that the order was fulfilled.
+R2 requires that the order was not fulfilled.
+
+Example scenario:
+{
+  "order_submitted": true,
+  "inventory_available": false,
+  "order_fulfilled": true,
+  "order_closed": false
+}
+This scenario keeps R1 and breaks R2.
+
+Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1.
+
+redundant R5 line 12
+R5 adds nothing. Whenever the requirements outside a conflict hold, R5 holds too.
+When an order is submitted and inventory is available, the Order System shall close the order.
+Suggested fix: remove R5, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+```
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-duplicate.ears.md
+-->
+```text
+spec: examples/order-duplicate.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 1
+vacuous: 0
+unused: 0
+
+duplicate R2 line 7
+R2 duplicates R1. The condition and the response are the same.
+When an order is submitted, the Order System shall fulfill the order.
+Suggested fix: remove R2, or ask whether it was meant to differ from R1. Do not delete it until the PM agrees.
+```
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-negation.ears.md
+-->
+```text
+spec: examples/order-negation.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 1
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+
+wording line 6
+The trigger is a bare negation. Write a positive condition, such as "When a non-member asks", or declare a positive event.
+When not a member asks to take a copy home, the Desk shall not allow the loan.
+```
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-unmeasured.ears.md
+-->
+```text
+spec: examples/order-unmeasured.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 1
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+
+wording line 4
+"as needed" is too vague to test. Replace it with something a scenario can check.
+output order_fulfilled: Bool "Handle it as needed." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
+```
+
 ## A condition that can never be true
 
-Show the requirement and the suggested fix. A condition that contradicts itself, or that asks for a value outside the declared range, never triggers. Ask the PM to rewrite the condition. Do not invent a response. If the rest of the spec can be satisfied, lint also marks that requirement redundant.
+Show the requirement and the suggested fix. A condition that contradicts itself, or that asks for a value outside the declared range, never triggers. Ask the PM to rewrite the condition. Do not invent a response. Do not also call that requirement redundant or a duplicate.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -1005,19 +1141,10 @@ conflicts: 0
 gaps: 0
 misuse: 0
 wording: 0
-redundant: 2
+redundant: 0
+duplicate: 0
 vacuous: 2
 unused: 0
-
-redundant R1 line 7
-R1 adds nothing. Whenever the other requirements hold, R1 holds too.
-When the cart is open and the cart is not open, the Checkout shall accept the order.
-Suggested fix: remove R1, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
-
-redundant R2 line 8
-R2 adds nothing. Whenever the other requirements hold, R2 holds too.
-When the quantity is at least 9, the Checkout shall accept the order.
-Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 
 vacuous R1 line 7
 R1 can never trigger. Its condition is impossible for every allowed value.
@@ -1046,6 +1173,7 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+duplicate: 0
 vacuous: 0
 unused: 4
 
@@ -1081,6 +1209,7 @@ examples/order-unused.ears.md
   "misuse": [],
   "wording": [],
   "redundant": [],
+  "duplicate": [],
   "vacuous": [],
   "unused": [
     {

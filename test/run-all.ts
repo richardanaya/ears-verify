@@ -173,6 +173,10 @@ function main(): void {
     { name: "lint-status", args: ["lint", "examples/order-status.ears.md"] },
     { name: "lint-chain", args: ["lint", "examples/order-chain.ears.md"] },
     { name: "lint-redundant", args: ["lint", "examples/order-redundant.ears.md"] },
+    { name: "lint-repeat", args: ["lint", "examples/order-repeat.ears.md"] },
+    { name: "lint-duplicate", args: ["lint", "examples/order-duplicate.ears.md"] },
+    { name: "lint-negation", args: ["lint", "examples/order-negation.ears.md"] },
+    { name: "lint-unmeasured", args: ["lint", "examples/order-unmeasured.ears.md"] },
     { name: "lint-vacuous", args: ["lint", "examples/order-vacuous.ears.md"] },
     { name: "lint-vacuous-json", args: ["lint", "--json", "examples/order-vacuous.ears.md"] },
     { name: "lint-unused", args: ["lint", "examples/order-unused.ears.md"] },
@@ -302,7 +306,14 @@ function plantedDetected(planted: string, expected: string, lintJson: string, pr
         return false;
       }
     } else if (kind === "redundant") {
-      if (problems.indexOf(words[1]) < 0 || problems.indexOf("adds nothing") < 0) {
+      const redundantAt = lintJson.indexOf('"redundant":');
+      const marker = '"id": "' + words[1] + '"';
+      if (
+        redundantAt < 0 ||
+        lintJson.indexOf(marker, redundantAt) < 0 ||
+        problems.indexOf(words[1]) < 0 ||
+        problems.indexOf("adds nothing") < 0
+      ) {
         fail("plan-to-problems redundant " + words[1]);
         return false;
       }
@@ -319,6 +330,10 @@ function plantedDetected(planted: string, expected: string, lintJson: string, pr
   }
   if (conflicts < 2) {
     fail("plan-to-problems needs two contradictions");
+    return false;
+  }
+  if (countText(lintJson, '"kind": "negation"') !== 2) {
+    fail("plan-to-problems negated triggers");
     return false;
   }
   const questions = countText(problems, "Which requirement should win?");

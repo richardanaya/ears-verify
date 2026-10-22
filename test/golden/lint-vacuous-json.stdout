@@ -5,22 +5,8 @@
   "gaps": [],
   "misuse": [],
   "wording": [],
-  "redundant": [
-    {
-      "id": "R1",
-      "line": 7,
-      "sentence": "When the cart is open and the cart is not open, the Checkout shall accept the order.",
-      "text": "R1 adds nothing. Whenever the other requirements hold, R1 holds too.",
-      "fix": "Suggested fix: remove R1, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees."
-    },
-    {
-      "id": "R2",
-      "line": 8,
-      "sentence": "When the quantity is at least 9, the Checkout shall accept the order.",
-      "text": "R2 adds nothing. Whenever the other requirements hold, R2 holds too.",
-      "fix": "Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees."
-    }
-  ],
+  "redundant": [],
+  "duplicate": [],
   "vacuous": [
     {
       "id": "R1",
