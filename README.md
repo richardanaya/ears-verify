@@ -219,7 +219,7 @@ The shape of the analysis follows Kiro's requirements analysis: separate behavio
 
 ## For the agent in the conversation
 
-The skill at [`skills/ears-verify/SKILL.md`](skills/ears-verify/SKILL.md) tells an agent how to sit with a product manager: turn their words into this vocabulary, run lint, explain a conflict in plain words, and ask which requirement should win.
+The skill at [`skills/ears-verify/SKILL.md`](skills/ears-verify/SKILL.md) tells an agent how to sit with a product manager. It lists the grammar the parser accepts, shows real `check`, `emit-smt`, `lint`, and `policy` output, and says to ask which requirement should win.
 
 ## Questions
 
