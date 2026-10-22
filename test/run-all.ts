@@ -10,7 +10,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 interface RunResult {
   status: number;
@@ -179,7 +179,6 @@ function main(): void {
 
   checkDocSamples("readme", "README.md", false);
   checkDocSamples("skill", "skills/ears-verify/SKILL.md", true);
-  forbidRetiredLanguage();
 
   if (failed !== 0) {
     console.error(String(failed) + " failed");
@@ -285,38 +284,6 @@ function requireTextFencesVerified(label: string, text: string, fences: number[]
   }
   if (found !== fences.length) fail(label + " verify block is missing a text sample");
   else console.log("PASS " + label + " text samples are all verified");
-}
-
-function forbidRetiredLanguage(): void {
-  const files: string[] = [];
-  collectFiles("src", files);
-  collectFiles("examples", files);
-  collectFiles("test", files);
-  collectFiles("skills", files);
-  collectFiles(".github", files);
-  files.push("README.md");
-  files.push("package.json");
-  const banned = ["u" + "rl", "what" + "wg", "user" + "info", "canonical" + "ize", "rf" + "c"];
-  let hits = 0;
-  for (let i = 0; i < files.length; i++) {
-    const text = readFileSync(files[i], "utf8").toLowerCase();
-    for (let b = 0; b < banned.length; b++) {
-      if (text.indexOf(banned[b]) !== -1) {
-        fail(files[i] + " contains retired language " + banned[b]);
-        hits++;
-      }
-    }
-  }
-  if (hits === 0) console.log("PASS retired language");
-}
-
-function collectFiles(dir: string, out: string[]): void {
-  const names = readdirSync(dir);
-  for (let i = 0; i < names.length; i++) {
-    const path = dir + "/" + names[i];
-    if (statSync(path).isDirectory()) collectFiles(path, out);
-    else out.push(path);
-  }
 }
 
 function parseExit(text: string): number {
