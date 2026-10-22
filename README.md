@@ -77,9 +77,13 @@ Exit status is `0` when the command is clean, `1` when something is wrong in the
 
 Each requirement becomes an implication: when its condition holds, its response must hold. plan-verify prints that logic as SMT-LIB and decides it with its own solver. Booleans go through DPLL. Integers and enums tighten bounds. ScriptC compiles the same TypeScript to a native binary, and Node runs the same source.
 
-## For the agent
+## Agentic neurosymbolic verification
 
-The skill at [skills/plan-verify/SKILL.md](skills/plan-verify/SKILL.md) tells an agent how to sit with a product manager: turn their words into EARS, run lint, explain the clash, and ask which requirement should win.
+An AI agent (the neural part) turns a plain-English plan into EARS requirements. plan-verify (the symbolic part) converts them to SMT-LIB and proves contradictions, gaps, rules that can never fire, and repeats with its own solver. The agent reads those plain-English findings, asks the human about the choices, revises, and runs lint again until the spec is clean. [skills/plan-verify/SKILL.md](skills/plan-verify/SKILL.md) is how an agent runs this loop.
+
+- The neural side writes.
+- The symbolic side checks with math.
+- The human decides.
 
 ## Examples
 
