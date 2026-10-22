@@ -8,6 +8,7 @@ import { bindScenario, evaluate, formatCheckJson, formatCheckText, formatErrorJs
 import { parseProperty, parseSpec } from "./ears.ts";
 import { parseScenarioJson } from "./jsonvalue.ts";
 import { formatLintJson, formatLintText, lintSpec } from "./lint.ts";
+import { buildProblems } from "./report.ts";
 import { formatScenariosJson, formatScenariosText, listScenarios } from "./scenarios.ts";
 import { analyzePolicy, formatPolicyJson, formatPolicyText } from "./policy.ts";
 import { formatEmitJson, printSmt } from "./smt.ts";
@@ -46,6 +47,10 @@ function main(): void {
   }
   if (command === "lint") {
     commandLint(args.slice(1));
+    return;
+  }
+  if (command === "report") {
+    commandReport(args.slice(1));
     return;
   }
   if (command === "scenarios") {
@@ -173,6 +178,24 @@ function commandLint(args: string[]): void {
   process.exit(EXIT_VIOLATIONS);
 }
 
+function commandReport(args: string[]): void {
+  const flags = parseFlags(args, false, false);
+  if (flags.error.length > 0) fail(flags.json, flags.error);
+  if (flags.json) fail(true, "usage: ears-verify report <spec>");
+  if (flags.positionals.length !== 1) fail(false, "usage: ears-verify report <spec>");
+  const specPath = flags.positionals[0];
+  const specText = readText(specPath);
+  if (specText === null) fail(false, "cannot read " + specPath);
+  const spec = parseSpec(specText);
+  if (!spec.ok) fail(false, specPath + ":" + String(spec.line) + ": " + spec.message);
+  const outcome = lintSpec(spec.spec);
+  if (outcome.kind === "error") fail(false, outcome.message);
+  const doc = buildProblems(specPath, spec.spec, outcome.report);
+  console.log(doc.text);
+  if (doc.count === 0) process.exit(EXIT_OK);
+  process.exit(EXIT_VIOLATIONS);
+}
+
 function commandScenarios(args: string[]): void {
   const flags = parseFlags(args, false, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
@@ -238,6 +261,7 @@ function usage(toStderr: boolean): void {
     "  ears-verify check [--json] <spec> --input <scenario>\n" +
     "  ears-verify emit-smt [--json] <spec>\n" +
     "  ears-verify lint [--json] <spec>\n" +
+    "  ears-verify report <spec>\n" +
     "  ears-verify scenarios [--json] <spec>\n" +
     "  ears-verify policy [--json] <spec> [--property <file>]\n" +
     "  ears-verify help";

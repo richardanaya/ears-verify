@@ -207,6 +207,7 @@ function main(): void {
 
   checkDocSamples("readme", "README.md", false);
   checkDocSamples("skill", "skills/ears-verify/SKILL.md", true);
+  checkPlanToProblems();
 
   if (failed !== 0) {
     console.error(String(failed) + " failed");
@@ -214,6 +215,142 @@ function main(): void {
   }
   console.log("all tests passed");
   process.exit(0);
+}
+
+function checkPlanToProblems(): void {
+  const dir = "examples/plan-to-problems/";
+  const spec = dir + "generated.ears.md";
+  const lintNode = nodeRun("src/main.ts", ["lint", "--json", spec]);
+  const lintBin = run("build/ears-verify", ["lint", "--json", spec]);
+  const lintOk = sameSaved("plan-to-problems lint", lintNode, lintBin, dir + "lint.json", 1);
+  const reportNode = nodeRun("src/main.ts", ["report", spec]);
+  const reportBin = run("build/ears-verify", ["report", spec]);
+  const reportOk = sameSaved("plan-to-problems report", reportNode, reportBin, dir + "problems.md", 1);
+  if (!lintOk || !reportOk) return;
+  const planted = readFileSync(dir + "planted.txt", "utf8");
+  const expected = readFileSync(dir + "expected-problems.md", "utf8");
+  if (plantedDetected(planted, expected, lintNode.stdout, reportNode.stdout)) {
+    console.log("PASS plan-to-problems planted problems");
+  }
+}
+
+function sameSaved(name: string, nodeResult: RunResult, binResult: RunResult, savedPath: string, exitCode: number): boolean {
+  if (
+    nodeResult.status !== binResult.status ||
+    nodeResult.stdout !== binResult.stdout ||
+    nodeResult.stderr !== binResult.stderr
+  ) {
+    fail(name + " node/native differ");
+    console.error("--- node stdout ---\n" + nodeResult.stdout);
+    console.error("--- native stdout ---\n" + binResult.stdout);
+    console.error("--- node stderr ---\n" + nodeResult.stderr);
+    console.error("--- native stderr ---\n" + binResult.stderr);
+    return false;
+  }
+  const saved = readFileSync(savedPath, "utf8");
+  if (nodeResult.stdout !== saved || nodeResult.stderr.length !== 0 || nodeResult.status !== exitCode) {
+    fail(name + " saved output mismatch");
+    console.error("expected exit " + String(exitCode) + ", got " + String(nodeResult.status));
+    console.error("--- actual stdout ---\n" + nodeResult.stdout);
+    console.error("--- saved stdout ---\n" + saved);
+    if (nodeResult.stderr.length > 0) console.error("--- stderr ---\n" + nodeResult.stderr);
+    return false;
+  }
+  console.log("PASS " + name + " (node = native = saved, exit " + String(exitCode) + ")");
+  return true;
+}
+
+function plantedDetected(planted: string, expected: string, lintJson: string, problems: string): boolean {
+  const lines = nonEmptyLines(planted);
+  if (lines.length === 0) {
+    fail("plan-to-problems planted list is empty");
+    return false;
+  }
+  if (problems.indexOf("keeps ") !== -1 || problems.indexOf("breaks ") !== -1) {
+    fail("plan-to-problems report picks a winner");
+    return false;
+  }
+  let conflicts = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const words = wordsOf(lines[i]);
+    if (words.length < 2) {
+      fail("plan-to-problems planted line " + lines[i]);
+      return false;
+    }
+    const kind = words[0];
+    if (kind === "conflict") {
+      if (words.length !== 3) {
+        fail("plan-to-problems conflict needs two ids");
+        return false;
+      }
+      conflicts++;
+      const pair = "\"" + words[1] + "\",\n        \"" + words[2] + "\"";
+      if (lintJson.indexOf(pair) < 0 || problems.indexOf(words[1]) < 0 || problems.indexOf(words[2]) < 0) {
+        fail("plan-to-problems conflict " + words[1] + " " + words[2]);
+        return false;
+      }
+    } else if (kind === "gap") {
+      const marker = "\"output\": \"" + words[1] + "\"";
+      if (lintJson.indexOf(marker) < 0 || problems.indexOf(words[1]) < 0) {
+        fail("plan-to-problems gap " + words[1]);
+        return false;
+      }
+    } else if (kind === "vacuous") {
+      const marker = "\"id\": \"" + words[1] + "\"";
+      if (lintJson.indexOf(marker) < 0 || problems.indexOf(words[1]) < 0) {
+        fail("plan-to-problems vacuous " + words[1]);
+        return false;
+      }
+    } else if (kind === "redundant") {
+      if (problems.indexOf(words[1]) < 0 || problems.indexOf("adds nothing") < 0) {
+        fail("plan-to-problems redundant " + words[1]);
+        return false;
+      }
+    } else {
+      fail("plan-to-problems unknown planted kind " + kind);
+      return false;
+    }
+    for (let w = 1; w < words.length; w++) {
+      if (expected.indexOf(words[w]) < 0) {
+        fail("plan-to-problems expected-problems.md omits " + words[w]);
+        return false;
+      }
+    }
+  }
+  if (conflicts < 2) {
+    fail("plan-to-problems needs two contradictions");
+    return false;
+  }
+  const questions = countText(problems, "Which requirement should win?");
+  if (questions !== conflicts) {
+    fail("plan-to-problems winner questions " + String(questions));
+    return false;
+  }
+  return true;
+}
+
+function wordsOf(line: string): string[] {
+  const words: string[] = [];
+  let start = 0;
+  for (let i = 0; i <= line.length; i++) {
+    if (i === line.length || line.charCodeAt(i) === 32) {
+      if (i > start) words.push(line.slice(start, i));
+      start = i + 1;
+    }
+  }
+  return words;
+}
+
+function countText(text: string, needle: string): number {
+  let count = 0;
+  let from = 0;
+  while (from < text.length) {
+    const at = text.indexOf(needle, from);
+    if (at < 0) break;
+    count++;
+    from = at + needle.length;
+  }
+  return count;
 }
 
 function checkDocSamples(label: string, path: string, strictText: boolean): void {

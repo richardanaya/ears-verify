@@ -1,0 +1,5 @@
+conflict R1 R2
+conflict R5 R6
+gap reminder_sent
+vacuous R9
+redundant R11

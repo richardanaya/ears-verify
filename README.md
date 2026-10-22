@@ -243,6 +243,7 @@ examples/order.ears.md
 | --- | --- | --- |
 | `check [--json] <spec> --input <scenario>` | Does this scenario fit the requirements? | Implemented |
 | `lint [--json] <spec>` | Do any requirements clash, leave a hole, never trigger, leave schema unused, repeat each other, or use a word a test cannot pin down? | Implemented |
+| `report <spec>` | What are the logical problems, in plain language? | Implemented |
 | `scenarios [--json] <spec>` | What accepted and rejected examples show each requirement's trigger? | Implemented |
 | `emit-smt [--json] <spec>` | What is the SMT-LIB for these requirements? | Implemented |
 | `policy [--json] <spec> [--property <file>]` | Which scenarios do the requirements allow and forbid? Does any allowed scenario break a property? | Implemented |
@@ -257,6 +258,7 @@ usage:
   ears-verify check [--json] <spec> --input <scenario>
   ears-verify emit-smt [--json] <spec>
   ears-verify lint [--json] <spec>
+  ears-verify report <spec>
   ears-verify scenarios [--json] <spec>
   ears-verify policy [--json] <spec> [--property <file>]
   ears-verify help
@@ -717,6 +719,10 @@ Status.placed is never mentioned.
 Suggested fix: use placed in a requirement, or remove it from Status.
 ```
 
+## From a plan to the problems
+
+[examples/plan-to-problems/README.md](examples/plan-to-problems/README.md) walks the whole path. A plain product plan goes in. A plain list of logical problems comes out. The live step that drafts the spec calls a model. The report step does not. The offline test uses the spec already in the folder and does not need a key.
+
 ## Where this comes from
 
 The shape of the analysis follows Kiro's requirements analysis: separate behavior from design, and look for what the requirements refuse to allow.
@@ -726,7 +732,7 @@ The shape of the analysis follows Kiro's requirements analysis: separate behavio
 
 ## For the agent in the conversation
 
-The skill at [`skills/ears-verify/SKILL.md`](skills/ears-verify/SKILL.md) tells an agent how to sit with a product manager. It lists the grammar the parser accepts, shows real `check`, `lint`, `scenarios`, `emit-smt`, `policy`, and `help` output, including the sentences a product manager would read, and says to ask which requirement should win.
+The skill at [`skills/ears-verify/SKILL.md`](skills/ears-verify/SKILL.md) tells an agent how to sit with a product manager. It lists the grammar the parser accepts, shows real `check`, `lint`, `report`, `scenarios`, `emit-smt`, `policy`, and `help` output, including the sentences a product manager would read, and says to ask which requirement should win.
 
 ## Questions
 
