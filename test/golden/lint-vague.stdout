@@ -6,12 +6,12 @@ wording: 3
 
 wording line 4
 "fast" is too vague to test. Replace it with something a scenario can check.
-output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order"
+output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
 
 wording line 4
 "appropriate" is too vague to test. Replace it with something a scenario can check.
-output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order"
+output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
 
 wording line 4
 "user-friendly" is too vague to test. Replace it with something a scenario can check.
-output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order"
+output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"

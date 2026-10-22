@@ -72,7 +72,7 @@ const failScenario = scenario(
 check("fail count", failScenario.violations === 1);
 check(
   "fail because",
-  failScenario.because === "an order is submitted, inventory is available, and not fulfill the order.",
+  failScenario.because === "An order was submitted and inventory was available, but the order was not fulfilled.",
 );
 
 const passScenario = scenario(
@@ -112,6 +112,10 @@ check(
   ) !== -1,
 );
 check("smt phrase", smt.indexOf('phrase "fulfill the order"') !== -1);
+check(
+  "smt outcome",
+  smt.indexOf('outcome "the order was fulfilled" / "the order was not fulfilled"') !== -1,
+);
 check("smt implication", smt.indexOf("(=> (and order_submitted inventory_available) order_fulfilled)") !== -1);
 
 const conflict = mustSpec(readFileSync("examples/order-conflict.ears.md", "utf8"));
@@ -126,6 +130,13 @@ if (conflictLint.kind === "report") {
   check("situation submitted", item.situation.length === 1 && item.situation[0].name === "order_submitted" && item.situation[0].value === "true");
   check("example fulfilled", item.example.length === 2 && item.example[1].value === "true");
   check("keeps R2", item.keeps.length === 1 && item.keeps[0] === "R2" && item.breaks === "R3");
+  check("clash voice", item.clash === "They clash when an order was submitted.");
+  check(
+    "requires voice",
+    item.requires.length === 2 &&
+      item.requires[0].value === "that the order was fulfilled" &&
+      item.requires[1].value === "that the order was not fulfilled",
+  );
   check("asks who wins", item.fix.indexOf("ask which requirement should win") !== -1);
   check("offers both keeps", item.fix.indexOf("To keep R2, remove R3.") !== -1 && item.fix.indexOf("To keep R3, remove R2.") !== -1);
   const again = lintSpec(conflict);
@@ -138,6 +149,11 @@ if (gapLint.kind === "report") {
   check("order has a gap", gapLint.report.gaps.length === 1 && gapLint.report.conflicts.length === 0);
   const gap = gapLint.report.gaps[0];
   check("gap output", gap.output === "order_fulfilled");
+  check(
+    "gap text",
+    gap.text ===
+      "Nothing says whether the order was fulfilled when an order was submitted and inventory was not available.",
+  );
   check(
     "gap situation",
     gap.situation.length === 2 &&
@@ -408,6 +424,57 @@ check(
   parseMessage('input quantity: Int 1..3 "Count." phrase "the quantity"\n\nR1 The Box shall the quantity is at home.\n') === '3: unexpected "is"',
 );
 check("reserved name phrase", parseMessage('event phrase: Bool "Nope."\n') === '1: "phrase" is a reserved word');
+check("reserved name outcome", parseMessage('event outcome: Bool "Nope."\n') === '1: "outcome" is a reserved word');
+check(
+  "outcome on int",
+  parseMessage('output quantity: Int 0..1 "Count." outcome "the quantity was set"\n') === "1: outcome is only for Bool",
+);
+check(
+  "outcome punctuation",
+  parseMessage('output done: Bool "Done." outcome "done!"\n') === "1: an outcome can only be words",
+);
+check(
+  "outcome then phrase",
+  parseMessage('output done: Bool "Done." outcome "done" phrase "do it"\n') === "1: unexpected trailing text",
+);
+check(
+  "outcome missing half",
+  parseMessage('output done: Bool "Done." outcome "done" /\n') === "1: expected an outcome in quotes",
+);
+
+const derived = mustSpec('output done: Bool "Done." phrase "fulfill the order" outcome "the order was fulfilled"\n\nR1 The Box shall fulfill the order.\n');
+check(
+  "derived outcome",
+  derived.symbols[0].outcomeYes === "the order was fulfilled" && derived.symbols[0].outcomeNo === "the order was not fulfilled",
+);
+check("derived because", scenario(derived, '{ "done": false }').because === "The order was not fulfilled.");
+
+const fromIs = mustSpec('output done: Bool "Done." outcome "the order is fulfilled"\n\nR1 The Box shall done.\n');
+check("outcome from is", fromIs.symbols[0].outcomeNo === "the order is not fulfilled");
+
+const bareOutcome = mustSpec('output done: Bool "Done." outcome "done"\n\nR1 The Box shall done.\n');
+check("outcome prefix not", bareOutcome.symbols[0].outcomeNo === "not done");
+check("outcome prefix because", scenario(bareOutcome, '{ "done": false }').because === "Not done.");
+
+const slashed = mustSpec('output done: Bool "Done." outcome "yes please" / "no thanks"\n\nR1 The Box shall done.\n');
+check("slash outcome", slashed.symbols[0].outcomeYes === "yes please" && slashed.symbols[0].outcomeNo === "no thanks");
+check("slash because", scenario(slashed, '{ "done": false }').because === "No thanks.");
+
+const defaultVoice = mustSpec(
+  'event order_submitted: Bool "Submits." phrase "an order is submitted"\n' +
+    'state inventory_available: Bool "Stock." phrase "inventory is available"\n' +
+    'output done: Bool "Done." phrase "mark the order done"\n\n' +
+    "R1 When an order is submitted and inventory is available, the Box shall mark the order done.\n",
+);
+check(
+  "default was because",
+  scenario(defaultVoice, '{ "order_submitted": true, "inventory_available": true, "done": false }').because ===
+    "An order was submitted and inventory was available, but not mark the order done.",
+);
+check(
+  "unphrased because",
+  scenario(mustSpec('output done: Bool "Done."\n\nR1 The Box shall done.\n'), '{ "done": false }').because === "done is false.",
+);
 
 const unhandled = lintSpec(mustSpec(readFileSync("examples/order-unhandled.ears.md", "utf8")));
 check("unhandled ran", unhandled.kind === "report");
@@ -455,7 +522,10 @@ if (quantityLint.kind === "report") {
   const item = quantityLint.report.conflicts[0];
   check("quantity ids", quantityLint.report.conflicts.length === 1 && quantityLint.report.gaps.length === 0 && item.ids[0] === "R4" && item.ids[1] === "R5");
   check("quantity not every", item.everySituation === false);
-  check("quantity requires", item.requires[0].value === "the quantity is at most 10" && item.requires[1].value === "the quantity is 12");
+  check(
+    "quantity requires",
+    item.requires[0].value === "that the quantity was at most 10" && item.requires[1].value === "that the quantity was 12",
+  );
   check("quantity example", item.example.length === 2 && item.example[1].name === "quantity" && item.example[1].value === "0");
   check("quantity keeps", item.keeps.length === 1 && item.keeps[0] === "R4" && item.breaks === "R5");
 }
@@ -466,7 +536,10 @@ if (statusLint.kind === "report") {
   const item = statusLint.report.conflicts[0];
   check("status ids", item.ids[0] === "R6" && item.ids[1] === "R7");
   check("status every", item.everySituation === true);
-  check("status requires", item.requires[0].value === "the status is shipped" && item.requires[1].value === "the status is cancelled");
+  check(
+    "status requires",
+    item.requires[0].value === "that the status was shipped" && item.requires[1].value === "that the status was cancelled",
+  );
   check("status example", item.example.length === 1 && item.example[0].value === "shipped");
 }
 
@@ -483,7 +556,13 @@ const alwaysProp = parseProperty(readFileSync("examples/order-always.ears.md", "
 check("always parsed", alwaysProp.ok === true);
 if (alwaysProp.ok) {
   const counter = analyzePolicy(order, "examples/order-always.ears.md", alwaysProp.requirements);
-  check("counterexample", counter.holds === false && counter.counterexample !== null && counter.breaks.length === 1 && counter.breaks[0].because === "not fulfill the order.");
+  check(
+    "counterexample",
+    counter.holds === false &&
+      counter.counterexample !== null &&
+      counter.breaks.length === 1 &&
+      counter.breaks[0].because === "The order was not fulfilled.",
+  );
 }
 const sameProp = parseProperty(readFileSync("examples/order-same.ears.md", "utf8"), order);
 if (sameProp.ok) {

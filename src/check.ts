@@ -4,9 +4,9 @@
  */
 
 import type { JsonObject, JsonValue } from "./jsonvalue.ts";
-import { describeAssignment, displayCode, type Requirement, type Spec } from "./spec.ts";
-import { Binding, evalAssertion, mentionedIndexes, T_FALSE, T_UNKNOWN } from "./term.ts";
-import { displayQuote, englishList, formatInt } from "./text.ts";
+import { describeAssignment, displayCode, reportBool, type Requirement, type Spec, type Term } from "./spec.ts";
+import { Binding, evalAssertion, evalBool, formatTerm, mentionedIndexes, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
+import { capitalize, displayQuote, englishList, formatInt, pastVoice } from "./text.ts";
 
 export interface Violation {
   id: string;
@@ -104,16 +104,88 @@ export function evaluateRequirements(spec: Spec, requirements: Requirement[], en
   return violations;
 }
 
-function because(spec: Spec, env: Binding, antecedent: import("./spec.ts").Term | null, consequent: import("./spec.ts").Term): string {
+function because(spec: Spec, env: Binding, antecedent: Term | null, consequent: Term): string {
   const indexes = mentionedIndexes(antecedent, consequent);
   if (indexes.length === 0) return "the response is false.";
+  if (!usesVoice(spec, indexes)) {
+    const parts: string[] = [];
+    for (let i = 0; i < indexes.length; i++) {
+      const sym = spec.symbols[indexes[i]];
+      const code = env.code[indexes[i]];
+      parts.push(describeAssignment(sym, displayCode(spec, sym, code), code === 1));
+    }
+    return englishList(parts) + ".";
+  }
+  const held: string[] = [];
+  if (antecedent !== null) collectHeld(spec, env, antecedent, held);
+  const actual = describeActual(spec, env, consequent);
+  if (held.length === 0) return capitalize(actual) + ".";
+  return capitalize(englishList(held)) + ", but " + actual + ".";
+}
+
+function usesVoice(spec: Spec, indexes: number[]): boolean {
+  for (let i = 0; i < indexes.length; i++) {
+    const sym = spec.symbols[indexes[i]];
+    if (sym.phrase.length > 0 || sym.outcomeYes.length > 0) return true;
+  }
+  return false;
+}
+
+function collectHeld(spec: Spec, env: Binding, term: Term, out: string[]): void {
+  if (term.kind === "and") {
+    collectHeld(spec, env, term.left, out);
+    collectHeld(spec, env, term.right, out);
+    return;
+  }
+  if (term.kind === "or") {
+    const leftTrue = evalBool(term.left, spec, env) === T_TRUE;
+    const rightTrue = evalBool(term.right, spec, env) === T_TRUE;
+    if (leftTrue) collectHeld(spec, env, term.left, out);
+    if (rightTrue) collectHeld(spec, env, term.right, out);
+    if (!leftTrue && !rightTrue) out.push(pastVoice(formatTerm(term)));
+    return;
+  }
+  if (term.kind === "sym") {
+    const sym = spec.symbols[term.index];
+    if (sym.sort.kind === "bool") {
+      out.push(reportBool(sym, env.code[term.index] === 1));
+      return;
+    }
+  }
+  if (term.kind === "not") {
+    const inner = term.term;
+    if (inner.kind === "sym") {
+      const sym = spec.symbols[inner.index];
+      if (sym.sort.kind === "bool") {
+        out.push(reportBool(sym, env.code[inner.index] === 1));
+        return;
+      }
+    }
+  }
+  out.push(pastVoice(formatTerm(term)));
+}
+
+function describeActual(spec: Spec, env: Binding, term: Term): string {
+  if (term.kind === "sym") {
+    const sym = spec.symbols[term.index];
+    if (sym.sort.kind === "bool") return reportBool(sym, env.code[term.index] === 1);
+  }
+  if (term.kind === "not") {
+    const inner = term.term;
+    if (inner.kind === "sym") {
+      const sym = spec.symbols[inner.index];
+      if (sym.sort.kind === "bool") return reportBool(sym, env.code[inner.index] === 1);
+    }
+  }
+  const indexes = mentionedIndexes(null, term);
+  if (indexes.length === 0) return pastVoice(formatTerm(term));
   const parts: string[] = [];
   for (let i = 0; i < indexes.length; i++) {
     const sym = spec.symbols[indexes[i]];
     const code = env.code[indexes[i]];
     parts.push(describeAssignment(sym, displayCode(spec, sym, code), code === 1));
   }
-  return englishList(parts) + ".";
+  return englishList(parts);
 }
 
 export function formatCheckText(specPath: string, scenarioPath: string, violations: Violation[]): string {

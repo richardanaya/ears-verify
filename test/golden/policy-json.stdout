@@ -28,7 +28,7 @@
       "id": "P1",
       "line": 3,
       "sentence": "The Order System shall fulfill the order.",
-      "because": "not fulfill the order."
+      "because": "The order was not fulfilled."
     }
   ]
 }

@@ -24,6 +24,49 @@ export function formatInt(value: number): string {
   return String(Math.trunc(value));
 }
 
+/** Capitalize the first letter when it is a lowercase ascii letter. */
+export function capitalize(text: string): string {
+  if (text.length === 0) return text;
+  const code = text.charCodeAt(0);
+  if (code >= 97 && code <= 122) return String.fromCharCode(code - 32) + text.slice(1);
+  return text;
+}
+
+/** Replace the first whole word. The replacement may itself contain spaces. */
+export function replaceWord(text: string, word: string, replacement: string): string {
+  const end = wordEnd(text, word);
+  if (end < 0) return text;
+  const start = end - word.length;
+  return text.slice(0, start) + replacement + text.slice(end);
+}
+
+/** Turn the first "is" into "was". Other words stay put. */
+export function pastVoice(text: string): string {
+  return replaceWord(text, "is", "was");
+}
+
+function wordEnd(text: string, word: string): number {
+  const target = lowerAscii(word);
+  let start = 0;
+  for (let i = 0; i <= text.length; i++) {
+    if (i === text.length || text.charCodeAt(i) === 32) {
+      if (i > start && lowerAscii(text.slice(start, i)) === target) return i;
+      start = i + 1;
+    }
+  }
+  return -1;
+}
+
+function lowerAscii(text: string): string {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= 65 && code <= 90) out += String.fromCharCode(code + 32);
+    else out += text.slice(i, i + 1);
+  }
+  return out;
+}
+
 /** "a", "a and b", or "a, b, and c". */
 export function englishList(parts: string[]): string {
   if (parts.length === 0) return "";

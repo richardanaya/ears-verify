@@ -13,9 +13,9 @@ When an order is submitted, the Order System shall fulfill the order.
 R3 line 8
 When an order is submitted, the Order System shall not fulfill the order.
 
-They clash when an order is submitted.
-R2 requires fulfill the order.
-R3 requires not fulfill the order.
+They clash when an order was submitted.
+R2 requires that the order was fulfilled.
+R3 requires that the order was not fulfilled.
 
 Example scenario:
 {

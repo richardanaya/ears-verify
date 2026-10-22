@@ -10,7 +10,7 @@
       "minimal": true,
       "everySituation": false,
       "summary": "R2 and R3 cannot both hold.",
-      "clash": "They clash when an order is submitted.",
+      "clash": "They clash when an order was submitted.",
       "requirements": [
         {
           "id": "R2",
@@ -32,11 +32,11 @@
       "requires": [
         {
           "id": "R2",
-          "text": "fulfill the order"
+          "text": "that the order was fulfilled"
         },
         {
           "id": "R3",
-          "text": "not fulfill the order"
+          "text": "that the order was not fulfilled"
         }
       ],
       "example": [

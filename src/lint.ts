@@ -5,10 +5,10 @@
  * an example, and a fix that does not pick a winner.
  */
 
-import { describeAssignment, displayCode, isDriver, requirementMentions, type Spec } from "./spec.ts";
+import { describeAssignment, displayCode, isDriver, reportBool, requirementMentions, type Spec, type Term } from "./spec.ts";
 import { bestGap, conflictingSets, modelFor, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
 import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
-import { displayQuote, englishList, formatInt } from "./text.ts";
+import { displayQuote, englishList, formatInt, pastVoice } from "./text.ts";
 
 interface WordRule {
   word: string;
@@ -230,17 +230,40 @@ function activeRequires(spec: Spec, indexes: number[], situation: Binding): Name
   const pairs: NameValue[] = [];
   for (let i = 0; i < chosen.length; i++) {
     const req = spec.requirements[chosen[i]];
-    pairs.push({ name: req.id, value: formatTerm(req.consequent) });
+    pairs.push({ name: req.id, value: obligationValue(spec, req.consequent) });
   }
   return pairs;
+}
+
+function obligationValue(spec: Spec, term: Term): string {
+  const plain = formatTerm(term);
+  const voiced = voiceObligation(spec, term);
+  if (voiced !== plain) return "that " + voiced;
+  return plain;
+}
+
+function voiceObligation(spec: Spec, term: Term): string {
+  if (term.kind === "sym") {
+    const sym = spec.symbols[term.index];
+    if (sym.sort.kind === "bool" && (sym.phrase.length > 0 || sym.outcomeYes.length > 0)) return reportBool(sym, true);
+    return formatTerm(term);
+  }
+  if (term.kind === "not") {
+    const inner = term.term;
+    if (inner.kind === "sym") {
+      const sym = spec.symbols[inner.index];
+      if (sym.sort.kind === "bool" && (sym.phrase.length > 0 || sym.outcomeYes.length > 0)) return reportBool(sym, false);
+    }
+  }
+  return pastVoice(formatTerm(term));
 }
 
 function explainGap(spec: Spec, outputIndex: number, situation: Binding): Gap {
   const sym = spec.symbols[outputIndex];
   const name = sym.name;
-  const label = sym.phrase.length > 0 ? sym.phrase : name;
   const pairs = driverPairs(spec, situation);
-  let text = "Nothing covers " + label;
+  const voiced = sym.sort.kind === "bool" && (sym.phrase.length > 0 || sym.outcomeYes.length > 0);
+  let text = voiced ? "Nothing says whether " + reportBool(sym, true) : "Nothing covers " + (sym.phrase.length > 0 ? sym.phrase : name);
   if (pairs.length === 0) text += ".";
   else text += " when " + pairClause(spec, pairs) + ".";
   return { output: name, situation: pairs, text: text };

@@ -14,6 +14,7 @@ import {
   findEnum,
   findSymbol,
   findVariant,
+  negateReport,
   type EnumDecl,
   type Requirement,
   type Role,
@@ -242,12 +243,17 @@ function parseDeclaration(line: string, lineNo: number, spec: Spec): string | nu
   if (!described.ok) return described.message;
   const phrased = parseOptionalPhrase(cur, spec);
   if (!phrased.ok) return phrased.message;
+  const stated = parseOptionalOutcome(cur, sort);
+  if (!stated.ok) return stated.message;
+  if (!cur.eof()) return "unexpected trailing text";
   const decl: SymbolDecl = {
     role: role,
     name: name,
     sort: sort,
     description: described.text,
     phrase: phrased.phrase,
+    outcomeYes: stated.yes,
+    outcomeNo: stated.no,
     unwanted: unwanted,
     line: lineNo,
     source: line,
@@ -355,16 +361,65 @@ function parseQuoted(cur: Cur, label: string): { ok: true; text: string } | { ok
 function parseOptionalPhrase(cur: Cur, spec: Spec): { ok: true; phrase: string } | { ok: false; message: string } {
   cur.skip();
   if (cur.eof()) return { ok: true, phrase: "" };
+  const save = cur.i;
   const word = readIdent(cur);
-  if (word === null || lowerAscii(word) !== "phrase") return { ok: false, message: "unexpected trailing text" };
+  if (word === null || lowerAscii(word) !== "phrase") {
+    cur.i = save;
+    return { ok: true, phrase: "" };
+  }
   const quoted = parseQuoted(cur, "phrase");
   if (!quoted.ok) return quoted;
   const phrase = normalizeSpaces(quoted.text);
   if (phrase.length === 0) return { ok: false, message: "expected a phrase" };
   const clash = phraseClash(spec, phrase);
   if (clash.length > 0) return { ok: false, message: clash };
-  if (!cur.eof()) return { ok: false, message: "unexpected trailing text" };
   return { ok: true, phrase: phrase };
+}
+
+function parseOptionalOutcome(
+  cur: Cur,
+  sort: Sort,
+): { ok: true; yes: string; no: string } | { ok: false; message: string } {
+  cur.skip();
+  if (cur.eof()) return { ok: true, yes: "", no: "" };
+  const save = cur.i;
+  const word = readIdent(cur);
+  if (word === null || lowerAscii(word) !== "outcome") {
+    cur.i = save;
+    return { ok: true, yes: "", no: "" };
+  }
+  if (sort.kind !== "bool") return { ok: false, message: "outcome is only for Bool" };
+  const yesQuoted = parseQuoted(cur, "outcome");
+  if (!yesQuoted.ok) return { ok: false, message: outcomeQuoteMessage(yesQuoted.message) };
+  const yes = normalizeSpaces(yesQuoted.text);
+  const yesError = outcomeWords(yes);
+  if (yesError !== null) return { ok: false, message: yesError };
+  cur.skip();
+  if (cur.i < cur.text.length && cur.text.charCodeAt(cur.i) === 47) {
+    cur.i++;
+    const noQuoted = parseQuoted(cur, "outcome");
+    if (!noQuoted.ok) return { ok: false, message: outcomeQuoteMessage(noQuoted.message) };
+    const no = normalizeSpaces(noQuoted.text);
+    const noError = outcomeWords(no);
+    if (noError !== null) return { ok: false, message: noError };
+    return { ok: true, yes: yes, no: no };
+  }
+  return { ok: true, yes: yes, no: negateReport(yes) };
+}
+
+function outcomeQuoteMessage(message: string): string {
+  if (message === "expected a outcome") return "expected an outcome";
+  if (message === "expected a outcome in quotes") return "expected an outcome in quotes";
+  return message;
+}
+
+function outcomeWords(text: string): string | null {
+  if (text.length === 0) return "expected an outcome";
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (isPhraseStop(code) || code === 43) return "an outcome can only be words";
+  }
+  return null;
 }
 
 interface SentenceOk {
@@ -981,7 +1036,8 @@ function isReserved(name: string): boolean {
     word === "enum" ||
     word === "bool" ||
     word === "int" ||
-    word === "phrase"
+    word === "phrase" ||
+    word === "outcome"
   );
 }
 

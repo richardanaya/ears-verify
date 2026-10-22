@@ -43,9 +43,9 @@ When an order is submitted, the Order System shall fulfill the order.
 R3 line 8
 When an order is submitted, the Order System shall not fulfill the order.
 
-They clash when an order is submitted.
-R2 requires fulfill the order.
-R3 requires not fulfill the order.
+They clash when an order was submitted.
+R2 requires that the order was fulfilled.
+R3 requires that the order was not fulfilled.
 
 Example scenario:
 {
@@ -57,7 +57,7 @@ This scenario keeps R2 and breaks R3.
 Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2.
 ```
 
-R2 says a submitted order is fulfilled. R3 says it is not. Both apply when the customer submits an order, so no behavior can satisfy both. The example keeps R2 only because R3 is the last requirement in the set. It is a witness, and it is not a recommendation. Ask which requirement should win, then delete or rewrite the other.
+R2 says the order was fulfilled. R3 says the order was not fulfilled. Both apply when the customer submits an order, so no behavior can satisfy both. The example keeps R2 only because R3 is the last requirement in the set. It is a witness, and it is not a recommendation. Ask which requirement should win, then delete or rewrite the other.
 
 ## Check one scenario
 
@@ -77,7 +77,7 @@ violations: 1
 
 R1 line 7
 WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
-an order is submitted, inventory is available, and not fulfill the order.
+An order was submitted and inventory was available, but the order was not fulfilled.
 ```
 
 <!-- verify stdout 0
@@ -108,7 +108,7 @@ misuse: 0
 wording: 0
 
 gap order_fulfilled
-Nothing covers fulfill the order when an order is submitted and not inventory is available.
+Nothing says whether the order was fulfilled when an order was submitted and inventory was not available.
 ```
 
 `examples/order-covered.ears.md` gives every situation a response. Lint is quiet:
@@ -142,7 +142,7 @@ examples/order.ears.md
 (declare-fun order_submitted () Bool)
 ; state inventory_available: Bool "Enough stock is on hand to fill the order." phrase "inventory is available"
 (declare-fun inventory_available () Bool)
-; output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order"
+; output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
 (declare-fun order_fulfilled () Bool)
 ; R1_L7 line 7: WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
 (assert (! (=> (and order_submitted inventory_available) order_fulfilled) :named R1_L7))
@@ -183,7 +183,7 @@ This scenario violates a requirement.
 
 R1 line 7
 WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
-an order is submitted, inventory is available, and not fulfill the order.
+An order was submitted and inventory was available, but the order was not fulfilled.
 ```
 
 Exit status is `0` when the command is clean, `1` when a scenario violates a requirement, lint finds something, or a property has a counterexample, and `2` when the spec, the scenario, the property, or the arguments are wrong. `--json` is for the agent. The text report is for the product manager.
@@ -202,11 +202,13 @@ Each piece is optional. `then` belongs in the line exactly when `if` is there. T
 event order_submitted: Bool "The customer submits an order." phrase "an order is submitted"
 state inventory_available: Bool "Enough stock is on hand to fill the order." phrase "inventory is available"
 input quantity: Int 1..10 "How many units the customer asked for." phrase "the quantity"
-output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order"
+output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
 unwanted event payment_declined: Bool "The payment was declined." phrase "payment fails"
 ```
 
-The phrase is the only wording a requirement may use for that name. `not fulfill the order` is the phrase with `not` in front. `the quantity is at most 10` is how an integer comparison is written. Matching is exact and case-insensitive: the words have to be the phrase you declared, and the longest phrase wins. A sentence that says `an order was submitted` is not close enough to count. The error names the line and the nearest phrases:
+The phrase is the only wording a requirement may use for that name. `not fulfill the order` is the phrase with `not` in front. `the quantity is at most 10` is how an integer comparison is written. Matching is exact and case-insensitive: the words have to be the phrase you declared, and the longest phrase wins. A sentence that says `an order was submitted` is not close enough to count. The error names the line and the nearest phrases.
+
+A Bool can also say how a report states the result, after the phrase: `outcome "the order was fulfilled" / "the order was not fulfilled"`. One string is enough. The false form inserts `not` after the first `was` or `is`, or prefixes `not` when neither word is there. Two strings separated by `/` are used as written. `outcome` is only for Bool, and `not` is allowed in that wording. When it is left off, a phrase that contains `is` is reported with `was` or `was not`. The violation line for the order above is `An order was submitted and inventory was available, but the order was not fulfilled.`
 
 <!-- verify stderr 2
 build/ears-verify
@@ -217,7 +219,7 @@ test/fixtures/unknown-phrase.ears.md
 error: test/fixtures/unknown-phrase.ears.md:5: unknown phrase "an order was submitted". Closest: "an order is submitted", "inventory is available", "fulfill the order".
 ```
 
-Scenarios and the SMT-LIB still use the declared names (`order_submitted`, `quantity`). The sentences you read, and the explanations under them, use the phrases.
+Scenarios and the SMT-LIB still use the declared names (`order_submitted`, `quantity`). The sentences you read, and the explanations under them, use the phrases and the outcome wording.
 
 Events and states are booleans. Inputs and outputs are booleans, integers with an inclusive range, or enums. An unwanted event, such as a payment being declined, is written with `if` ... `then`. Writing it with `when` is a lint finding, because `when` reads like the normal trigger for the response.
 
@@ -309,15 +311,15 @@ wording: 3
 
 wording line 4
 "fast" is too vague to test. Replace it with something a scenario can check.
-output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order"
+output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
 
 wording line 4
 "appropriate" is too vague to test. Replace it with something a scenario can check.
-output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order"
+output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
 
 wording line 4
 "user-friendly" is too vague to test. Replace it with something a scenario can check.
-output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order"
+output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
 ```
 
 <!-- verify stdout 1
@@ -341,9 +343,9 @@ When an order is submitted, the Order System shall the quantity is at most 10.
 R5 line 8
 When an order is submitted, the Order System shall the quantity is 12.
 
-They clash when an order is submitted.
-R4 requires the quantity is at most 10.
-R5 requires the quantity is 12.
+They clash when an order was submitted.
+R4 requires that the quantity was at most 10.
+R5 requires that the quantity was 12.
 
 Example scenario:
 {
@@ -379,8 +381,8 @@ R7 line 7
 The Order System shall the status is cancelled.
 
 They clash in every situation.
-R6 requires the status is shipped.
-R7 requires the status is cancelled.
+R6 requires that the status was shipped.
+R7 requires that the status was cancelled.
 
 Example scenario:
 {
@@ -438,7 +440,7 @@ This scenario satisfies every requirement and violates the property.
 
 P1 line 3
 The Order System shall fulfill the order.
-not fulfill the order.
+The order was not fulfilled.
 ```
 
 `examples/order-same.ears.md` repeats R1. Nothing the requirements allow can break it:

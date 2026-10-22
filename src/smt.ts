@@ -57,6 +57,10 @@ function symbolComment(spec: Spec, sym: SymbolDecl): string {
   const prefix = sym.unwanted ? "unwanted " + sym.role : sym.role;
   let text = prefix + " " + sym.name + ": " + sortComment(spec, sym) + " \"" + escapeComment(sym.description) + "\"";
   if (sym.phrase.length > 0) text += " phrase \"" + escapeComment(sym.phrase) + "\"";
+  if (sym.outcomeYes.length > 0) {
+    text += " outcome \"" + escapeComment(sym.outcomeYes) + "\"";
+    if (sym.outcomeNo.length > 0) text += " / \"" + escapeComment(sym.outcomeNo) + "\"";
+  }
   return text;
 }
 

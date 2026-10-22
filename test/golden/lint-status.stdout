@@ -14,8 +14,8 @@ R7 line 7
 The Order System shall the status is cancelled.
 
 They clash in every situation.
-R6 requires the status is shipped.
-R7 requires the status is cancelled.
+R6 requires that the status was shipped.
+R7 requires that the status was cancelled.
 
 Example scenario:
 {

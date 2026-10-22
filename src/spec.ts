@@ -4,6 +4,8 @@
  * Every Int has an inclusive range so the solver's domain is finite.
  */
 
+import { replaceWord } from "./text.ts";
+
 export type Role = "event" | "state" | "input" | "output";
 
 export type Sort =
@@ -24,6 +26,10 @@ export interface SymbolDecl {
   description: string;
   /** Plain words that stand for this symbol in a requirement. Empty means the name is used. */
   phrase: string;
+  /** How a report states this Bool when it is true. Empty means the phrase is used. */
+  outcomeYes: string;
+  /** How a report states this Bool when it is false. Empty means it is derived. */
+  outcomeNo: string;
   unwanted: boolean;
   line: number;
   source: string;
@@ -118,14 +124,50 @@ export function displayCode(spec: Spec, sym: SymbolDecl, code: number): string {
   return decl.variants[code];
 }
 
-/** How a report names one assigned symbol. Phrases stay exact; a false boolean is "not" plus the phrase. */
+/**
+ * How a report names one assigned symbol.
+ * A Bool uses its outcome when one is declared. Otherwise a phrase that
+ * contains "is" is stated with "was" or "was not", and any other phrase
+ * stays as written, with "not" in front when the Bool is false.
+ * An integer or enum phrase is stated with "was".
+ */
 export function describeAssignment(sym: SymbolDecl, shown: string, isTrue: boolean): string {
+  if (sym.sort.kind === "bool") return reportBool(sym, isTrue);
   if (sym.phrase.length === 0) return sym.name + " is " + shown;
-  if (sym.sort.kind === "bool") {
-    if (isTrue) return sym.phrase;
-    return "not " + sym.phrase;
+  return replaceWord(sym.phrase + " is " + shown, "is", "was");
+}
+
+/** How a report states a Bool. */
+export function reportBool(sym: SymbolDecl, isTrue: boolean): string {
+  if (isTrue && sym.outcomeYes.length > 0) return sym.outcomeYes;
+  if (!isTrue && sym.outcomeNo.length > 0) return sym.outcomeNo;
+  if (!isTrue && sym.outcomeYes.length > 0) return negateReport(sym.outcomeYes);
+  if (sym.phrase.length === 0) return sym.name + " is " + (isTrue ? "true" : "false");
+  if (hasWord(sym.phrase, "is")) {
+    if (isTrue) return replaceWord(sym.phrase, "is", "was");
+    return replaceWord(sym.phrase, "is", "was not");
   }
-  return sym.phrase + " is " + shown;
+  if (isTrue) return sym.phrase;
+  return "not " + sym.phrase;
+}
+
+/** Insert "not" after the first "was" or "is", or prefix "not" when neither is there. */
+export function negateReport(text: string): string {
+  const afterWas = insertNotAfter(text, "was");
+  if (afterWas.length > 0) return afterWas;
+  const afterIs = insertNotAfter(text, "is");
+  if (afterIs.length > 0) return afterIs;
+  return "not " + text;
+}
+
+function insertNotAfter(text: string, word: string): string {
+  const changed = replaceWord(text, word, word + " not");
+  if (changed === text) return "";
+  return changed;
+}
+
+function hasWord(text: string, word: string): boolean {
+  return replaceWord(text, word, word + "\u0001") !== text;
 }
 
 export function termMentions(term: Term, index: number): boolean {
