@@ -1,0 +1,36 @@
+{
+  "ok": false,
+  "spec": "examples/order-unused.ears.md",
+  "conflicts": [],
+  "gaps": [],
+  "misuse": [],
+  "wording": [],
+  "redundant": [],
+  "vacuous": [],
+  "unused": [
+    {
+      "name": "loyalty",
+      "kind": "state",
+      "text": "loyalty (\"the customer is loyal\") is a state and no requirement mentions it.",
+      "fix": "Suggested fix: use loyalty in a requirement, or remove it from the schema."
+    },
+    {
+      "name": "region",
+      "kind": "input",
+      "text": "region (\"the region\") is an input and no requirement mentions it.",
+      "fix": "Suggested fix: use region in a requirement, or remove it from the schema."
+    },
+    {
+      "name": "receipt_sent",
+      "kind": "output",
+      "text": "Nothing sets receipt_sent (\"a receipt is sent\"). Requirements mention it, but no response says what it shall be.",
+      "fix": "Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value."
+    },
+    {
+      "name": "Lane.refund",
+      "kind": "variant",
+      "text": "Lane.refund is never mentioned.",
+      "fix": "Suggested fix: use refund in a requirement, or remove it from Lane."
+    }
+  ]
+}

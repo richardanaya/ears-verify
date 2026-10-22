@@ -1,0 +1,11 @@
+spec: examples/order-unhandled.ears.md
+conflicts: 0
+gaps: 1
+misuse: 0
+wording: 0
+redundant: 0
+vacuous: 0
+unused: 0
+
+gap order_cancelled
+No requirement handles "an order is cancelled". Suggested fix: add a requirement that says what the system shall do, or remove the event.

@@ -1,0 +1,24 @@
+spec: examples/order-awkward.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 4
+redundant: 0
+vacuous: 0
+unused: 0
+
+wording line 7
+"shall the ... is ..." is awkward. Write the response as a verb phrase, such as "bill at most 2 seats", and bind it with as.
+When start the subscription, the Checkout shall the lane is fulfill.
+
+wording line 7
+"When" needs a condition with "is", not a bare verb. "When the subscription is started" is the form.
+When start the subscription, the Checkout shall the lane is fulfill.
+
+wording line 8
+"shall the ... is ..." is awkward. Write the response as a verb phrase, such as "bill at most 2 seats", and bind it with as.
+When not start the subscription, the Checkout shall the lane is hold.
+
+wording line 8
+"When" needs a condition with "is", not a bare verb. "When the subscription is started" is the form.
+When not start the subscription, the Checkout shall the lane is hold.

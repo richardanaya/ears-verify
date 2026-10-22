@@ -1,0 +1,24 @@
+spec: examples/order-unused.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+vacuous: 0
+unused: 4
+
+unused loyalty
+loyalty ("the customer is loyal") is a state and no requirement mentions it.
+Suggested fix: use loyalty in a requirement, or remove it from the schema.
+
+unused region
+region ("the region") is an input and no requirement mentions it.
+Suggested fix: use region in a requirement, or remove it from the schema.
+
+unused receipt_sent
+Nothing sets receipt_sent ("a receipt is sent"). Requirements mention it, but no response says what it shall be.
+Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value.
+
+unused Lane.refund
+Lane.refund is never mentioned.
+Suggested fix: use refund in a requirement, or remove it from Lane.

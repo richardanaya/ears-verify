@@ -1,0 +1,27 @@
+{
+  "name": "ears-verify",
+  "version": "0.1.0",
+  "description": "Catch contradictions in EARS requirements before anyone builds them. The same TypeScript runs on Node and compiles to a native binary with ScriptC.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "ears-verify": "./src/main.ts"
+  },
+  "scripts": {
+    "build": "scriptc build src/main.ts -o build/ears-verify",
+    "coverage": "scriptc coverage src/main.ts --fail-on=blockers",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --experimental-strip-types test/run-all.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "scriptc": "0.4.1",
+    "typescript": "5.9.3"
+  },
+  "allowScripts": {
+    "scriptc@0.4.1": true
+  }
+}

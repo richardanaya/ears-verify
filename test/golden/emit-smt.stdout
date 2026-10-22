@@ -1,0 +1,10 @@
+; spec: examples/order.ears.md
+(set-logic ALL)
+; event order_submitted: Bool "The customer submits an order." phrase "an order is submitted"
+(declare-fun order_submitted () Bool)
+; state inventory_available: Bool "Enough stock is on hand to fill the order." phrase "inventory is available"
+(declare-fun inventory_available () Bool)
+; output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
+(declare-fun order_fulfilled () Bool)
+; R1_L7 line 7: WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
+(assert (! (=> (and order_submitted inventory_available) order_fulfilled) :named R1_L7))

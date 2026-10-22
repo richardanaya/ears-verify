@@ -1,0 +1,4 @@
+{
+  "ok": false,
+  "error": "usage: ears-verify emit-smt [--json] <spec>"
+}

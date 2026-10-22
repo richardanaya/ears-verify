@@ -1,0 +1,30 @@
+spec: examples/order-conflict.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+vacuous: 0
+unused: 0
+
+conflict {R2, R3}
+R2 and R3 cannot both hold.
+
+R2 line 7
+When an order is submitted, the Order System shall fulfill the order.
+
+R3 line 8
+When an order is submitted, the Order System shall not fulfill the order.
+
+They clash when an order was submitted.
+R2 requires that the order was fulfilled.
+R3 requires that the order was not fulfilled.
+
+Example scenario:
+{
+  "order_submitted": true,
+  "order_fulfilled": true
+}
+This scenario keeps R2 and breaks R3.
+
+Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2.

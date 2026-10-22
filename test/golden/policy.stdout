@@ -1,0 +1,19 @@
+spec: examples/order.ears.md
+accepted:
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": false
+}
+This scenario satisfies every requirement.
+rejected:
+{
+  "order_submitted": true,
+  "inventory_available": true,
+  "order_fulfilled": false
+}
+This scenario violates a requirement.
+
+R1 line 7
+WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
+An order was submitted and inventory was available, but the order was not fulfilled.

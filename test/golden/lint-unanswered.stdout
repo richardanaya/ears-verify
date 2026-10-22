@@ -1,0 +1,11 @@
+spec: examples/order-unanswered.ears.md
+conflicts: 0
+gaps: 1
+misuse: 0
+wording: 0
+redundant: 0
+vacuous: 0
+unused: 0
+
+gap payment_declined
+No requirement states a response when "payment fails". Suggested fix: add an if ... then requirement, and ask what the system shall do. Do not choose the response.

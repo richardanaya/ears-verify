@@ -1,0 +1,19 @@
+spec: examples/order-covered.ears.md
+accepted:
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": false
+}
+This scenario satisfies every requirement.
+rejected:
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": true
+}
+This scenario violates a requirement.
+
+R3 line 9
+When an order is not submitted, the Order System shall not fulfill the order.
+An order was not submitted, but the order was fulfilled.

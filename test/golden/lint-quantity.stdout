@@ -1,0 +1,30 @@
+spec: examples/order-quantity.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+vacuous: 0
+unused: 0
+
+conflict {R4, R5}
+R4 and R5 cannot both hold.
+
+R4 line 7
+When an order is submitted, the Order System shall accept at most 10 units.
+
+R5 line 8
+When an order is submitted, the Order System shall accept 12 units.
+
+They clash when an order was submitted.
+R4 requires that at most 10 units were accepted.
+R5 requires that 12 units were accepted.
+
+Example scenario:
+{
+  "order_submitted": true,
+  "quantity": 0
+}
+This scenario keeps R4 and breaks R5.
+
+Suggested fix: ask which requirement should win. To keep R4, remove R5. To keep R5, remove R4.

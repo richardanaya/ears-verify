@@ -1,0 +1,34 @@
+{
+  "ok": false,
+  "spec": "examples/order.ears.md",
+  "property": "examples/order-always.ears.md",
+  "holds": false,
+  "note": "",
+  "acceptedFound": false,
+  "accepted": [],
+  "rejectedFound": false,
+  "rejected": [],
+  "counterexampleFound": true,
+  "counterexample": [
+    {
+      "name": "order_submitted",
+      "value": "false"
+    },
+    {
+      "name": "inventory_available",
+      "value": "false"
+    },
+    {
+      "name": "order_fulfilled",
+      "value": "false"
+    }
+  ],
+  "breaks": [
+    {
+      "id": "P1",
+      "line": 3,
+      "sentence": "The Order System shall fulfill the order.",
+      "because": "The order was not fulfilled."
+    }
+  ]
+}
