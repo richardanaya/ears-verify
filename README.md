@@ -2,8 +2,6 @@
 
 # plan-verify
 
-Formerly ears-verify.
-
 Catch contradictions in your requirements before anyone builds them.
 
 plan-verify is for product managers, and for the AI agents who write requirements with them. You talk through what the product should do. The agent turns that into [EARS](https://alistairmavin.com/ears/) requirements. Each name in the schema is bound to a phrase, and the requirement is written with those phrases, so a line reads the way you would say it. plan-verify then looks for requirements that cannot all be true, and explains the clash in plain language: which requirements disagree, in what situation, a concrete example, and a fix.
