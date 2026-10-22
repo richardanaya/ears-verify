@@ -4,7 +4,7 @@
  */
 
 import type { JsonObject, JsonValue } from "./jsonvalue.ts";
-import { displayCode, type Spec } from "./spec.ts";
+import { describeAssignment, displayCode, type Spec } from "./spec.ts";
 import { Binding, evalAssertion, mentionedIndexes, T_FALSE, T_UNKNOWN } from "./term.ts";
 import { displayQuote, englishList, formatInt } from "./text.ts";
 
@@ -106,7 +106,8 @@ function because(spec: Spec, env: Binding, antecedent: import("./spec.ts").Term 
   const parts: string[] = [];
   for (let i = 0; i < indexes.length; i++) {
     const sym = spec.symbols[indexes[i]];
-    parts.push(sym.name + " is " + displayCode(spec, sym, env.code[indexes[i]]));
+    const code = env.code[indexes[i]];
+    parts.push(describeAssignment(sym, displayCode(spec, sym, code), code === 1));
   }
   return englishList(parts) + ".";
 }

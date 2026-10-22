@@ -22,6 +22,8 @@ export interface SymbolDecl {
   name: string;
   sort: Sort;
   description: string;
+  /** Plain words that stand for this symbol in a requirement. Empty means the name is used. */
+  phrase: string;
   unwanted: boolean;
   line: number;
   source: string;
@@ -53,7 +55,7 @@ export type Term =
   | { kind: "bool"; value: boolean }
   | { kind: "int"; value: number }
   | { kind: "enum"; enumName: string; variant: string; index: number }
-  | { kind: "sym"; name: string; index: number }
+  | { kind: "sym"; name: string; index: number; phrase: string }
   | { kind: "not"; term: Term }
   | { kind: "and"; left: Term; right: Term }
   | { kind: "or"; left: Term; right: Term }
@@ -114,6 +116,16 @@ export function displayCode(spec: Spec, sym: SymbolDecl, code: number): string {
   if (decl === null) return "?";
   if (code < 0 || code >= decl.variants.length) return "?";
   return decl.variants[code];
+}
+
+/** How a report names one assigned symbol. Phrases stay exact; a false boolean is "not" plus the phrase. */
+export function describeAssignment(sym: SymbolDecl, shown: string, isTrue: boolean): string {
+  if (sym.phrase.length === 0) return sym.name + " is " + shown;
+  if (sym.sort.kind === "bool") {
+    if (isTrue) return sym.phrase;
+    return "not " + sym.phrase;
+  }
+  return sym.phrase + " is " + shown;
 }
 
 export function termMentions(term: Term, index: number): boolean {

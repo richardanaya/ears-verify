@@ -6,8 +6,8 @@ wording: 2
 
 wording line 4
 "quickly" is too vague to test. Replace it with something a scenario can check.
-output order_fulfilled: Bool "The system responds quickly."
+output order_fulfilled: Bool "The system responds quickly." phrase "fulfill the order"
 
 wording line 5
 "database" names a solution. Say what the system must do, not how to build it.
-state saved: Bool "Store the order in the database."
+state saved: Bool "Store the order in the database." phrase "the order is saved"

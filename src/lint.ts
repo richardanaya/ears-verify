@@ -4,10 +4,10 @@
  * set, the situation, an example, and a fix that does not pick a winner.
  */
 
-import { displayCode, isDriver, type Spec } from "./spec.ts";
+import { describeAssignment, displayCode, isDriver, type Spec } from "./spec.ts";
 import { bestGap, conflictingSets, modelFor, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
 import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
-import { englishList, formatInt } from "./text.ts";
+import { displayQuote, englishList, formatInt } from "./text.ts";
 
 interface WordRule {
   word: string;
@@ -151,7 +151,7 @@ function explainConflict(spec: Spec, group: ConflictGroup): Conflict {
     }
   }
   const summary = summaryText(ids, group.minimal);
-  const clash = clashText(everySituation, situationPairs);
+  const clash = clashText(spec, everySituation, situationPairs);
   const fix = fixText(ids, group.minimal);
   return {
     ids: ids,
@@ -200,11 +200,13 @@ function activeRequires(spec: Spec, indexes: number[], situation: Binding): Name
 }
 
 function explainGap(spec: Spec, outputIndex: number, situation: Binding): Gap {
-  const name = spec.symbols[outputIndex].name;
+  const sym = spec.symbols[outputIndex];
+  const name = sym.name;
+  const label = sym.phrase.length > 0 ? sym.phrase : name;
   const pairs = driverPairs(spec, situation);
-  let text = "Nothing covers " + name;
+  let text = "Nothing covers " + label;
   if (pairs.length === 0) text += ".";
-  else text += " when " + pairClause(pairs) + ".";
+  else text += " when " + pairClause(spec, pairs) + ".";
   return { output: name, situation: pairs, text: text };
 }
 
@@ -214,12 +216,16 @@ function findMisuse(spec: Spec): Misuse[] {
     const req = spec.requirements[r];
     if (!req.hasWhen || req.hasIf || req.whenTerm === null) continue;
     const names: string[] = [];
+    const labels: string[] = [];
     for (let s = 0; s < spec.symbols.length; s++) {
       if (!spec.symbols[s].unwanted) continue;
-      if (mentions(req.whenTerm, s)) names.push(spec.symbols[s].name);
+      if (!mentions(req.whenTerm, s)) continue;
+      names.push(spec.symbols[s].name);
+      const phrase = spec.symbols[s].phrase;
+      labels.push(phrase.length > 0 ? displayQuote(phrase) : spec.symbols[s].name);
     }
     if (names.length === 0) continue;
-    const label = names.length === 1 ? names[0] + " is an unwanted event" : englishList(names) + " are unwanted events";
+    const label = labels.length === 1 ? labels[0] + " is an unwanted event" : englishList(labels) + " are unwanted events";
     found.push({
       id: req.id,
       line: req.line,
@@ -300,10 +306,19 @@ function driverPairs(spec: Spec, env: Binding): NameValue[] {
   return pairs;
 }
 
-function pairClause(pairs: NameValue[]): string {
+function pairClause(spec: Spec, pairs: NameValue[]): string {
   const parts: string[] = [];
-  for (let i = 0; i < pairs.length; i++) parts.push(pairs[i].name + " is " + pairs[i].value);
+  for (let i = 0; i < pairs.length; i++) parts.push(phrasePair(spec, pairs[i]));
   return englishList(parts);
+}
+
+function phrasePair(spec: Spec, pair: NameValue): string {
+  for (let i = 0; i < spec.symbols.length; i++) {
+    const sym = spec.symbols[i];
+    if (sym.name !== pair.name) continue;
+    return describeAssignment(sym, pair.value, pair.value === "true");
+  }
+  return pair.name + " is " + pair.value;
 }
 
 function summaryText(ids: string[], minimal: boolean): string {
@@ -313,9 +328,9 @@ function summaryText(ids: string[], minimal: boolean): string {
   return englishList(ids) + " cannot all hold.";
 }
 
-function clashText(everySituation: boolean, situation: NameValue[]): string {
+function clashText(spec: Spec, everySituation: boolean, situation: NameValue[]): string {
   if (everySituation || situation.length === 0) return "They clash in every situation.";
-  return "They clash when " + pairClause(situation) + ".";
+  return "They clash when " + pairClause(spec, situation) + ".";
 }
 
 function fixText(ids: string[], minimal: boolean): string {

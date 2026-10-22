@@ -10,17 +10,17 @@
       "minimal": true,
       "everySituation": false,
       "summary": "R2 and R3 cannot both hold.",
-      "clash": "They clash when order_submitted is true.",
+      "clash": "They clash when an order is submitted.",
       "requirements": [
         {
           "id": "R2",
           "line": 7,
-          "sentence": "When order_submitted, the Order System shall order_fulfilled."
+          "sentence": "When an order is submitted, the Order System shall fulfill the order."
         },
         {
           "id": "R3",
           "line": 8,
-          "sentence": "When order_submitted, the Order System shall not order_fulfilled."
+          "sentence": "When an order is submitted, the Order System shall not fulfill the order."
         }
       ],
       "situation": [
@@ -32,11 +32,11 @@
       "requires": [
         {
           "id": "R2",
-          "text": "order_fulfilled"
+          "text": "fulfill the order"
         },
         {
           "id": "R3",
-          "text": "not order_fulfilled"
+          "text": "not fulfill the order"
         }
       ],
       "example": [

@@ -3,5 +3,5 @@ scenario: examples/order-fail.json
 violations: 1
 
 R1 line 7
-When order_submitted and inventory_available, the Order System shall order_fulfilled.
-order_submitted is true, inventory_available is true, and order_fulfilled is false.
+WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
+an order is submitted, inventory is available, and not fulfill the order.

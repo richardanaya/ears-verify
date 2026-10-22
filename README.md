@@ -4,7 +4,7 @@
 
 Catch contradictions in your requirements before anyone builds them.
 
-ears-verify is for product managers, and for the AI agents who write requirements with them. You talk through what the product should do. The agent turns that into [EARS](https://alistairmavin.com/ears/) requirements with a fixed vocabulary. ears-verify then looks for requirements that cannot all be true, and explains the clash in plain language: which requirements disagree, in what situation, a concrete example, and a fix.
+ears-verify is for product managers, and for the AI agents who write requirements with them. You talk through what the product should do. The agent turns that into [EARS](https://alistairmavin.com/ears/) requirements. Each name in the schema is bound to a phrase, and the requirement is written with those phrases, so a line reads the way you would say it. ears-verify then looks for requirements that cannot all be true, and explains the clash in plain language: which requirements disagree, in what situation, a concrete example, and a fix.
 
 It will not choose which requirement wins. That question goes back to you.
 
@@ -38,14 +38,14 @@ conflict {R2, R3}
 R2 and R3 cannot both hold.
 
 R2 line 7
-When order_submitted, the Order System shall order_fulfilled.
+When an order is submitted, the Order System shall fulfill the order.
 
 R3 line 8
-When order_submitted, the Order System shall not order_fulfilled.
+When an order is submitted, the Order System shall not fulfill the order.
 
-They clash when order_submitted is true.
-R2 requires order_fulfilled.
-R3 requires not order_fulfilled.
+They clash when an order is submitted.
+R2 requires fulfill the order.
+R3 requires not fulfill the order.
 
 Example scenario:
 {
@@ -76,8 +76,8 @@ scenario: examples/order-fail.json
 violations: 1
 
 R1 line 7
-When order_submitted and inventory_available, the Order System shall order_fulfilled.
-order_submitted is true, inventory_available is true, and order_fulfilled is false.
+WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
+an order is submitted, inventory is available, and not fulfill the order.
 ```
 
 <!-- verify stdout 0
@@ -108,7 +108,7 @@ misuse: 0
 wording: 0
 
 gap order_fulfilled
-Nothing covers order_fulfilled when order_submitted is true and inventory_available is false.
+Nothing covers fulfill the order when an order is submitted and not inventory is available.
 ```
 
 `examples/order-covered.ears.md` gives every situation a response. Lint is quiet:
@@ -138,13 +138,13 @@ examples/order.ears.md
 ```text
 ; spec: examples/order.ears.md
 (set-logic ALL)
-; event order_submitted: Bool "The customer submits an order."
+; event order_submitted: Bool "The customer submits an order." phrase "an order is submitted"
 (declare-fun order_submitted () Bool)
-; state inventory_available: Bool "Enough stock is on hand to fill the order."
+; state inventory_available: Bool "Enough stock is on hand to fill the order." phrase "inventory is available"
 (declare-fun inventory_available () Bool)
-; output order_fulfilled: Bool "The order is fulfilled."
+; output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order"
 (declare-fun order_fulfilled () Bool)
-; R1_L7 line 7: When order_submitted and inventory_available, the Order System shall order_fulfilled.
+; R1_L7 line 7: WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
 (assert (! (=> (and order_submitted inventory_available) order_fulfilled) :named R1_L7))
 ```
 
@@ -178,12 +178,25 @@ While <state>, when <trigger>, if <condition>, where <feature>, then the <system
 Each piece is optional. `then` belongs in the line exactly when `if` is there. The names come from declarations at the top of the spec, so the same idea cannot be spelled two ways:
 
 ```text
-event order_submitted: Bool "The customer submits an order."
-state inventory_available: Bool "Enough stock is on hand to fill the order."
-input quantity: Int 1..10 "How many units the customer asked for."
-output order_fulfilled: Bool "The order is fulfilled."
-unwanted event payment_declined: Bool "The payment was declined."
+event order_submitted: Bool "The customer submits an order." phrase "an order is submitted"
+state inventory_available: Bool "Enough stock is on hand to fill the order." phrase "inventory is available"
+input quantity: Int 1..10 "How many units the customer asked for." phrase "the quantity"
+output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order"
+unwanted event payment_declined: Bool "The payment was declined." phrase "payment fails"
 ```
+
+The phrase is the only wording a requirement may use for that name. `not fulfill the order` is the phrase with `not` in front. `the quantity is at most 10` is how an integer comparison is written. Matching is exact and case-insensitive: the words have to be the phrase you declared, and the longest phrase wins. A sentence that says `an order was submitted` is not close enough to count. The error names the line and the nearest phrases:
+
+<!-- verify stderr 2
+build/ears-verify
+lint
+test/fixtures/unknown-phrase.ears.md
+-->
+```text
+error: test/fixtures/unknown-phrase.ears.md:5: unknown phrase "an order was submitted". Closest: "an order is submitted", "inventory is available", "fulfill the order".
+```
+
+Scenarios and the SMT-LIB still use the declared names (`order_submitted`, `quantity`). The sentences you read, and the explanations under them, use the phrases.
 
 Events and states are booleans. Inputs and outputs are booleans, integers with an inclusive range, or enums. An unwanted event, such as a payment being declined, is written with `if` ... `then`. Writing it with `when` is a lint finding, because `when` reads like the normal trigger for the response.
 
@@ -208,7 +221,7 @@ examples/order-wide.ears.md
 error: search space has more than 250000 assignments. Narrow the integer ranges and try again.
 ```
 
-There are no strings in the logic. Descriptions stay in the spec, next to the names, and they are where vague words (`quickly`, `appropriate`, `user-friendly`) and solution words (`database`, `api`, `microservice`) are caught.
+There are no strings in the logic. Descriptions and phrases stay next to the names. Vague words (`quickly`, `appropriate`, `user-friendly`) and solution words (`database`, `api`, `microservice`) are caught in descriptions and in requirement sentences.
 
 ## Where this comes from
 

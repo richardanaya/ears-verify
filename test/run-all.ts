@@ -165,6 +165,7 @@ function main(): void {
     { name: "lint-wording", args: ["lint", "examples/order-wording.ears.md"] },
     { name: "lint-wide", args: ["lint", "examples/order-wide.ears.md"] },
     { name: "malformed-spec", args: ["check", "test/fixtures/malformed.ears.md", "--input", "examples/order-pass.json"] },
+    { name: "unknown-phrase", args: ["lint", "test/fixtures/unknown-phrase.ears.md"] },
     { name: "malformed-scenario", args: ["check", "examples/order.ears.md", "--input", "examples/order-bad.json"] },
     { name: "policy", args: ["policy"] },
     { name: "usage", args: [] },

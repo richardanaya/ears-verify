@@ -15,57 +15,82 @@ The samples below are the built CLI. `node --experimental-strip-types src/main.t
 
 ## Vocabulary
 
-Declare every name before the requirement that uses it. One name per idea, reused every time the PM comes back to that idea. The quoted description is their English. The requirement line uses the name.
+Declare every name before the requirement that uses it. One name per idea, reused every time the PM comes back to that idea. Bind that name to the phrase they actually say. The requirement line uses the phrase, not the name. The name is what a JSON scenario and the SMT-LIB use.
 
 ```ears
 enum Region { us, eu }
-event order_submitted: Bool "The customer submits an order."
-state inventory_available: Bool "Enough stock is on hand to fill the order."
-input quantity: Int 1..10 "How many units the customer asked for."
-input region: Region "The region the order ships to."
-output order_fulfilled: Bool "The order is fulfilled."
-unwanted event payment_declined: Bool "The payment was declined."
+event order_submitted: Bool "The customer submits an order." phrase "an order is submitted"
+state inventory_available: Bool "Enough stock is on hand to fill the order." phrase "inventory is available"
+input quantity: Int 1..10 "How many units the customer asked for." phrase "the quantity"
+input region: Region "The region the order ships to." phrase "the region"
+output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order"
+unwanted event payment_declined: Bool "The payment was declined." phrase "payment fails"
 ```
 
-Keywords are case-insensitive. Names keep the case you wrote.
+Keywords are case-insensitive. Names keep the case you wrote. A phrase match is case-insensitive too.
 
 | Declaration | Form the parser accepts |
 | --- | --- |
 | Enum | `enum Name { variant, variant }` |
-| Event | `event name: Bool "description"` |
-| State | `state name: Bool "description"` |
-| Input | `input name: Type "description"` |
-| Output | `output name: Type "description"` |
-| Unwanted event | `unwanted event name: Bool "description"` |
+| Event | `event name: Bool "description" phrase "words"` |
+| State | `state name: Bool "description" phrase "words"` |
+| Input | `input name: Type "description" phrase "words"` |
+| Output | `output name: Type "description" phrase "words"` |
+| Unwanted event | `unwanted event name: Bool "description" phrase "words"` |
+
+`phrase` is optional. Leave it off only when you are still naming the idea. Once it is there, write requirements with that phrase.
 
 `Type` is `Bool`, `Int min..max`, or an enum name declared above that line. Events and states are `Bool` only. An unwanted marker applies only to an event. Ranges are inclusive and both ends sit inside `-1000000..1000000`. At least one variant is required. Variant names are unique across the whole spec and cannot match a symbol name.
 
-A description is a double-quoted string. `\"`, `\\`, `\/`, and `\t` are the escapes. A newline in a description is rejected, and an empty description is rejected.
+A description and a phrase are double-quoted strings. `\"`, `\\`, `\/`, and `\t` are the escapes. A newline is rejected, and an empty description or phrase is rejected. Extra spaces inside a phrase collapse to one space. A phrase is words: a hyphen may sit inside a word (`user-friendly`), and `+`, `=`, and other punctuation may not. A phrase cannot start with `not`, `and`, or `or`. A one-word phrase cannot be a reserved word. Two phrases that match ignoring case are an error, and a phrase cannot repeat another symbol, enum, or variant.
 
-These words are reserved and cannot be names: `not`, `and`, `or`, `true`, `false`, `while`, `when`, `if`, `where`, `then`, `the`, `shall`, `should`, `must`, `will`, `event`, `state`, `input`, `output`, `unwanted`, `enum`, `bool`, `int`.
+These words are reserved and cannot be names: `not`, `and`, `or`, `true`, `false`, `while`, `when`, `if`, `where`, `then`, `the`, `shall`, `should`, `must`, `will`, `event`, `state`, `input`, `output`, `unwanted`, `enum`, `bool`, `int`, `phrase`.
 
 Blank lines, `#` headings, `//` comments, and a full-line `<!-- ...` are ignored. A requirement may continue onto the next lines until a blank line, a comment, a declaration, or the next id. The requirement's line number is the line of its id.
 
+## Phrases
+
+Matching is exact. The words in the sentence have to be a declared phrase, compared without regard to case. The longest phrase wins, so `an order` does not steal `an order is submitted` when both are declared. There is no fuzzy match and no stemming.
+
+`not` in front of a phrase is the negation: `not fulfill the order`. Write that. Do not declare a second phrase for the false case.
+
+An unknown run of words is an error. The message names the line and up to three closest phrases, nearest edit distance first:
+
+<!-- verify stderr 2
+build/ears-verify
+lint
+test/fixtures/unknown-phrase.ears.md
+-->
+```text
+error: test/fixtures/unknown-phrase.ears.md:5: unknown phrase "an order was submitted". Closest: "an order is submitted", "inventory is available", "fulfill the order".
+```
+
+When you see that, show the PM the sentence and the suggestions. Ask which declared phrase they meant, or add a phrase they just introduced. Do not silently pick one.
+
+A name with no phrase still parses as that name. Prefer the phrase in anything the PM will read.
+
 ## Operations
 
-A condition or a response is a boolean expression. This is the whole language:
+A condition or a response is a boolean expression. This is the whole language. The phrase column is what you write once `phrase` is declared. The name column is the same term with no phrase bound.
 
-| Phrase | What it means |
-| --- | --- |
-| `order_submitted` | That Bool symbol is true. |
-| `not order_fulfilled` | That Bool symbol is false. |
-| `not quantity = 1` | `not` applies to the comparison: the quantity is something other than 1. |
-| `a and b` | Both sides are true. `and` binds tighter than `or`. |
-| `a or b` | Either side is true. |
-| `true`, `false` | Boolean literals, any case. |
-| `quantity = 1`, `quantity != 1` | Equality. Both sides must be Bool, both Int, or the same enum. |
-| `quantity < 2`, `<=`, `>`, `>=` | Integer comparisons only. |
-| `shipped = quantity + 1`, `shipped = quantity - 1` | Integer addition and subtraction. |
-| `offset = -1` | A negative integer literal. No leading zeros. |
-| `decision = fulfill` | The symbol equals that enum variant. |
-| `(a or b) and c` | Parentheses group the expression. |
+| With a phrase | With only the name | What it means |
+| --- | --- | --- |
+| `an order is submitted` | `order_submitted` | That Bool symbol is true. |
+| `not fulfill the order` | `not order_fulfilled` | That Bool symbol is false. |
+| `not the quantity is 1` | `not quantity = 1` | `not` applies to the comparison: the quantity is something other than 1. |
+| `a and b` | `a and b` | Both sides are true. `and` binds tighter than `or`. |
+| `a or b` | `a or b` | Either side is true. |
+| `true`, `false` | `true`, `false` | Boolean literals, any case. |
+| `the quantity is 1`, `the quantity is not 1` | `quantity = 1`, `quantity != 1` | Equality. Both sides must be Bool, both Int, or the same enum. |
+| `the quantity is less than 2`, `is at most`, `is greater than`, `is at least` | `quantity < 2`, `<=`, `>`, `>=` | Integer comparisons only. |
+| `the number shipped is the quantity + 1` | `shipped = quantity + 1`, and `quantity - 1` | Integer addition and subtraction. |
+| `the offset is -1` | `offset = -1` | A negative integer literal. No leading zeros. |
+| `the region is us` | `region = us` | The symbol equals that enum variant. `us` is the variant name. |
+| `(a or b) and c` | `(a or b) and c` | Parentheses group the expression. |
 
-`shall quantity` is rejected, because the response has to be a boolean. `shall quantity = 1` is accepted. `+` and `-` expect integers.
+`is`, `is not`, `is at most`, `is at least`, `is less than`, and `is greater than` are the same comparisons as `=`, `!=`, `<=`, `>=`, `<`, and `>`. When the left side has a phrase, reports print the English form.
+
+`shall the quantity` is rejected, because the response has to be a boolean. `shall the quantity is 1` is accepted. `+` and `-` expect integers.
 
 ## EARS patterns
 
@@ -77,16 +102,16 @@ While <state>, when <trigger>, if <condition>, where <feature>, then the <system
 
 | Pattern | Use it for | Shape the parser accepts |
 | --- | --- | --- |
-| Ubiquitous | A response that is always required | `The Order System shall order_fulfilled.` |
-| When | The normal trigger | `When order_submitted, the Order System shall order_fulfilled.` |
-| If, then | An unwanted or exceptional case | `If payment_declined, then the Order System shall order_rejected.` |
-| While | A state that already holds | `While inventory_available, the Order System shall order_fulfilled.` |
-| Where | A variant, such as a region | `Where region = us, the Order System shall order_fulfilled.` |
-| Combined | Any of the above, in the order above | `While inventory_available, when order_submitted, if quantity >= 1, where region = us, then the Warehouse shall shipped = quantity.` |
+| Ubiquitous | A response that is always required | `The Order System shall fulfill the order.` |
+| When | The normal trigger | `When an order is submitted, the Order System shall fulfill the order.` |
+| If, then | An unwanted or exceptional case | `If payment fails, then the Order System shall reject the order.` |
+| While | A state that already holds | `While inventory is available, the Order System shall fulfill the order.` |
+| Where | A variant, such as a region | `Where the region is us, the Order System shall fulfill the order.` |
+| Combined | Any of the above, in the order above | `While inventory is available, when an order is submitted, if the quantity is at least 1, where the region is us, then the Warehouse shall the number shipped is the quantity.` |
 
 `should`, `must`, and `will` are not `shall`. The parser stops and asks for `shall`.
 
-Each requirement with at least one clause becomes one implication. The clauses are joined with `and` in the order while, when, if, where, and that antecedent implies the response. A ubiquitous requirement is asserted as the response itself. Assertion names are the id, `_L`, and the line, such as `R1_L7`.
+Each requirement with at least one clause becomes one implication. The clauses are joined with `and` in the order while, when, if, where, and that antecedent implies the response. A ubiquitous requirement is asserted as the response itself. Assertion names are the id, `_L`, and the line, such as `R1_L7`. The SMT-LIB uses the symbol names. The comment above each assertion repeats the original sentence.
 
 An unwanted event is written with `if` ... `then`. `when` is the normal trigger. Lint flags an unwanted event used in `when` without an `if`.
 
@@ -95,8 +120,8 @@ The line has to be something a scenario can make true or false. Lint rejects the
 ## Workflow
 
 1. Listen. Write down the PM's words before you translate them.
-2. Add or reuse declarations. If they describe something you already named, use that name.
-3. Write one EARS line per requirement. Normal triggers use `when`. Unwanted conditions use `if` ... `then`.
+2. Add or reuse declarations. If they describe something you already named, use that name and its phrase. Bind a new phrase to the words they keep using.
+3. Write one EARS line per requirement, using the phrases. Normal triggers use `when`. Unwanted conditions use `if` ... `then`.
 4. Run `build/ears-verify lint <spec>`.
 5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Stop until they answer. Do not choose.
 6. When they describe a concrete story, write a flat JSON scenario with every declared name and run `build/ears-verify check <spec> --input <scenario>`. `policy` is the planned search for a scenario that breaks a separate property. It is not available yet; say that, and do not invent its result.
@@ -125,8 +150,8 @@ scenario: examples/order-fail.json
 violations: 1
 
 R1 line 7
-When order_submitted and inventory_available, the Order System shall order_fulfilled.
-order_submitted is true, inventory_available is true, and order_fulfilled is false.
+WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
+an order is submitted, inventory is available, and not fulfill the order.
 ```
 
 This scenario fits R1:
@@ -154,13 +179,13 @@ examples/order.ears.md
 ```text
 ; spec: examples/order.ears.md
 (set-logic ALL)
-; event order_submitted: Bool "The customer submits an order."
+; event order_submitted: Bool "The customer submits an order." phrase "an order is submitted"
 (declare-fun order_submitted () Bool)
-; state inventory_available: Bool "Enough stock is on hand to fill the order."
+; state inventory_available: Bool "Enough stock is on hand to fill the order." phrase "inventory is available"
 (declare-fun inventory_available () Bool)
-; output order_fulfilled: Bool "The order is fulfilled."
+; output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order"
 (declare-fun order_fulfilled () Bool)
-; R1_L7 line 7: When order_submitted and inventory_available, the Order System shall order_fulfilled.
+; R1_L7 line 7: WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
 (assert (! (=> (and order_submitted inventory_available) order_fulfilled) :named R1_L7))
 ```
 
@@ -179,7 +204,7 @@ misuse: 0
 wording: 0
 
 gap order_fulfilled
-Nothing covers order_fulfilled when order_submitted is true and inventory_available is false.
+Nothing covers fulfill the order when an order is submitted and not inventory is available.
 ```
 
 Ask what should happen in that situation. `examples/order-covered.ears.md` answers every situation, and lint is clean:
@@ -211,19 +236,19 @@ examples/order-combined.ears.md
 (set-logic ALL)
 ; enum Region { us, eu }
 (declare-datatypes ((Region 0)) (((us) (eu))))
-; state inventory_available: Bool "Enough stock is on hand to fill the order."
+; state inventory_available: Bool "Enough stock is on hand to fill the order." phrase "inventory is available"
 (declare-fun inventory_available () Bool)
-; event order_submitted: Bool "The customer submits an order."
+; event order_submitted: Bool "The customer submits an order." phrase "an order is submitted"
 (declare-fun order_submitted () Bool)
-; input quantity: Int 1..5 "How many units the customer asked for."
+; input quantity: Int 1..5 "How many units the customer asked for." phrase "the quantity"
 (declare-fun quantity () Int)
 (assert (and (>= quantity 1) (<= quantity 5)))
-; input region: Region "The region the order ships to."
+; input region: Region "The region the order ships to." phrase "the region"
 (declare-fun region () Region)
-; output shipped: Int 1..5 "How many units are shipped."
+; output shipped: Int 1..5 "How many units are shipped." phrase "the number shipped"
 (declare-fun shipped () Int)
 (assert (and (>= shipped 1) (<= shipped 5)))
-; R1.2_L10 line 10: While inventory_available, when order_submitted, if quantity >= 1, where region = us, then the Warehouse shall shipped = quantity.
+; R1.2_L10 line 10: While inventory is available, when an order is submitted, if the quantity is at least 1, where the region is us, then the Warehouse shall the number shipped is the quantity.
 (assert (! (=> (and (and (and inventory_available order_submitted) (>= quantity 1)) (= region us)) (= shipped quantity)) :named R1.2_L10))
 ```
 
@@ -247,14 +272,14 @@ conflict {R2, R3}
 R2 and R3 cannot both hold.
 
 R2 line 7
-When order_submitted, the Order System shall order_fulfilled.
+When an order is submitted, the Order System shall fulfill the order.
 
 R3 line 8
-When order_submitted, the Order System shall not order_fulfilled.
+When an order is submitted, the Order System shall not fulfill the order.
 
-They clash when order_submitted is true.
-R2 requires order_fulfilled.
-R3 requires not order_fulfilled.
+They clash when an order is submitted.
+R2 requires fulfill the order.
+R3 requires not fulfill the order.
 
 Example scenario:
 {
@@ -285,7 +310,7 @@ misuse: 0
 wording: 0
 ```
 
-`examples/order-misuse.ears.md` uses `when` for that unwanted event. Show the finding and rewrite it with the PM as `if payment_declined, then ...`.
+`examples/order-misuse.ears.md` uses `when` for that unwanted event. Show the finding and rewrite it with the PM as `If payment fails, then the Order System shall reject the order.`
 
 <!-- verify stdout 1
 build/ears-verify
@@ -300,8 +325,8 @@ misuse: 1
 wording: 0
 
 misuse R4 line 6
-payment_declined is an unwanted event. Write if ... then, not when.
-When payment_declined, the Order System shall order_rejected.
+"payment fails" is an unwanted event. Write if ... then, not when.
+When payment fails, the Order System shall reject the order.
 ```
 
 ## Vague words and solution words
@@ -322,11 +347,11 @@ wording: 2
 
 wording line 4
 "quickly" is too vague to test. Replace it with something a scenario can check.
-output order_fulfilled: Bool "The system responds quickly."
+output order_fulfilled: Bool "The system responds quickly." phrase "fulfill the order"
 
 wording line 5
 "database" names a solution. Say what the system must do, not how to build it.
-state saved: Bool "Store the order in the database."
+state saved: Bool "Store the order in the database." phrase "the order is saved"
 ```
 
 ## policy is planned

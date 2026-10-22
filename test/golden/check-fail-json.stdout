@@ -6,8 +6,8 @@
     {
       "id": "R1",
       "line": 7,
-      "sentence": "When order_submitted and inventory_available, the Order System shall order_fulfilled.",
-      "because": "order_submitted is true, inventory_available is true, and order_fulfilled is false."
+      "sentence": "WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.",
+      "because": "an order is submitted, inventory is available, and not fulfill the order."
     }
   ]
 }

@@ -55,7 +55,9 @@ export function printSmt(specPath: string, spec: Spec): string {
 
 function symbolComment(spec: Spec, sym: SymbolDecl): string {
   const prefix = sym.unwanted ? "unwanted " + sym.role : sym.role;
-  return prefix + " " + sym.name + ": " + sortComment(spec, sym) + " \"" + escapeComment(sym.description) + "\"";
+  let text = prefix + " " + sym.name + ": " + sortComment(spec, sym) + " \"" + escapeComment(sym.description) + "\"";
+  if (sym.phrase.length > 0) text += " phrase \"" + escapeComment(sym.phrase) + "\"";
+  return text;
 }
 
 function sortComment(spec: Spec, sym: SymbolDecl): string {

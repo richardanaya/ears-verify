@@ -62,6 +62,7 @@ const order = mustSpec(orderText);
 check("order has R1", order.requirements.length === 1 && order.requirements[0].id === "R1");
 check("order R1 line", order.requirements[0].line === 7);
 check("order symbols", order.symbols.length === 3);
+check("order phrase", order.symbols[0].phrase === "an order is submitted" && order.symbols[2].phrase === "fulfill the order");
 
 const failScenario = scenario(
   order,
@@ -70,7 +71,7 @@ const failScenario = scenario(
 check("fail count", failScenario.violations === 1);
 check(
   "fail because",
-  failScenario.because === "order_submitted is true, inventory_available is true, and order_fulfilled is false.",
+  failScenario.because === "an order is submitted, inventory is available, and not fulfill the order.",
 );
 
 const passScenario = scenario(
@@ -103,7 +104,13 @@ check("wrong type", wrongType.because === "order_fulfilled must be true or false
 const smt = printSmt("examples/order.ears.md", order);
 check("smt logic", smt.indexOf("(set-logic ALL)") !== -1);
 check("smt named", smt.indexOf(":named R1_L7") !== -1);
-check("smt sentence", smt.indexOf("line 7: When order_submitted and inventory_available, the Order System shall order_fulfilled.") !== -1);
+check(
+  "smt sentence",
+  smt.indexOf(
+    "line 7: WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.",
+  ) !== -1,
+);
+check("smt phrase", smt.indexOf('phrase "fulfill the order"') !== -1);
 check("smt implication", smt.indexOf("(=> (and order_submitted inventory_available) order_fulfilled)") !== -1);
 
 const conflict = mustSpec(readFileSync("examples/order-conflict.ears.md", "utf8"));
@@ -158,7 +165,17 @@ check(
     misuse.report.misuse[0].id === "R4" &&
     misuse.report.misuse[0].symbols.length === 1 &&
     misuse.report.misuse[0].symbols[0] === "payment_declined" &&
+    misuse.report.misuse[0].text === '"payment fails" is an unwanted event. Write if ... then, not when.' &&
     misuse.report.conflicts.length === 0,
+);
+const bareMisuse = lintSpec(
+  mustSpec('unwanted event payment_declined: Bool "Declined."\noutput order_rejected: Bool "Rejected."\n\nR4 When payment_declined, the Order System shall order_rejected.\n'),
+);
+check(
+  "misuse without a phrase",
+  bareMisuse.kind === "report" &&
+    bareMisuse.report.misuse.length === 1 &&
+    bareMisuse.report.misuse[0].text === "payment_declined is an unwanted event. Write if ... then, not when.",
 );
 
 const payment = lintSpec(mustSpec(readFileSync("examples/payment-if.ears.md", "utf8")));
@@ -316,6 +333,83 @@ const namedLint = lintSpec(named);
 check("solution in the system name", namedLint.kind === "report" && namedLint.report.wording.length === 1 && namedLint.report.wording[0].word === "api");
 
 check("conflict helper", idsOf(conflict).length === 2);
+
+const natural = mustSpec(
+  'event order_submitted: Bool "Submitted." phrase "  an   order\tis submitted  "\n' +
+    'output order_fulfilled: Bool "Done." phrase "fulfill the order"\n\n' +
+    "R1 When AN ORDER IS SUBMITTED, the Order System shall fulfill the order.\n",
+);
+check("phrase normalized", natural.symbols[0].phrase === "an order is submitted");
+check("phrase case", formatTerm(natural.requirements[0].antecedent === null ? natural.requirements[0].consequent : natural.requirements[0].antecedent) === "an order is submitted");
+check("negation phrase", formatTerm(mustSpec('output order_fulfilled: Bool "Done." phrase "fulfill the order"\n\nR1 The Order System shall not fulfill the order.\n').requirements[0].consequent) === "not fulfill the order");
+
+const longest = mustSpec(
+  'event short: Bool "Short." phrase "an order"\n' +
+    'event long: Bool "Long." phrase "an order is submitted"\n' +
+    'output flag: Bool "Flag."\n\n' +
+    "R1 The Box shall an order is submitted.\n",
+);
+check("longest phrase", longest.requirements[0].consequent.kind === "sym" && longest.requirements[0].consequent.kind === "sym" && formatTerm(longest.requirements[0].consequent) === "an order is submitted");
+
+const english = mustSpec(
+  'input quantity: Int 0..5 "Count." phrase "the quantity"\n' +
+    'output shipped: Int 0..5 "Sent." phrase "the number shipped"\n\n' +
+    "R1 The Box shall the quantity is at most 4.\n" +
+    "R2 The Box shall the quantity is at least 1.\n" +
+    "R3 The Box shall the quantity is less than 5.\n" +
+    "R4 The Box shall the quantity is greater than 0.\n" +
+    "R5 The Box shall the quantity is not 3.\n" +
+    "R6 The Box shall the number shipped is the quantity.\n" +
+    "R7 The Box shall the quantity <= 4.\n",
+);
+check("at most", formatTerm(english.requirements[0].consequent) === "the quantity is at most 4");
+check("at least", formatTerm(english.requirements[1].consequent) === "the quantity is at least 1");
+check("less than", formatTerm(english.requirements[2].consequent) === "the quantity is less than 5");
+check("greater than", formatTerm(english.requirements[3].consequent) === "the quantity is greater than 0");
+check("is not", formatTerm(english.requirements[4].consequent) === "the quantity is not 3");
+check("phrase eq", formatTerm(english.requirements[5].consequent) === "the number shipped is the quantity");
+check("symbolic still english", formatTerm(english.requirements[6].consequent) === "the quantity is at most 4");
+check("english holds", scenario(english, '{ "quantity": 2, "shipped": 2 }').violations === 0);
+check("english misses", scenario(english, '{ "quantity": 0, "shipped": 2 }').violations === 3);
+
+const combinedFile = mustSpec(readFileSync("examples/order-combined.ears.md", "utf8"));
+check("combined file phrase", formatTerm(combinedFile.requirements[0].consequent) === "the number shipped is the quantity");
+check("combined file smt", printSmt("examples/order-combined.ears.md", combinedFile).indexOf("(= shipped quantity)") !== -1);
+
+check(
+  "unknown phrase",
+  parseMessage(
+    'event order_submitted: Bool "Submitted." phrase "an order is submitted"\n' +
+      'output order_fulfilled: Bool "Done." phrase "fulfill the order"\n\n' +
+      "R1 The Order System shall an order was submitted.\n",
+  ) === '4: unknown phrase "an order was submitted". Closest: "an order is submitted", "fulfill the order".',
+);
+check(
+  "unknown phrase stops at and",
+  parseMessage(
+    'event order_submitted: Bool "Submitted." phrase "an order is submitted"\n\nR1 The Order System shall an order was submitted and an order is submitted.\n',
+  ).indexOf('unknown phrase "an order was submitted"') !== -1,
+);
+check("duplicate phrase", parseMessage('event a: Bool "A." phrase "an order is submitted"\nevent b: Bool "B." phrase "An Order Is Submitted"\n') === '2: "An Order Is Submitted" is already a phrase');
+check("phrase reserved", parseMessage('event a: Bool "A." phrase "when"\n') === '1: "when" is a reserved word');
+check("phrase starts with not", parseMessage('event a: Bool "A." phrase "not ready"\n') === '1: a phrase cannot start with "not"');
+check("phrase punctuation", parseMessage('input quantity: Int 1..3 "Count." phrase "quantity = 1"\n') === "1: a phrase can only be words");
+check("phrase empty", parseMessage('event a: Bool "A." phrase ""\n') === "1: expected a phrase");
+check("phrase blank", parseMessage('event a: Bool "A." phrase "   "\n') === "1: expected a phrase");
+check("phrase symbol clash", parseMessage('event flag: Bool "F."\nevent other: Bool "O." phrase "flag"\n') === '2: "flag" is already a symbol');
+check("name is phrase", parseMessage('event other: Bool "O." phrase "flag"\nevent flag: Bool "F."\n') === '2: "flag" is already a phrase');
+check("phrase variant", parseMessage('enum Region { us, eu }\ninput region: Region "Where." phrase "us"\n') === '2: "us" is already an enum variant');
+check("phrase enum", parseMessage('enum Region { us, eu }\noutput flag: Bool "F." phrase "region"\n') === '2: "region" is already an enum');
+check("bad phrase escape", parseMessage('event a: Bool "A." phrase "bad\\q"\n') === "1: bad escape in phrase");
+check("phrase trailing", parseMessage('event a: Bool "A." phrase "ready" extra\n') === "1: unexpected trailing text");
+check(
+  "is at rewinds",
+  parseMessage('input quantity: Int 1..3 "Count." phrase "the quantity"\n\nR1 The Box shall the quantity is at home.\n') === '3: unexpected "is"',
+);
+check("reserved name phrase", parseMessage('event phrase: Bool "Nope."\n') === '1: "phrase" is a reserved word');
+
+const hyphen = mustSpec('event ready: Bool "Ready." phrase "user-friendly checkout"\n\nR1 The Box shall user-friendly checkout.\n');
+check("hyphen phrase", formatTerm(hyphen.requirements[0].consequent) === "user-friendly checkout");
 
 if (failed !== 0) {
   console.error(String(failed) + " failed");

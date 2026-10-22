@@ -1,3 +1,3 @@
-event order_submitted: Bool "The customer submits an order."
+event order_submitted: Bool "The customer submits an order." phrase "an order is submitted"
 
-R1 When order_submitted, the Order System should order_fulfilled.
+R1 When an order is submitted, the Order System should fulfill the order.

@@ -1,9 +1,9 @@
 # Every situation has a response.
 
-event order_submitted: Bool "The customer submits an order."
-state inventory_available: Bool "Enough stock is on hand to fill the order."
-output order_fulfilled: Bool "The order is fulfilled."
+event order_submitted: Bool "The customer submits an order." phrase "an order is submitted"
+state inventory_available: Bool "Enough stock is on hand to fill the order." phrase "inventory is available"
+output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order"
 
-R1 When order_submitted and inventory_available, the Order System shall order_fulfilled.
-R2 When order_submitted and not inventory_available, the Order System shall not order_fulfilled.
-R3 When not order_submitted, the Order System shall not order_fulfilled.
+R1 When an order is submitted and inventory is available, the Order System shall fulfill the order.
+R2 When an order is submitted and not inventory is available, the Order System shall not fulfill the order.
+R3 When not an order is submitted, the Order System shall not fulfill the order.

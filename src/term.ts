@@ -152,7 +152,10 @@ export function formatTerm(term: Term): string {
   if (term.kind === "bool") return term.value ? "true" : "false";
   if (term.kind === "int") return formatInt(term.value);
   if (term.kind === "enum") return term.variant;
-  if (term.kind === "sym") return term.name;
+  if (term.kind === "sym") {
+    if (term.phrase.length > 0) return term.phrase;
+    return term.name;
+  }
   if (term.kind === "not") {
     if (isSimple(term.term)) return "not " + formatTerm(term.term);
     return "not (" + formatTerm(term.term) + ")";
@@ -161,7 +164,29 @@ export function formatTerm(term: Term): string {
   if (term.kind === "or") return formatSide(term.left, "or", true) + " or " + formatSide(term.right, "or", false);
   if (term.kind === "add") return formatSide(term.left, "add", true) + " + " + formatSide(term.right, "add", false);
   if (term.kind === "sub") return formatSide(term.left, "add", true) + " - " + formatSide(term.right, "add", false);
-  return formatSide(term.left, "add", true) + " " + cmpOp(term) + " " + formatSide(term.right, "add", true);
+  return formatSide(term.left, "add", true) + " " + comparisonWord(term) + " " + formatSide(term.right, "add", true);
+}
+
+function comparisonWord(term: Term): string {
+  if (
+    term.kind !== "eq" &&
+    term.kind !== "neq" &&
+    term.kind !== "lt" &&
+    term.kind !== "le" &&
+    term.kind !== "gt" &&
+    term.kind !== "ge"
+  ) {
+    return "?";
+  }
+  if (term.left.kind === "sym" && term.left.phrase.length > 0) {
+    if (term.kind === "eq") return "is";
+    if (term.kind === "neq") return "is not";
+    if (term.kind === "lt") return "is less than";
+    if (term.kind === "le") return "is at most";
+    if (term.kind === "gt") return "is greater than";
+    return "is at least";
+  }
+  return cmpOp(term);
 }
 
 function formatSide(term: Term, parent: string, isLeft: boolean): string {
