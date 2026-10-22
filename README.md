@@ -77,6 +77,16 @@ Exit status is `0` when the command is clean, `1` when something is wrong in the
 
 Each requirement becomes an implication: when its condition holds, its response must hold. plan-verify prints that logic as SMT-LIB and decides it with its own solver. Booleans go through DPLL. Integers and enums tighten bounds. ScriptC compiles the same TypeScript to a native binary, and Node runs the same source.
 
+## What it handles, and what it doesn't
+
+- EARS patterns: a requirement can always hold (no condition), or use While, When, If ... then, and Where. Combined clauses are accepted in that order.
+- Types: Bool, Int, and enum. Events and states are Bool. Every Int declares a range inside -1,000,000..1,000,000.
+- Solver scope: linear integer arithmetic only. Integers can be added, subtracted, and compared. There is no multiply operator, so a variable is not multiplied by a constant or by another variable. No real numbers, no strings in the logic, and no time or sequence.
+- Listing limits: every minimal conflicting set is listed when there are 12 requirements or fewer, even if a range is wide. Above 12, sets that fail in the same situations can collapse to one, and a driver domain wider than 64 values or more than 8192 driver combinations drops a later set that needs a requirement already reported.
+- Non-goals: this is not a general theorem prover. It does not check code against the spec, it parses only the EARS grammar it accepts, and it does not choose which requirement wins.
+
+Details are in [the reference](docs/reference.md).
+
 ## Agentic neurosymbolic verification
 
 An AI agent (the neural part) turns a plain-English plan into EARS requirements. plan-verify (the symbolic part) converts them to SMT-LIB and proves contradictions, gaps, rules that can never fire, and repeats with its own solver. The agent reads those plain-English findings, asks the human about the choices, revises, and runs lint again until the spec is clean. [skills/plan-verify/SKILL.md](skills/plan-verify/SKILL.md) is how an agent runs this loop.
