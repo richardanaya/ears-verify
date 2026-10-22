@@ -1,0 +1,7 @@
+spec: examples/url-orders.ears.md
+scenario: examples/url-orders-fail.json
+violations: 1
+
+R1 line 5
+The Shop shall url.scheme = "https".
+url.scheme is "http".

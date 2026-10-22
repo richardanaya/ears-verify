@@ -1,0 +1,7 @@
+spec: examples/url-orders.ears.md
+scenario: examples/url-orders-userinfo.json
+violations: 1
+
+R2 line 6
+The Shop shall url.userinfo is empty.
+url.userinfo is "bob".

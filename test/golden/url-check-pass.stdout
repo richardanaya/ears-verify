@@ -1,0 +1,3 @@
+spec: examples/url-orders.ears.md
+scenario: examples/url-orders-pass.json
+violations: 0

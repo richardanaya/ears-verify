@@ -1,0 +1,8 @@
+{
+  "url.scheme": "https",
+  "url.userinfo": "",
+  "url.host": "example.com",
+  "url.path": "/items",
+  "url.query": "page={page}&status={status}",
+  "url.fragment": ""
+}

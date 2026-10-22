@@ -1,0 +1,31 @@
+; spec: examples/url-orders.ears.md
+(set-logic ALL)
+; input url.scheme: String "The URL scheme."
+(declare-fun |url.scheme| () String)
+; input url.userinfo: String "The userinfo. A canonical URL has none."
+(declare-fun |url.userinfo| () String)
+; input url.host: String "The URL host."
+(declare-fun |url.host| () String)
+; input url.port: Int -1..65535 "The TCP port, or -1 when the URL omits it."
+(declare-fun |url.port| () Int)
+(assert (and (>= |url.port| (- 1)) (<= |url.port| 65535)))
+; input url.path: String "The URL path."
+(declare-fun |url.path| () String)
+; input url.query: String "The URL query, without the question mark."
+(declare-fun |url.query| () String)
+; input url.fragment: String "The URL fragment, without the hash."
+(declare-fun |url.fragment| () String)
+; R1_L5 line 5: The Shop shall url.scheme = "https".
+(assert (! (= |url.scheme| "https") :named R1_L5))
+; R2_L6 line 6: The Shop shall url.userinfo is empty.
+(assert (! (= |url.userinfo| "") :named R2_L6))
+; R3_L7 line 7: The Shop shall url.host = "example.com" or url.host ends with ".example.com".
+(assert (! (or (= |url.host| "example.com") (str.suffixof ".example.com" |url.host|)) :named R3_L7))
+; R4_L8 line 8: The Shop shall url.port is empty.
+(assert (! (= |url.port| (- 1)) :named R4_L8))
+; R5_L9 line 9: The Shop shall url.path = "/customers/{customerId}/orders".
+(assert (! (= |url.path| "/customers/{customerId}/orders") :named R5_L9))
+; R6_L10 line 10: The Shop shall url.query = "status={status}".
+(assert (! (= |url.query| "status={status}") :named R6_L10))
+; R7_L11 line 11: The Shop shall url.fragment is empty.
+(assert (! (= |url.fragment| "") :named R7_L11))

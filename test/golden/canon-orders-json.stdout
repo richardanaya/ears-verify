@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "input": "HTTPS://Example.COM:443/customer/{CustomerId}/order/?status={status}",
+  "canonical": "https://example.com/customers/{customerId}/orders?status={status}",
+  "violations": [
+    "lowercase the scheme",
+    "lowercase the host",
+    "omit the default port",
+    "no trailing slash except the root",
+    "plural collection nouns",
+    "use {camelCase} placeholders"
+  ]
+}

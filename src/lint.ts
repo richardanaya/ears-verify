@@ -4,7 +4,7 @@
  * set, the situation, an example, and a fix that does not pick a winner.
  */
 
-import { displayCode, isDriver, type Spec } from "./spec.ts";
+import { displayCode, isDriver, type Spec, type Term } from "./spec.ts";
 import { bestGap, conflictingSets, modelFor, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
 import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 import { englishList, formatInt } from "./text.ts";
@@ -99,6 +99,8 @@ export function lintSpec(spec: Spec): LintOutcome {
   const conflicts: Conflict[] = [];
   const groups = conflictingSets(spec);
   for (let i = 0; i < groups.length; i++) conflicts.push(explainConflict(spec, groups[i]));
+  const strings = stringConflicts(spec);
+  for (let i = 0; i < strings.length; i++) conflicts.push(strings[i]);
   const gaps: Gap[] = [];
   for (let i = 0; i < spec.symbols.length; i++) {
     if (isDriver(spec.symbols[i])) continue;
@@ -134,10 +136,6 @@ function explainConflict(spec: Spec, group: ConflictGroup): Conflict {
   let keepsSentence = "";
   const breaks = ids[lastPos];
   if (exampleEnv !== null) {
-    for (let i = 0; i < spec.symbols.length; i++) {
-      examplePairs.push({ name: spec.symbols[i].name, value: displayCode(spec, spec.symbols[i], exampleEnv.code[i]) });
-    }
-    exampleJson = formatScenario(spec, exampleEnv);
     let faithful = true;
     for (let i = 0; i < keptIndexes.length; i++) {
       const req = spec.requirements[keptIndexes[i]];
@@ -146,6 +144,10 @@ function explainConflict(spec: Spec, group: ConflictGroup): Conflict {
     const broken = spec.requirements[group.indexes[lastPos]];
     if (evalAssertion(broken.antecedent, broken.consequent, spec, exampleEnv) !== T_FALSE) faithful = false;
     if (faithful) {
+      for (let i = 0; i < spec.symbols.length; i++) {
+        examplePairs.push({ name: spec.symbols[i].name, value: displayCode(spec, spec.symbols[i], exampleEnv.code[i]) });
+      }
+      exampleJson = formatScenario(spec, exampleEnv);
       for (let i = 0; i < lastPos; i++) keeps.push(ids[i]);
       keepsSentence = keepsText(keeps, breaks);
     }
@@ -271,9 +273,9 @@ function collectWords(text: string, line: number, context: string, found: Wordin
   }
 }
 
-function mentions(term: import("./spec.ts").Term, index: number): boolean {
+function mentions(term: Term, index: number): boolean {
   if (term.kind === "sym") return term.index === index;
-  if (term.kind === "not") return mentions(term.term, index);
+  if (term.kind === "not" || term.kind === "empty") return mentions(term.term, index);
   if (
     term.kind === "and" ||
     term.kind === "or" ||
@@ -284,11 +286,200 @@ function mentions(term: import("./spec.ts").Term, index: number): boolean {
     term.kind === "gt" ||
     term.kind === "ge" ||
     term.kind === "add" ||
-    term.kind === "sub"
+    term.kind === "sub" ||
+    term.kind === "prefix" ||
+    term.kind === "suffix" ||
+    term.kind === "contains"
   ) {
     return mentions(term.left, index) || mentions(term.right, index);
   }
   return false;
+}
+
+interface StrFact {
+  req: number;
+  op: string;
+  text: string;
+}
+
+function stringConflicts(spec: Spec): Conflict[] {
+  const found: Conflict[] = [];
+  const seen: string[] = [];
+  for (let s = 0; s < spec.symbols.length; s++) {
+    if (spec.symbols[s].sort.kind !== "string") continue;
+    const facts: StrFact[] = [];
+    for (let r = 0; r < spec.requirements.length; r++) {
+      const req = spec.requirements[r];
+      if (req.antecedent !== null) continue;
+      const bucket: StrFact[] = [];
+      if (!collectFacts(spec, req.consequent, r, s, false, bucket)) continue;
+      for (let f = 0; f < bucket.length; f++) facts.push(bucket[f]);
+    }
+    for (let a = 0; a < facts.length; a++) {
+      for (let b = a + 1; b < facts.length; b++) {
+        if (!factsClash(facts[a], facts[b])) continue;
+        const group = factGroup(facts[a], facts[b]);
+        const key = groupKey(group);
+        let dup = false;
+        for (let g = 0; g < seen.length; g++) {
+          if (seen[g] === key) dup = true;
+        }
+        if (dup) continue;
+        seen.push(key);
+        found.push(explainString(spec, group));
+      }
+    }
+  }
+  return found;
+}
+
+function factGroup(left: StrFact, right: StrFact): number[] {
+  if (left.req === right.req) return [left.req];
+  if (left.req < right.req) return [left.req, right.req];
+  return [right.req, left.req];
+}
+
+function groupKey(group: number[]): string {
+  let out = "";
+  for (let i = 0; i < group.length; i++) {
+    if (i > 0) out += ",";
+    out += formatInt(group[i]);
+  }
+  return out;
+}
+
+function explainString(spec: Spec, group: number[]): Conflict {
+  const ids: string[] = [];
+  const lines: number[] = [];
+  const sentences: string[] = [];
+  const requires: NameValue[] = [];
+  for (let i = 0; i < group.length; i++) {
+    const req = spec.requirements[group[i]];
+    ids.push(req.id);
+    lines.push(req.line);
+    sentences.push(req.sentence);
+    requires.push({ name: req.id, value: formatTerm(req.consequent) });
+  }
+  const breaks = ids[ids.length - 1];
+  return {
+    ids: ids,
+    lines: lines,
+    sentences: sentences,
+    minimal: true,
+    everySituation: true,
+    situation: [],
+    requires: requires,
+    example: [],
+    exampleJson: "",
+    keeps: [],
+    breaks: breaks,
+    summary: summaryText(ids, true),
+    clash: clashText(true, []),
+    fix: fixText(ids, true),
+    keepsSentence: "",
+  };
+}
+
+function collectFacts(spec: Spec, term: Term, req: number, symbol: number, neg: boolean, out: StrFact[]): boolean {
+  if (term.kind === "and" && !neg) {
+    return collectFacts(spec, term.left, req, symbol, false, out) && collectFacts(spec, term.right, req, symbol, false, out);
+  }
+  if (term.kind === "not") return collectFacts(spec, term.term, req, symbol, !neg, out);
+  if (term.kind === "empty") {
+    if (term.term.kind !== "sym") return false;
+    if (spec.symbols[term.term.index].sort.kind !== "string") return false;
+    if (term.term.index !== symbol) return true;
+    out.push({ req: req, op: neg ? "not-empty" : "empty", text: "" });
+    return true;
+  }
+  if (term.kind === "eq" || term.kind === "neq" || term.kind === "prefix" || term.kind === "suffix" || term.kind === "contains") {
+    const fact = textFact(spec, term, req, symbol, neg);
+    if (fact === "no") return false;
+    if (fact === "other") return true;
+    out.push(fact);
+    return true;
+  }
+  return false;
+}
+
+function textFact(spec: Spec, term: Term, req: number, symbol: number, neg: boolean): StrFact | "no" | "other" {
+  if (term.kind !== "eq" && term.kind !== "neq" && term.kind !== "prefix" && term.kind !== "suffix" && term.kind !== "contains") {
+    return "no";
+  }
+  let op: string = term.kind;
+  if (term.kind === "eq" && neg) op = "neq";
+  else if (term.kind === "neq" && neg) op = "eq";
+  else if (term.kind === "prefix" && neg) op = "not-prefix";
+  else if (term.kind === "suffix" && neg) op = "not-suffix";
+  else if (term.kind === "contains" && neg) op = "not-contains";
+  if (term.kind === "eq" || term.kind === "neq") {
+    const side = stringSides(spec, term.left, term.right);
+    if (side === null) return "no";
+    if (side.index !== symbol) return "other";
+    return { req: req, op: op, text: side.text };
+  }
+  if (term.left.kind === "sym" && term.right.kind === "str" && spec.symbols[term.left.index].sort.kind === "string") {
+    if (term.left.index !== symbol) return "other";
+    return { req: req, op: op, text: term.right.value };
+  }
+  return "no";
+}
+
+function stringSides(spec: Spec, left: Term, right: Term): { index: number; text: string } | null {
+  if (left.kind === "sym" && right.kind === "str" && spec.symbols[left.index].sort.kind === "string") {
+    return { index: left.index, text: right.value };
+  }
+  if (right.kind === "sym" && left.kind === "str" && spec.symbols[right.index].sort.kind === "string") {
+    return { index: right.index, text: left.value };
+  }
+  return null;
+}
+
+function factsClash(left: StrFact, right: StrFact): boolean {
+  const pinnedLeft = pinnedValue(left);
+  const pinnedRight = pinnedValue(right);
+  if (pinnedLeft !== null && pinnedRight !== null) return pinnedLeft !== pinnedRight;
+  if (pinnedLeft !== null) return !factHolds(pinnedLeft, right);
+  if (pinnedRight !== null) return !factHolds(pinnedRight, left);
+  if (left.op === "prefix" && right.op === "not-prefix" && left.text === right.text) return true;
+  if (left.op === "not-prefix" && right.op === "prefix" && left.text === right.text) return true;
+  if (left.op === "suffix" && right.op === "not-suffix" && left.text === right.text) return true;
+  if (left.op === "not-suffix" && right.op === "suffix" && left.text === right.text) return true;
+  if (left.op === "contains" && right.op === "not-contains" && left.text === right.text) return true;
+  if (left.op === "not-contains" && right.op === "contains" && left.text === right.text) return true;
+  if (left.op === "not-empty" && right.op === "empty") return true;
+  if (left.op === "empty" && right.op === "not-empty") return true;
+  return false;
+}
+
+function pinnedValue(fact: StrFact): string | null {
+  if (fact.op === "eq") return fact.text;
+  if (fact.op === "empty") return "";
+  return null;
+}
+
+function factHolds(value: string, fact: StrFact): boolean {
+  if (fact.op === "eq") return value === fact.text;
+  if (fact.op === "neq") return value !== fact.text;
+  if (fact.op === "empty") return value.length === 0;
+  if (fact.op === "not-empty") return value.length !== 0;
+  if (fact.op === "prefix") return hasPrefixText(value, fact.text);
+  if (fact.op === "not-prefix") return !hasPrefixText(value, fact.text);
+  if (fact.op === "suffix") return hasSuffixText(value, fact.text);
+  if (fact.op === "not-suffix") return !hasSuffixText(value, fact.text);
+  if (fact.op === "contains") return value.indexOf(fact.text) >= 0;
+  if (fact.op === "not-contains") return value.indexOf(fact.text) < 0;
+  return true;
+}
+
+function hasPrefixText(text: string, prefix: string): boolean {
+  if (prefix.length > text.length) return false;
+  return text.slice(0, prefix.length) === prefix;
+}
+
+function hasSuffixText(text: string, suffix: string): boolean {
+  if (suffix.length > text.length) return false;
+  return text.slice(text.length - suffix.length) === suffix;
 }
 
 function driverPairs(spec: Spec, env: Binding): NameValue[] {

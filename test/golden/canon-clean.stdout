@@ -1,0 +1,2 @@
+https://example.com/customers/{customerId}/orders?status={status}
+violations: 0

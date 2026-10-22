@@ -1,0 +1,8 @@
+https://example.com/customers/{customerId}/orders?status={status}
+violations: 6
+- lowercase the scheme
+- lowercase the host
+- omit the default port
+- no trailing slash except the root
+- plural collection nouns
+- use {camelCase} placeholders

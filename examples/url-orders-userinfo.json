@@ -1,0 +1,9 @@
+{
+  "url.scheme": "https",
+  "url.userinfo": "bob",
+  "url.host": "example.com",
+  "url.port": -1,
+  "url.path": "/customers/{customerId}/orders",
+  "url.query": "status={status}",
+  "url.fragment": ""
+}
