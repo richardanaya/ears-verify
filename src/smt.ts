@@ -53,6 +53,10 @@ export function printSmt(specPath: string, spec: Spec): string {
   return lines.join("\n");
 }
 
+export function formatEmitJson(specPath: string, smt: string): string {
+  return JSON.stringify({ ok: true, spec: specPath, smt: smt }, null, 2);
+}
+
 function symbolComment(spec: Spec, sym: SymbolDecl): string {
   const prefix = sym.unwanted ? "unwanted " + sym.role : sym.role;
   let text = prefix + " " + sym.name + ": " + sortComment(spec, sym) + " \"" + escapeComment(sym.description) + "\"";

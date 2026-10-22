@@ -133,7 +133,169 @@ The line has to be something a scenario can make true or false. Lint rejects the
 6. When they describe a concrete story, write a flat JSON scenario with every declared name and run `build/ears-verify check <spec> --input <scenario>`. When they hope something is always true, write that hope as a property file of `P` requirements and run `build/ears-verify policy <spec> --property <file>`. A counterexample is a scenario the requirements allow and the property forbids. If you have no property yet, `policy <spec>` prints one allowed scenario and one forbidden scenario. The search tries false before true, so the first hit is not a recommendation.
 7. Report every check violation by requirement ID, line, and sentence, then the values. A passing check can still leave a gap. If lint reported one, say which output is uncovered and in what situation.
 
-`--json` is the same report in a stable shape, for you. Show the PM the text.
+`--json` is the same report in a stable shape, for you. Show the PM the text. Stderr stays empty. A bad file or a bad argument is exit 2 and `{ "ok": false, "error": "..." }`.
+
+`check` returns `ok`, `spec`, `scenario`, and `violations` of `id`, `line`, `sentence`, `because`.
+
+<!-- verify stdout 1
+build/ears-verify
+check
+--json
+examples/order.ears.md
+--input
+examples/order-fail.json
+-->
+```text
+{
+  "ok": false,
+  "spec": "examples/order.ears.md",
+  "scenario": "examples/order-fail.json",
+  "violations": [
+    {
+      "id": "R1",
+      "line": 7,
+      "sentence": "WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.",
+      "because": "An order was submitted and inventory was available, but the order was not fulfilled."
+    }
+  ]
+}
+```
+
+`lint` returns `ok`, `spec`, `conflicts`, `gaps`, `misuse`, and `wording`. A conflict carries `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements`, `situation`, `requires`, `example`, `keeps`, `breaks`, and `fix`. Situation and example entries are `name` and `value`. Requirements are `id`, `line`, and `sentence`. Requires entries are `id` and `text`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+--json
+examples/order-conflict.ears.md
+-->
+```text
+{
+  "ok": false,
+  "spec": "examples/order-conflict.ears.md",
+  "conflicts": [
+    {
+      "ids": [
+        "R2",
+        "R3"
+      ],
+      "minimal": true,
+      "everySituation": false,
+      "summary": "R2 and R3 cannot both hold.",
+      "clash": "They clash when an order was submitted.",
+      "requirements": [
+        {
+          "id": "R2",
+          "line": 7,
+          "sentence": "When an order is submitted, the Order System shall fulfill the order."
+        },
+        {
+          "id": "R3",
+          "line": 8,
+          "sentence": "When an order is submitted, the Order System shall not fulfill the order."
+        }
+      ],
+      "situation": [
+        {
+          "name": "order_submitted",
+          "value": "true"
+        }
+      ],
+      "requires": [
+        {
+          "id": "R2",
+          "text": "that the order was fulfilled"
+        },
+        {
+          "id": "R3",
+          "text": "that the order was not fulfilled"
+        }
+      ],
+      "example": [
+        {
+          "name": "order_submitted",
+          "value": "true"
+        },
+        {
+          "name": "order_fulfilled",
+          "value": "true"
+        }
+      ],
+      "keeps": [
+        "R2"
+      ],
+      "breaks": "R3",
+      "fix": "Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2."
+    }
+  ],
+  "gaps": [],
+  "misuse": [],
+  "wording": []
+}
+```
+
+`policy` returns `ok`, `spec`, `property`, `holds`, `note`, `acceptedFound`, `accepted`, `rejectedFound`, `rejected`, `counterexampleFound`, `counterexample`, and `breaks`. A scenario list is empty when its `Found` flag is false. Each entry is `name` and `value`. A break is `id`, `line`, `sentence`, and `because`.
+
+<!-- verify stdout 1
+build/ears-verify
+policy
+--json
+examples/order.ears.md
+--property
+examples/order-always.ears.md
+-->
+```text
+{
+  "ok": false,
+  "spec": "examples/order.ears.md",
+  "property": "examples/order-always.ears.md",
+  "holds": false,
+  "note": "",
+  "acceptedFound": false,
+  "accepted": [],
+  "rejectedFound": false,
+  "rejected": [],
+  "counterexampleFound": true,
+  "counterexample": [
+    {
+      "name": "order_submitted",
+      "value": "false"
+    },
+    {
+      "name": "inventory_available",
+      "value": "false"
+    },
+    {
+      "name": "order_fulfilled",
+      "value": "false"
+    }
+  ],
+  "breaks": [
+    {
+      "id": "P1",
+      "line": 3,
+      "sentence": "The Order System shall fulfill the order.",
+      "because": "The order was not fulfilled."
+    }
+  ]
+}
+```
+
+`emit-smt --json` returns `ok`, `spec`, and `smt`. `smt` is the plain SMT-LIB text, newlines between lines, none after the last line.
+
+<!-- verify stdout 0
+build/ears-verify
+emit-smt
+--json
+examples/order.ears.md
+-->
+```text
+{
+  "ok": true,
+  "spec": "examples/order.ears.md",
+  "smt": "; spec: examples/order.ears.md\n(set-logic ALL)\n; event order_submitted: Bool \"The customer submits an order.\" phrase \"an order is submitted\"\n(declare-fun order_submitted () Bool)\n; state inventory_available: Bool \"Enough stock is on hand to fill the order.\" phrase \"inventory is available\"\n(declare-fun inventory_available () Bool)\n; output order_fulfilled: Bool \"The order is fulfilled.\" phrase \"fulfill the order\" outcome \"the order was fulfilled\" / \"the order was not fulfilled\"\n(declare-fun order_fulfilled () Bool)\n; R1_L7 line 7: WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.\n(assert (! (=> (and order_submitted inventory_available) order_fulfilled) :named R1_L7))"
+}
+```
 
 A scenario value is `true` or `false`, an integer inside the declared range, or an enum variant string. Every declared name is required. Extra names are rejected. Leading zeros are rejected.
 

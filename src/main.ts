@@ -9,7 +9,7 @@ import { parseProperty, parseSpec } from "./ears.ts";
 import { parseScenarioJson } from "./jsonvalue.ts";
 import { formatLintJson, formatLintText, lintSpec } from "./lint.ts";
 import { analyzePolicy, formatPolicyJson, formatPolicyText } from "./policy.ts";
-import { printSmt } from "./smt.ts";
+import { formatEmitJson, printSmt } from "./smt.ts";
 import { spaceSize } from "./solver.ts";
 import { displayQuote } from "./text.ts";
 import type { Requirement } from "./spec.ts";
@@ -130,14 +130,16 @@ function commandCheck(args: string[]): void {
 
 function commandEmit(args: string[]): void {
   const flags = parseFlags(args, false, false);
-  if (flags.error.length > 0) fail(false, flags.error);
-  if (flags.json || flags.input.length > 0 || flags.positionals.length !== 1) fail(false, "usage: ears-verify emit-smt <spec>");
+  if (flags.error.length > 0) fail(flags.json, flags.error);
+  if (flags.positionals.length !== 1) fail(flags.json, "usage: ears-verify emit-smt [--json] <spec>");
   const specPath = flags.positionals[0];
   const specText = readText(specPath);
-  if (specText === null) fail(false, "cannot read " + specPath);
+  if (specText === null) fail(flags.json, "cannot read " + specPath);
   const spec = parseSpec(specText);
-  if (!spec.ok) fail(false, specPath + ":" + String(spec.line) + ": " + spec.message);
-  console.log(printSmt(specPath, spec.spec));
+  if (!spec.ok) fail(flags.json, specPath + ":" + String(spec.line) + ": " + spec.message);
+  const smt = printSmt(specPath, spec.spec);
+  if (flags.json) console.log(formatEmitJson(specPath, smt));
+  else console.log(smt);
   process.exit(EXIT_OK);
 }
 
@@ -204,7 +206,7 @@ function usage(toStderr: boolean): void {
   const text =
     "usage:\n" +
     "  ears-verify check [--json] <spec> --input <scenario>\n" +
-    "  ears-verify emit-smt <spec>\n" +
+    "  ears-verify emit-smt [--json] <spec>\n" +
     "  ears-verify lint [--json] <spec>\n" +
     "  ears-verify policy [--json] <spec> [--property <file>]\n" +
     "  ears-verify help";

@@ -1,7 +1,7 @@
 error: missing command
 usage:
   ears-verify check [--json] <spec> --input <scenario>
-  ears-verify emit-smt <spec>
+  ears-verify emit-smt [--json] <spec>
   ears-verify lint [--json] <spec>
   ears-verify policy [--json] <spec> [--property <file>]
   ears-verify help
