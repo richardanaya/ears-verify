@@ -171,8 +171,7 @@ function findVacuous(spec: Spec): Vacuous[] {
   const found: Vacuous[] = [];
   for (let i = 0; i < spec.requirements.length; i++) {
     const req = spec.requirements[i];
-    if (req.antecedent === null) continue;
-    if (conditionPossible(spec, req.antecedent)) continue;
+    if (!requirementVacuous(spec, req)) continue;
     found.push({
       id: req.id,
       line: req.line,
@@ -185,6 +184,11 @@ function findVacuous(spec: Spec): Vacuous[] {
     });
   }
   return found;
+}
+
+function requirementVacuous(spec: Spec, req: Requirement): boolean {
+  if (req.antecedent === null) return false;
+  return !conditionPossible(spec, req.antecedent);
 }
 
 function conditionPossible(spec: Spec, term: Term): boolean {
@@ -318,6 +322,7 @@ function findRedundant(spec: Spec, groups: ConflictGroup[], earlier: number[]): 
   for (let i = 0; i < flags.length; i++) {
     if (!flags[i]) continue;
     const req = spec.requirements[i];
+    if (requirementVacuous(spec, req)) continue;
     const held = narrowed
       ? "Whenever the requirements outside a conflict hold, "
       : "Whenever the other requirements hold, ";
@@ -341,6 +346,7 @@ function findDuplicates(spec: Spec, earlier: number[]): Duplicate[] {
     if (earlier[i] < 0) continue;
     const req = spec.requirements[i];
     const prior = spec.requirements[earlier[i]];
+    if (requirementVacuous(spec, req) || requirementVacuous(spec, prior)) continue;
     found.push({
       id: req.id,
       line: req.line,

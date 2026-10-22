@@ -1042,7 +1042,7 @@ When not a member asks to take a copy home, the Desk shall not allow the loan.
 
 ## A condition that can never be true
 
-`examples/order-vacuous.ears.md` has a condition that contradicts itself, and a quantity comparison outside the declared range. The response is never demanded. Lint names each one. When the rest of the spec can be satisfied, the same requirements are also redundant, because a condition that is never true cannot add a constraint. The vacuous line says to rewrite the condition. It does not pick a response.
+`examples/order-vacuous.ears.md` has a condition that contradicts itself, and a quantity comparison outside the declared range. The response is never demanded. Lint names each one as vacuous. It does not also call that requirement redundant or a duplicate, because a condition that can never be true is implied by anything. The vacuous line says to rewrite the condition. It does not pick a response.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -1055,20 +1055,10 @@ conflicts: 0
 gaps: 0
 misuse: 0
 wording: 0
-redundant: 2
+redundant: 0
 duplicate: 0
 vacuous: 2
 unused: 0
-
-redundant R1 line 7
-R1 adds nothing. Whenever the other requirements hold, R1 holds too.
-When the cart is open and the cart is not open, the Checkout shall accept the order.
-Suggested fix: remove R1, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
-
-redundant R2 line 8
-R2 adds nothing. Whenever the other requirements hold, R2 holds too.
-When the quantity is at least 9, the Checkout shall accept the order.
-Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 
 vacuous R1 line 7
 R1 can never trigger. Its condition is impossible for every allowed value.

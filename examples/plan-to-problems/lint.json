@@ -501,13 +501,6 @@
   ],
   "redundant": [
     {
-      "id": "R9",
-      "line": 24,
-      "sentence": "When a member asks to take a copy home and the loan length is at least 40, the Fall Desk shall allow the loan.",
-      "text": "R9 adds nothing. Whenever the requirements outside a conflict hold, R9 holds too.",
-      "fix": "Suggested fix: remove R9, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees."
-    },
-    {
       "id": "R11",
       "line": 26,
       "sentence": "When a member brings a copy back and the loan is overdue, the Fall Desk shall close the loan.",

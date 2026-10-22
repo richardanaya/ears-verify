@@ -1128,7 +1128,7 @@ output order_fulfilled: Bool "Handle it as needed." phrase "fulfill the order" o
 
 ## A condition that can never be true
 
-Show the requirement and the suggested fix. A condition that contradicts itself, or that asks for a value outside the declared range, never triggers. Ask the PM to rewrite the condition. Do not invent a response. If the rest of the spec can be satisfied, lint also marks that requirement redundant.
+Show the requirement and the suggested fix. A condition that contradicts itself, or that asks for a value outside the declared range, never triggers. Ask the PM to rewrite the condition. Do not invent a response. Do not also call that requirement redundant or a duplicate.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -1141,20 +1141,10 @@ conflicts: 0
 gaps: 0
 misuse: 0
 wording: 0
-redundant: 2
+redundant: 0
 duplicate: 0
 vacuous: 2
 unused: 0
-
-redundant R1 line 7
-R1 adds nothing. Whenever the other requirements hold, R1 holds too.
-When the cart is open and the cart is not open, the Checkout shall accept the order.
-Suggested fix: remove R1, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
-
-redundant R2 line 8
-R2 adds nothing. Whenever the other requirements hold, R2 holds too.
-When the quantity is at least 9, the Checkout shall accept the order.
-Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 
 vacuous R1 line 7
 R1 can never trigger. Its condition is impossible for every allowed value.

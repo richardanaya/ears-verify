@@ -873,7 +873,33 @@ if (vacuousLint.kind === "report") {
       vacuousLint.report.vacuous[1].text.indexOf("R2 can never trigger.") === 0,
   );
   check("vacuous fix", vacuousLint.report.vacuous[0].fix.indexOf("Suggested fix: rewrite the condition in R1") === 0);
-  check("vacuous also redundant", vacuousLint.report.redundant.length === 2);
+  check(
+    "vacuous is not redundant",
+    vacuousLint.report.redundant.length === 0 && vacuousLint.report.duplicate.length === 0,
+  );
+}
+const vacuousCopy = lintSpec(
+  mustSpec(
+    'input quantity: Int 1..5 "Count." phrase "the quantity"\n' +
+      'output order_accepted: Bool "Accepted." phrase "accept the order"\n\n' +
+      "R1 When the quantity is at least 9, the Checkout shall accept the order.\n" +
+      "R2 When the quantity is at least 9, the Checkout shall accept the order.\n" +
+      "R3 The Checkout shall accept the order.\n" +
+      "R4 The Checkout shall accept the order.\n",
+  ),
+);
+check("vacuous copy ran", vacuousCopy.kind === "report");
+if (vacuousCopy.kind === "report") {
+  check(
+    "vacuous copy is not a duplicate",
+    vacuousCopy.report.vacuous.length === 2 &&
+      vacuousCopy.report.vacuous[0].id === "R1" &&
+      vacuousCopy.report.vacuous[1].id === "R2" &&
+      vacuousCopy.report.redundant.length === 0 &&
+      vacuousCopy.report.duplicate.length === 1 &&
+      vacuousCopy.report.duplicate[0].id === "R4" &&
+      vacuousCopy.report.duplicate[0].sameAs === "R3",
+  );
 }
 
 const possible = lintSpec(
