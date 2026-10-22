@@ -181,7 +181,7 @@ function commandScenarios(args: string[]): void {
   const spec = parseSpec(specText);
   if (!spec.ok) fail(flags.json, specPath + ":" + String(spec.line) + ": " + spec.message);
   if (spaceSize(spec.spec) < 0) {
-    fail(flags.json, "search space has more than 250000 assignments. Narrow the integer ranges and try again.");
+    fail(flags.json, "a symbol has an empty domain. Declare at least one allowed value.");
   }
   const rows = listScenarios(spec.spec);
   if (flags.json) console.log(formatScenariosJson(specPath, rows));
@@ -199,7 +199,7 @@ function commandPolicy(args: string[]): void {
   const parsed = parseSpec(specText);
   if (!parsed.ok) fail(flags.json, specPath + ":" + String(parsed.line) + ": " + parsed.message);
   if (spaceSize(parsed.spec) < 0) {
-    fail(flags.json, "search space has more than 250000 assignments. Narrow the integer ranges and try again.");
+    fail(flags.json, "a symbol has an empty domain. Declare at least one allowed value.");
   }
   let propertyReqs: Requirement[] = [];
   if (flags.property.length > 0) {

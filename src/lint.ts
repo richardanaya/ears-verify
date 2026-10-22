@@ -103,7 +103,7 @@ export function lintSpec(spec: Spec): LintOutcome {
   if (spaceSize(spec) < 0) {
     return {
       kind: "error",
-      message: "search space has more than " + formatInt(250000) + " assignments. Narrow the integer ranges and try again.",
+      message: "a symbol has an empty domain. Declare at least one allowed value.",
     };
   }
   const conflicts: Conflict[] = [];

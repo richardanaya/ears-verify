@@ -1,14 +1,15 @@
 /**
  * Seeded differential test. Random small specs are checked two ways:
- * the solver's minimal conflict sets, and a brute-force enumerator that
- * tries every driver situation and every output assignment.
+ * the decision procedure, and a brute-force enumerator that tries every
+ * driver situation and every output assignment. Both must agree on
+ * satisfiability, the least model, and the minimal conflict sets.
  * The seed is fixed, so Node and the native binary see the same specs.
  */
 
 import { readFileSync } from "node:fs";
 import { parseSpec } from "../src/ears.ts";
 import { codeAt, domainSize, isDriver, type Spec } from "../src/spec.ts";
-import { conflictingSets } from "../src/solver.ts";
+import { conflictingSets, firstScenario } from "../src/solver.ts";
 import { Binding, evalAssertion, T_TRUE } from "../src/term.ts";
 
 const SEED = 20261022;
@@ -54,6 +55,18 @@ export function runSoundness(): number {
       count++;
     }
   }
+  const coupled =
+    'input quantity: Int 0..5 "Q."\noutput shipped: Int 0..5 "S."\n\nR1 The Box shall shipped = quantity + 1.\n';
+  const hole = 'input n: Int 0..6 "N."\noutput o: Bool "O."\n\nR1 The Box shall n <= 1 or n >= 4.\nR2 When n >= 4, the Box shall o.\n';
+  const fixed = [coupled, hole];
+  for (let i = 0; i < fixed.length; i++) {
+    const parsed = parseSpec(fixed[i]);
+    if (!parsed.ok) failSound("fixed parse " + parsed.message, fixed[i]);
+    else {
+      compareSpec(parsed.spec, fixed[i]);
+      count++;
+    }
+  }
   const rng = new Rng(SEED);
   for (let i = 0; i < RANDOM_SPECS; i++) {
     const text = randomSpec(rng);
@@ -78,6 +91,51 @@ function compareSpec(spec: Spec, text: string): void {
   if (solverUnsat !== bruteUnsat || solverCores !== bruteCores) {
     failSound("mismatch solver [" + solverCores + "] brute [" + bruteCores + "]", text);
   }
+  const solverModel = firstScenario(spec, 0, []);
+  const bruteModel = bruteLex(spec);
+  if (!sameBinding(solverModel, bruteModel)) {
+    failSound("model mismatch", text);
+  }
+  if (solverModel !== null && !allHold(spec, everyIndex(spec), solverModel)) {
+    failSound("model does not satisfy the requirements", text);
+  }
+}
+
+function everyIndex(spec: Spec): number[] {
+  const indexes: number[] = [];
+  for (let i = 0; i < spec.requirements.length; i++) indexes.push(i);
+  return indexes;
+}
+
+function sameBinding(left: Binding | null, right: Binding | null): boolean {
+  if (left === null || right === null) return left === null && right === null;
+  if (left.code.length !== right.code.length) return false;
+  for (let i = 0; i < left.code.length; i++) {
+    if (left.known[i] !== right.known[i]) return false;
+    if (left.known[i] && left.code[i] !== right.code[i]) return false;
+  }
+  return true;
+}
+
+function bruteLex(spec: Spec): Binding | null {
+  const env = new Binding(spec.symbols.length);
+  return walkLex(spec, env, 0);
+}
+
+function walkLex(spec: Spec, env: Binding, pos: number): Binding | null {
+  if (pos === spec.symbols.length) {
+    if (allHold(spec, everyIndex(spec), env)) return env.copy();
+    return null;
+  }
+  const count = domainSize(spec, spec.symbols[pos]);
+  for (let v = 0; v < count; v++) {
+    env.known[pos] = true;
+    env.code[pos] = codeAt(spec.symbols[pos], v);
+    const found = walkLex(spec, env, pos + 1);
+    if (found !== null) return found;
+  }
+  env.known[pos] = false;
+  return null;
 }
 
 function coreKey(groups: number[][]): string {

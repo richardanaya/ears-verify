@@ -1,20 +1,25 @@
 /**
- * Finite-domain search for EARS requirements.
+ * Realizability for EARS requirements.
  *
  * A set of requirements conflicts when some situation (an assignment of the
  * events, states, and inputs) has no output assignment that satisfies all of
- * them. Two responses can each be possible on their own and still clash when
- * the same situation makes both of them apply.
+ * them. Whether that output assignment exists is a decision: DPLL on the
+ * boolean skeleton, and bounds propagation for linear integer arithmetic.
+ * Enum values are integer indexes in declaration order.
  *
- * Values are tried false before true, enums in declaration order, and integers
- * from min to max, so the first result is stable. The product of the domain
- * sizes is capped.
+ * Models are the lexicographically least assignment: false before true, enums
+ * in declaration order, integers from the low end of the range to the high end.
+ * Up to 12 requirements, minimal cores are every unrealizable subset. Above
+ * that, cores are shrunk by deletion. A wide driver domain drops a later core
+ * that would reuse a requirement already reported.
  */
 
 import { codeAt, domainSize, isDriver, requirementMentions, type Requirement, type Spec, type Term } from "./spec.ts";
-import { Binding, evalAssertion, evalBool, T_FALSE, T_TRUE } from "./term.ts";
+import { driverWide, firstUnsatDrivers, minimumModel, satisfiable, TheoryQuery } from "./decide.ts";
+import { Binding, evalAssertion, evalBool, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 
-export const SEARCH_LIMIT = 250000;
+const PRODUCT_CAP = 9007199254740991;
+const GAP_WALK_LIMIT = 100000;
 
 export interface SituationScan {
   unsat: Binding | null;
@@ -34,35 +39,183 @@ class GapState {
   }
 }
 
+class TheoryCache {
+  spec: Spec;
+  keys: string[];
+  queries: TheoryQuery[];
+
+  constructor(spec: Spec) {
+    this.spec = spec;
+    this.keys = [];
+    this.queries = [];
+  }
+
+  get(indexes: number[]): TheoryQuery {
+    let key = "";
+    for (let i = 0; i < indexes.length; i++) {
+      if (i > 0) key += ",";
+      key += String(indexes[i]);
+    }
+    for (let i = 0; i < this.keys.length; i++) {
+      if (this.keys[i] === key) return this.queries[i];
+    }
+    const query = new TheoryQuery(this.spec, reqsOf(this.spec, indexes));
+    this.keys.push(key);
+    this.queries.push(query);
+    return query;
+  }
+}
+
+class Ival {
+  known: boolean;
+  kind: string;
+  lo: number;
+  hi: number;
+
+  constructor() {
+    this.known = false;
+    this.kind = "";
+    this.lo = 0;
+    this.hi = 0;
+  }
+}
+
+class GapBox {
+  spec: Spec;
+  outputIndex: number;
+  drivers: number[];
+  lo: number[];
+  hi: number[];
+  best: Binding | null;
+
+  constructor(spec: Spec, outputIndex: number, drivers: number[]) {
+    this.spec = spec;
+    this.outputIndex = outputIndex;
+    this.drivers = drivers;
+    this.lo = [];
+    this.hi = [];
+    this.best = null;
+    for (let i = 0; i < spec.symbols.length; i++) {
+      this.lo.push(1);
+      this.hi.push(0);
+    }
+    for (let i = 0; i < drivers.length; i++) {
+      const si = drivers[i];
+      const sym = spec.symbols[si];
+      const count = domainSize(spec, sym);
+      if (count <= 0) continue;
+      this.lo[si] = codeAt(sym, 0);
+      this.hi[si] = codeAt(sym, count - 1);
+    }
+  }
+
+  solve(): Binding | null {
+    this.seek(0);
+    return this.best;
+  }
+
+  seek(pos: number): void {
+    const status = boxStatus(this.spec, this.outputIndex, this.lo, this.hi);
+    if (status === 0) return;
+    if (this.best !== null) {
+      const weight = boxWeight(this.spec, this.drivers, this.hi);
+      const bestW = gapWeight(this.spec, this.drivers, this.best);
+      if (weight < bestW) return;
+      if (weight === bestW && !gapBetter(this.spec, this.drivers, this.corner(), this.best)) return;
+    }
+    if (status === 1) {
+      this.consider(this.corner());
+      return;
+    }
+    if (pos >= this.drivers.length) {
+      const env = this.pinned();
+      if (isGap(this.spec, env, this.outputIndex)) this.consider(env);
+      return;
+    }
+    const si = this.drivers[pos];
+    if (this.lo[si] > this.hi[si]) return;
+    if (this.lo[si] === this.hi[si]) {
+      this.seek(pos + 1);
+      return;
+    }
+    const savedLo = this.lo[si];
+    const savedHi = this.hi[si];
+    const span = savedHi - savedLo;
+    if (span <= 24) {
+      for (let v = savedHi; v >= savedLo; v--) {
+        this.lo[si] = v;
+        this.hi[si] = v;
+        this.seek(pos + 1);
+      }
+      this.lo[si] = savedLo;
+      this.hi[si] = savedHi;
+      return;
+    }
+    const mid = savedLo + Math.floor(span / 2);
+    this.lo[si] = mid + 1;
+    this.hi[si] = savedHi;
+    this.seek(pos);
+    this.lo[si] = savedLo;
+    this.hi[si] = mid;
+    this.seek(pos);
+    this.lo[si] = savedLo;
+    this.hi[si] = savedHi;
+  }
+
+  corner(): Binding {
+    const env = new Binding(this.spec.symbols.length);
+    for (let i = 0; i < this.drivers.length; i++) {
+      const si = this.drivers[i];
+      env.known[si] = true;
+      env.code[si] = this.hi[si];
+    }
+    return env;
+  }
+
+  pinned(): Binding {
+    const env = new Binding(this.spec.symbols.length);
+    for (let i = 0; i < this.drivers.length; i++) {
+      const si = this.drivers[i];
+      env.known[si] = true;
+      env.code[si] = this.lo[si];
+    }
+    return env;
+  }
+
+  consider(env: Binding): void {
+    if (this.best === null || gapBetter(this.spec, this.drivers, env, this.best)) this.best = env;
+  }
+}
+
 export function spaceSize(spec: Spec): number {
   let product = 1;
   for (let i = 0; i < spec.symbols.length; i++) {
     const size = domainSize(spec, spec.symbols[i]);
     if (size <= 0) return -1;
-    if (product > SEARCH_LIMIT / size) return -1;
+    if (product > PRODUCT_CAP / size) return PRODUCT_CAP;
     product = product * size;
   }
   return product;
 }
 
 export function scanRequirements(spec: Spec, indexes: number[]): SituationScan {
-  const env = new Binding(spec.symbols.length);
-  const scan: SituationScan = { unsat: null, sawSat: false };
-  walkSituations(spec, indexes, driverIndexes(spec), outputIndexes(spec), env, 0, scan);
-  return scan;
+  const holds = reqsOf(spec, indexes);
+  return {
+    unsat: firstUnsatDrivers(spec, holds),
+    sawSat: satisfiable(spec, holds),
+  };
 }
 
 export function modelFor(spec: Spec, indexes: number[], situation: Binding): Binding | null {
-  const env = situation.copy();
-  const outputs = outputIndexes(spec);
-  clearKnown(env, outputs);
-  if (searchOutputs(spec, indexes, outputs, env, 0)) return env;
-  return null;
+  return minimumModel(spec, reqsOf(spec, indexes), [], null, 0, situation, true);
 }
 
 export function conflictingSets(spec: Spec): ConflictGroup[] {
   const n = spec.requirements.length;
-  if (n > 12) return coresByDeletion(spec);
+  if (n > 12) {
+    if (driverWide(spec)) return coresLarge(spec);
+    return coresByDeletion(spec);
+  }
   let size = 1;
   for (let i = 0; i < n; i++) size = size * 2;
   const cacheKnown: boolean[] = [];
@@ -107,7 +260,7 @@ export function conflictingSets(spec: Spec): ConflictGroup[] {
  * mode 0: every requirement holds.
  * mode 1: some requirement fails.
  * mode 2: every requirement holds and some extra requirement fails.
- * Values are tried in the same order as the linter: false, then true.
+ * Values are tried false before true, then low integers before high ones.
  */
 export function firstScenario(spec: Spec, mode: number, extra: Requirement[]): Binding | null {
   if (mode === 1) return firstMatching(spec, [], spec.requirements, null, 0);
@@ -128,74 +281,7 @@ export function firstMatching(
   guard: Term | null,
   wantGuard: number,
 ): Binding | null {
-  if (wantGuard === 2 && guard === null) return null;
-  const found = new ScenarioFound();
-  const env = new Binding(spec.symbols.length);
-  walkMatch(spec, mustHold, mustFail, guard, wantGuard, env, 0, found);
-  return found.env;
-}
-
-class ScenarioFound {
-  env: Binding | null;
-
-  constructor() {
-    this.env = null;
-  }
-}
-
-function walkMatch(
-  spec: Spec,
-  mustHold: Requirement[],
-  mustFail: Requirement[],
-  guard: Term | null,
-  wantGuard: number,
-  env: Binding,
-  pos: number,
-  found: ScenarioFound,
-): void {
-  if (found.env !== null) return;
-  if (pos === spec.symbols.length) {
-    if (matching(spec, mustHold, mustFail, guard, wantGuard, env)) found.env = env.copy();
-    return;
-  }
-  const sym = spec.symbols[pos];
-  const count = domainSize(spec, sym);
-  for (let v = 0; v < count; v++) {
-    env.known[pos] = true;
-    env.code[pos] = codeAt(sym, v);
-    walkMatch(spec, mustHold, mustFail, guard, wantGuard, env, pos + 1, found);
-    if (found.env !== null) break;
-  }
-  env.known[pos] = false;
-}
-
-function matching(
-  spec: Spec,
-  mustHold: Requirement[],
-  mustFail: Requirement[],
-  guard: Term | null,
-  wantGuard: number,
-  env: Binding,
-): boolean {
-  if (wantGuard === 1 && guard !== null && evalBool(guard, spec, env) !== T_TRUE) return false;
-  if (wantGuard === 2 && (guard === null || evalBool(guard, spec, env) !== T_FALSE)) return false;
-  if (!allReqTrue(spec, mustHold, env)) return false;
-  if (mustFail.length === 0) return true;
-  return anyReqFalse(spec, mustFail, env);
-}
-
-function allReqTrue(spec: Spec, reqs: Requirement[], env: Binding): boolean {
-  for (let i = 0; i < reqs.length; i++) {
-    if (evalAssertion(reqs[i].antecedent, reqs[i].consequent, spec, env) !== T_TRUE) return false;
-  }
-  return true;
-}
-
-function anyReqFalse(spec: Spec, reqs: Requirement[], env: Binding): boolean {
-  for (let i = 0; i < reqs.length; i++) {
-    if (evalAssertion(reqs[i].antecedent, reqs[i].consequent, spec, env) === T_FALSE) return true;
-  }
-  return false;
+  return minimumModel(spec, mustHold, mustFail, guard, wantGuard, null, false);
 }
 
 /**
@@ -211,98 +297,67 @@ export function redundantFlags(spec: Spec): boolean[] {
   if (n < 2) return flags;
   const all: number[] = [];
   for (let i = 0; i < n; i++) all.push(i);
-  if (scanRequirements(spec, all).unsat !== null) return flags;
-  const witnessed: boolean[] = [];
-  const broken: boolean[] = [];
+  if (firstUnsatDrivers(spec, reqsOf(spec, all)) !== null) return flags;
   for (let i = 0; i < n; i++) {
-    witnessed.push(false);
-    broken.push(false);
-  }
-  const env = new Binding(spec.symbols.length);
-  walkRedundant(spec, env, 0, witnessed, broken);
-  for (let i = 0; i < n; i++) {
-    if (witnessed[i] && !broken[i]) flags[i] = true;
+    const others: Requirement[] = [];
+    for (let j = 0; j < n; j++) {
+      if (j !== i) others.push(spec.requirements[j]);
+    }
+    if (!satisfiable(spec, others)) continue;
+    const fails: Requirement[] = [];
+    fails.push(spec.requirements[i]);
+    if (minimumModel(spec, others, fails, null, 0, null, false) === null) flags[i] = true;
   }
   return flags;
 }
 
-function walkRedundant(spec: Spec, env: Binding, pos: number, witnessed: boolean[], broken: boolean[]): void {
-  if (pos === spec.symbols.length) {
-    noteRedundant(spec, env, witnessed, broken);
-    return;
-  }
-  const sym = spec.symbols[pos];
-  const count = domainSize(spec, sym);
-  for (let v = 0; v < count; v++) {
-    env.known[pos] = true;
-    env.code[pos] = codeAt(sym, v);
-    walkRedundant(spec, env, pos + 1, witnessed, broken);
-  }
-  env.known[pos] = false;
-}
-
-function noteRedundant(spec: Spec, env: Binding, witnessed: boolean[], broken: boolean[]): void {
-  const n = spec.requirements.length;
-  let trueCount = 0;
-  let falseCount = 0;
-  let falseIndex = 0;
-  for (let i = 0; i < n; i++) {
-    const req = spec.requirements[i];
-    const value = evalAssertion(req.antecedent, req.consequent, spec, env);
-    if (value === T_TRUE) trueCount++;
-    else if (value === T_FALSE) {
-      falseCount++;
-      falseIndex = i;
-    }
-  }
-  if (falseCount === 0 && trueCount === n) {
-    for (let i = 0; i < n; i++) witnessed[i] = true;
-    return;
-  }
-  if (falseCount === 1 && trueCount === n - 1) {
-    witnessed[falseIndex] = true;
-    broken[falseIndex] = true;
-  }
-}
-
 export function bestGap(spec: Spec, outputIndex: number): Binding | null {
-  const env = new Binding(spec.symbols.length);
-  const state = new GapState();
-  walkGaps(spec, outputIndex, driverIndexes(spec), outputIndexes(spec), env, 0, state);
-  return state.best;
+  let mentioned = false;
+  for (let r = 0; r < spec.requirements.length; r++) {
+    const req = spec.requirements[r];
+    if (!requirementMentions(req, outputIndex)) continue;
+    mentioned = true;
+    if (req.antecedent === null) return null;
+  }
+  const drivers = driverIndexes(spec);
+  if (!mentioned) return maxDriverBinding(spec, drivers);
+  if (driverWalkFits(spec, drivers)) {
+    const env = new Binding(spec.symbols.length);
+    const state = new GapState();
+    walkGaps(spec, outputIndex, drivers, outputIndexes(spec), env, 0, state);
+    return state.best;
+  }
+  const box = new GapBox(spec, outputIndex, drivers);
+  return box.solve();
 }
 
-function walkSituations(
-  spec: Spec,
-  indexes: number[],
-  drivers: number[],
-  outputs: number[],
-  env: Binding,
-  pos: number,
-  scan: SituationScan,
-): void {
-  if (scan.unsat !== null && scan.sawSat) return;
-  if (pos === drivers.length) {
-    clearKnown(env, outputs);
-    const sat = searchOutputs(spec, indexes, outputs, env, 0);
-    if (sat) scan.sawSat = true;
-    else if (scan.unsat === null) {
-      const snap = env.copy();
-      clearKnown(snap, outputs);
-      scan.unsat = snap;
-    }
-    return;
-  }
-  const si = drivers[pos];
-  const sym = spec.symbols[si];
-  const count = domainSize(spec, sym);
-  for (let v = 0; v < count; v++) {
+function reqsOf(spec: Spec, indexes: number[]): Requirement[] {
+  const holds: Requirement[] = [];
+  for (let i = 0; i < indexes.length; i++) holds.push(spec.requirements[indexes[i]]);
+  return holds;
+}
+
+function maxDriverBinding(spec: Spec, drivers: number[]): Binding {
+  const env = new Binding(spec.symbols.length);
+  for (let i = 0; i < drivers.length; i++) {
+    const si = drivers[i];
+    const sym = spec.symbols[si];
+    const count = domainSize(spec, sym);
     env.known[si] = true;
-    env.code[si] = codeAt(sym, v);
-    walkSituations(spec, indexes, drivers, outputs, env, pos + 1, scan);
-    if (scan.unsat !== null && scan.sawSat) break;
+    env.code[si] = count <= 0 ? 0 : codeAt(sym, count - 1);
   }
-  env.known[si] = false;
+  return env;
+}
+
+function driverWalkFits(spec: Spec, drivers: number[]): boolean {
+  let product = 1;
+  for (let i = 0; i < drivers.length; i++) {
+    const size = domainSize(spec, spec.symbols[drivers[i]]);
+    if (size <= 0 || size > 4096) return false;
+    if (product > GAP_WALK_LIMIT / size) return false;
+    product = product * size;
+  }
+  return true;
 }
 
 function walkGaps(
@@ -369,35 +424,217 @@ function gapWeight(spec: Spec, drivers: number[], env: Binding): number {
   return weight;
 }
 
-function searchOutputs(spec: Spec, indexes: number[], outputs: number[], env: Binding, pos: number): boolean {
-  if (pos === outputs.length) return allTrue(spec, indexes, env);
-  if (anyFalse(spec, indexes, env)) return false;
-  const si = outputs[pos];
-  const sym = spec.symbols[si];
-  const count = domainSize(spec, sym);
-  for (let v = 0; v < count; v++) {
-    env.known[si] = true;
-    env.code[si] = codeAt(sym, v);
-    if (searchOutputs(spec, indexes, outputs, env, pos + 1)) return true;
+function boxWeight(spec: Spec, drivers: number[], hi: number[]): number {
+  let weight = 0;
+  for (let i = 0; i < drivers.length; i++) {
+    const si = drivers[i];
+    const sym = spec.symbols[si];
+    if (sym.sort.kind === "int") weight += hi[si] - sym.sort.min;
+    else weight += hi[si];
   }
-  env.known[si] = false;
-  return false;
+  return weight;
 }
 
-function allTrue(spec: Spec, indexes: number[], env: Binding): boolean {
-  for (let i = 0; i < indexes.length; i++) {
-    const req = spec.requirements[indexes[i]];
-    if (evalAssertion(req.antecedent, req.consequent, spec, env) !== T_TRUE) return false;
+function boxStatus(spec: Spec, outputIndex: number, lo: number[], hi: number[]): number {
+  let mixed = false;
+  for (let r = 0; r < spec.requirements.length; r++) {
+    const req = spec.requirements[r];
+    if (!requirementMentions(req, outputIndex)) continue;
+    if (req.antecedent === null) return 0;
+    const guard = rangeBool(req.antecedent, spec, lo, hi);
+    if (guard === T_TRUE) return 0;
+    if (guard === T_FALSE) continue;
+    if (!canBeFalse(req.antecedent, spec, lo, hi)) return 0;
+    mixed = true;
   }
+  if (mixed) return 2;
+  return 1;
+}
+
+function rangeBool(term: Term, spec: Spec, lo: number[], hi: number[]): number {
+  if (term.kind === "bool") return term.value ? T_TRUE : T_FALSE;
+  if (term.kind === "sym") {
+    if (lo[term.index] > hi[term.index]) return T_UNKNOWN;
+    const sym = spec.symbols[term.index];
+    if (sym.sort.kind !== "bool") return T_UNKNOWN;
+    if (lo[term.index] !== hi[term.index]) return T_UNKNOWN;
+    return lo[term.index] === 1 ? T_TRUE : T_FALSE;
+  }
+  if (term.kind === "not") {
+    const inner = rangeBool(term.term, spec, lo, hi);
+    if (inner === T_UNKNOWN) return T_UNKNOWN;
+    return inner === T_TRUE ? T_FALSE : T_TRUE;
+  }
+  if (term.kind === "and") {
+    const left = rangeBool(term.left, spec, lo, hi);
+    const right = rangeBool(term.right, spec, lo, hi);
+    if (left === T_FALSE || right === T_FALSE) return T_FALSE;
+    if (left === T_TRUE && right === T_TRUE) return T_TRUE;
+    return T_UNKNOWN;
+  }
+  if (term.kind === "or") {
+    const left = rangeBool(term.left, spec, lo, hi);
+    const right = rangeBool(term.right, spec, lo, hi);
+    if (left === T_TRUE || right === T_TRUE) return T_TRUE;
+    if (left === T_FALSE && right === T_FALSE) return T_FALSE;
+    return T_UNKNOWN;
+  }
+  if (
+    term.kind === "eq" ||
+    term.kind === "neq" ||
+    term.kind === "lt" ||
+    term.kind === "le" ||
+    term.kind === "gt" ||
+    term.kind === "ge"
+  ) {
+    return rangeCmp(term, spec, lo, hi);
+  }
+  return T_UNKNOWN;
+}
+
+function rangeCmp(term: Term, spec: Spec, lo: number[], hi: number[]): number {
+  if (
+    term.kind !== "eq" &&
+    term.kind !== "neq" &&
+    term.kind !== "lt" &&
+    term.kind !== "le" &&
+    term.kind !== "gt" &&
+    term.kind !== "ge"
+  ) {
+    return T_UNKNOWN;
+  }
+  const left = linRange(term.left, spec, lo, hi);
+  const right = linRange(term.right, spec, lo, hi);
+  if (!left.known || !right.known) return T_UNKNOWN;
+  if (left.kind !== right.kind) return T_UNKNOWN;
+  const apart = left.hi < right.lo || right.hi < left.lo;
+  const points = left.lo === left.hi && right.lo === right.hi;
+  const same = points && left.lo === right.lo;
+  if (left.kind !== "int") {
+    if (term.kind === "eq") {
+      if (same) return T_TRUE;
+      if (apart) return T_FALSE;
+      return T_UNKNOWN;
+    }
+    if (term.kind === "neq") {
+      if (same) return T_FALSE;
+      if (apart) return T_TRUE;
+      return T_UNKNOWN;
+    }
+    return T_UNKNOWN;
+  }
+  if (term.kind === "eq") {
+    if (same) return T_TRUE;
+    if (apart) return T_FALSE;
+    return T_UNKNOWN;
+  }
+  if (term.kind === "neq") {
+    if (same) return T_FALSE;
+    if (apart) return T_TRUE;
+    return T_UNKNOWN;
+  }
+  if (term.kind === "lt") {
+    if (left.hi < right.lo) return T_TRUE;
+    if (left.lo >= right.hi) return T_FALSE;
+    return T_UNKNOWN;
+  }
+  if (term.kind === "le") {
+    if (left.hi <= right.lo) return T_TRUE;
+    if (left.lo > right.hi) return T_FALSE;
+    return T_UNKNOWN;
+  }
+  if (term.kind === "gt") {
+    if (left.lo > right.hi) return T_TRUE;
+    if (left.hi <= right.lo) return T_FALSE;
+    return T_UNKNOWN;
+  }
+  if (left.lo >= right.hi) return T_TRUE;
+  if (left.hi < right.lo) return T_FALSE;
+  return T_UNKNOWN;
+}
+
+function linRange(term: Term, spec: Spec, lo: number[], hi: number[]): Ival {
+  const out = new Ival();
+  if (term.kind === "int") {
+    out.known = true;
+    out.kind = "int";
+    out.lo = term.value;
+    out.hi = term.value;
+    return out;
+  }
+  if (term.kind === "enum") {
+    out.known = true;
+    out.kind = "enum:" + term.enumName;
+    out.lo = term.index;
+    out.hi = term.index;
+    return out;
+  }
+  if (term.kind === "bool") {
+    out.known = true;
+    out.kind = "bool";
+    out.lo = term.value ? 1 : 0;
+    out.hi = out.lo;
+    return out;
+  }
+  if (term.kind === "sym") {
+    if (lo[term.index] > hi[term.index]) return out;
+    const sym = spec.symbols[term.index];
+    out.known = true;
+    if (sym.sort.kind === "bool") out.kind = "bool";
+    else if (sym.sort.kind === "int") out.kind = "int";
+    else out.kind = "enum:" + sym.sort.enumName;
+    out.lo = lo[term.index];
+    out.hi = hi[term.index];
+    return out;
+  }
+  if (term.kind === "add" || term.kind === "sub") {
+    const left = linRange(term.left, spec, lo, hi);
+    const right = linRange(term.right, spec, lo, hi);
+    if (!left.known || !right.known || left.kind !== "int" || right.kind !== "int") return out;
+    out.known = true;
+    out.kind = "int";
+    if (term.kind === "add") {
+      out.lo = left.lo + right.lo;
+      out.hi = left.hi + right.hi;
+    } else {
+      out.lo = left.lo - right.hi;
+      out.hi = left.hi - right.lo;
+    }
+    return out;
+  }
+  return out;
+}
+
+function canBeFalse(term: Term, spec: Spec, lo: number[], hi: number[]): boolean {
+  if (term.kind === "bool") return !term.value;
+  if (term.kind === "sym") {
+    if (lo[term.index] > hi[term.index]) return false;
+    if (spec.symbols[term.index].sort.kind !== "bool") return false;
+    return lo[term.index] === 0;
+  }
+  if (term.kind === "not") return canBeTrue(term.term, spec, lo, hi);
+  if (term.kind === "and") return canBeFalse(term.left, spec, lo, hi) || canBeFalse(term.right, spec, lo, hi);
+  if (term.kind === "or") return canBeFalse(term.left, spec, lo, hi) && canBeFalse(term.right, spec, lo, hi);
+  const value = rangeBool(term, spec, lo, hi);
+  if (value === T_FALSE) return true;
+  if (value === T_TRUE) return false;
   return true;
 }
 
-function anyFalse(spec: Spec, indexes: number[], env: Binding): boolean {
-  for (let i = 0; i < indexes.length; i++) {
-    const req = spec.requirements[indexes[i]];
-    if (evalAssertion(req.antecedent, req.consequent, spec, env) === T_FALSE) return true;
+function canBeTrue(term: Term, spec: Spec, lo: number[], hi: number[]): boolean {
+  if (term.kind === "bool") return term.value;
+  if (term.kind === "sym") {
+    if (lo[term.index] > hi[term.index]) return false;
+    if (spec.symbols[term.index].sort.kind !== "bool") return false;
+    return hi[term.index] === 1;
   }
-  return false;
+  if (term.kind === "not") return canBeFalse(term.term, spec, lo, hi);
+  if (term.kind === "and") return canBeTrue(term.left, spec, lo, hi) && canBeTrue(term.right, spec, lo, hi);
+  if (term.kind === "or") return canBeTrue(term.left, spec, lo, hi) || canBeTrue(term.right, spec, lo, hi);
+  const value = rangeBool(term, spec, lo, hi);
+  if (value === T_TRUE) return true;
+  if (value === T_FALSE) return false;
+  return true;
 }
 
 function clearKnown(env: Binding, indexes: number[]): void {
@@ -429,11 +666,11 @@ function outputIndexes(spec: Spec): number[] {
 function coresByDeletion(spec: Spec): ConflictGroup[] {
   const cores: ConflictGroup[] = [];
   const drivers = driverIndexes(spec);
-  const outputs = outputIndexes(spec);
   const env = new Binding(spec.symbols.length);
   const all: number[] = [];
   for (let i = 0; i < spec.requirements.length; i++) all.push(i);
-  walkCores(spec, all, drivers, outputs, env, 0, cores);
+  const cache = new TheoryCache(spec);
+  walkCores(spec, all, drivers, env, 0, cores, cache);
   return cores;
 }
 
@@ -441,13 +678,13 @@ function walkCores(
   spec: Spec,
   all: number[],
   drivers: number[],
-  outputs: number[],
   env: Binding,
   pos: number,
   cores: ConflictGroup[],
+  cache: TheoryCache,
 ): void {
   if (pos === drivers.length) {
-    harvestCores(spec, all, outputs, env, cores);
+    harvestCores(spec, all, env, cores, cache);
     return;
   }
   const si = drivers[pos];
@@ -456,17 +693,17 @@ function walkCores(
   for (let v = 0; v < count; v++) {
     env.known[si] = true;
     env.code[si] = codeAt(sym, v);
-    walkCores(spec, all, drivers, outputs, env, pos + 1, cores);
+    walkCores(spec, all, drivers, env, pos + 1, cores, cache);
   }
   env.known[si] = false;
 }
 
-function harvestCores(spec: Spec, all: number[], outputs: number[], env: Binding, cores: ConflictGroup[]): void {
+function harvestCores(spec: Spec, all: number[], env: Binding, cores: ConflictGroup[], cache: TheoryCache): void {
   let pool = copyIndexes(all);
-  while (situationUnsat(spec, pool, outputs, env)) {
+  while (situationUnsat(pool, env, cache)) {
     let removed = false;
     for (let c = 0; c < cores.length; c++) {
-      if (!situationUnsat(spec, cores[c].indexes, outputs, env)) continue;
+      if (!situationUnsat(cores[c].indexes, env, cache)) continue;
       const next = subtractIndexes(pool, cores[c].indexes);
       if (next.length < pool.length) {
         pool = next;
@@ -474,8 +711,8 @@ function harvestCores(spec: Spec, all: number[], outputs: number[], env: Binding
       }
     }
     if (removed) continue;
-    const local = minimizeSituation(spec, pool, outputs, env);
-    const global = minimizeGlobal(spec, local);
+    const local = minimizeSituation(pool, env, cache);
+    const global = minimizeGlobal(local, cache);
     if (global.length === 0) return;
     if (!hasCore(cores, global)) cores.push({ indexes: global, minimal: true });
     const next = subtractIndexes(pool, global);
@@ -484,32 +721,56 @@ function harvestCores(spec: Spec, all: number[], outputs: number[], env: Binding
   }
 }
 
-function minimizeSituation(spec: Spec, indexes: number[], outputs: number[], env: Binding): number[] {
+/**
+ * Wide driver domains are not listed. Each core is the requirements that fail
+ * in the least bad situation still in the pool, then that core is removed.
+ * A later core that needs a requirement from an earlier one is not reported.
+ */
+function coresLarge(spec: Spec): ConflictGroup[] {
+  const cores: ConflictGroup[] = [];
+  let pool: number[] = [];
+  for (let i = 0; i < spec.requirements.length; i++) pool.push(i);
+  const cache = new TheoryCache(spec);
+  while (pool.length > 0) {
+    const bad = cache.get(pool).badDrivers();
+    if (bad === null) break;
+    const local = minimizeSituation(pool, bad, cache);
+    const global = minimizeGlobal(local, cache);
+    if (global.length === 0) break;
+    if (!hasCore(cores, global)) cores.push({ indexes: global, minimal: true });
+    const next = subtractIndexes(pool, global);
+    if (next.length === pool.length) break;
+    pool = next;
+  }
+  return cores;
+}
+
+function minimizeSituation(indexes: number[], env: Binding, cache: TheoryCache): number[] {
   let current = copyIndexes(indexes);
   let i = 0;
   while (i < current.length) {
     const trial = withoutAt(current, i);
-    if (situationUnsat(spec, trial, outputs, env)) current = trial;
+    if (situationUnsat(trial, env, cache)) current = trial;
     else i++;
   }
   return current;
 }
 
-function minimizeGlobal(spec: Spec, indexes: number[]): number[] {
+function minimizeGlobal(indexes: number[], cache: TheoryCache): number[] {
   let current = copyIndexes(indexes);
   let i = 0;
   while (i < current.length) {
     const trial = withoutAt(current, i);
-    if (scanRequirements(spec, trial).unsat !== null) current = trial;
+    const bad = trial.length === 0 ? null : cache.get(trial).badDrivers();
+    if (bad !== null) current = trial;
     else i++;
   }
   return current;
 }
 
-function situationUnsat(spec: Spec, indexes: number[], outputs: number[], env: Binding): boolean {
+function situationUnsat(indexes: number[], env: Binding, cache: TheoryCache): boolean {
   if (indexes.length === 0) return false;
-  clearKnown(env, outputs);
-  return !searchOutputs(spec, indexes, outputs, env, 0);
+  return !cache.get(indexes).pinnedSat(env);
 }
 
 function hasCore(cores: ConflictGroup[], indexes: number[]): boolean {

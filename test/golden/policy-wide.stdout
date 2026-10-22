@@ -1,0 +1,15 @@
+spec: examples/order-wide.ears.md
+accepted:
+{
+  "quantity": 0
+}
+This scenario satisfies every requirement.
+rejected:
+{
+  "quantity": 1
+}
+This scenario violates a requirement.
+
+R1 line 5
+The Counter shall the quantity is 0.
+The quantity was 1.

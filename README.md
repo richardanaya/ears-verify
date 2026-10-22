@@ -501,22 +501,29 @@ A line with no condition is ubiquitous: the response is always required. `While`
 
 ## How a contradiction is found
 
-Each requirement becomes an implication: when its condition is true, its response must be true. `check` plugs in the scenario you wrote. `lint` searches.
+Each requirement becomes an implication: when its condition is true, its response must be true. `check` plugs in the scenario you wrote. `lint` asks whether some situation has no response that satisfies the set.
 
-A set such as `{R2, R3}` is reported when some situation has no allowed response, even if other situations are fine. The set is minimal: drop any one requirement and the rest can be satisfied. Sets are listed smallest first. Specs with more than 12 requirements are still checked as a whole; the report says when that list was not narrowed to the smallest set.
+Booleans are decided by DPLL over the clauses of those implications. Integers, and enum values numbered in the order you declared them, are linear arithmetic: bounds tighten until a comparison is forced, and the search branches where a bound or a comparison can change. A model is the lexicographically least assignment. The search tries `false` before `true`, enum values in declaration order, and integers from the low end of the range to the high end. The example scenario is that first assignment. Run it twice and you get the same bytes.
 
-The search tries `false` before `true`, enum values in the order you declared them, and integers from the low end of the range to the high end. The example scenario is the first assignment that search finds. Run it twice and you get the same bytes.
+A set such as `{R2, R3}` is reported when some situation has no allowed response, even if other situations are fine. The set is minimal: drop any one requirement and the rest can be satisfied. With 12 requirements or fewer, every such set is listed, smallest first. With more than 12, each set is shrunk by deleting requirements from a failing situation, and situations are tried in that same order. Two sets that share a requirement and fail in exactly the same situations can collapse to one of them. If a driver domain is wider than 64 values, or the driver combinations exceed 8192, each set is removed before the next search, so a later set that needs a requirement from an earlier one is not reported.
 
-An integer has to declare `min..max`, inside `-1000000..1000000`. The product of the domain sizes has to be at most 250000 or lint stops:
+An integer has to declare `min..max`, inside `-1000000..1000000`. The procedure decides the range. It does not list every value, so a wide range is still checked:
 
-<!-- verify stderr 2
+<!-- verify stdout 0
 build/ears-verify
 lint
 examples/order-wide.ears.md
 -->
 ```text
-error: search space has more than 250000 assignments. Narrow the integer ranges and try again.
+spec: examples/order-wide.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
 ```
+
+A comparison that ties two wide integers together is still decided, by splitting the range. A boolean combination of those comparisons can take longer than a single bound.
 
 There are no strings in the logic. Descriptions and phrases stay next to the names. Vague words (`quickly`, `appropriate`, `user-friendly`) and solution words (`database`, `api`, `microservice`) are caught in descriptions and in requirement sentences.
 
@@ -691,11 +698,11 @@ The skill at [`skills/ears-verify/SKILL.md`](skills/ears-verify/SKILL.md) tells 
 
 ## Questions
 
-**Why our own solver?** The fragment is small and finite, so the binary can decide it directly. There is no Z3, cvc5, or yices to install, and the Node run and the native binary are tested to print the same bytes.
+**Why our own solver?** The decision procedure is in this repository: DPLL for the boolean structure, and bounds for linear integer arithmetic. There is no Z3, cvc5, or yices to install, and the Node run and the native binary are tested to print the same bytes.
 
 **Why ScriptC?** One TypeScript program is the product. ScriptC 0.4.1 compiles that program to a native binary, and `scriptc coverage` stays fully static. Node 24 runs the same files for day-to-day edits.
 
-**Why do integers need a range?** The search enumerates every allowed value. A declared range keeps that finite, and a range that would blow past 250000 assignments is an error you can fix by narrowing it.
+**Why do integers need a range?** The arithmetic is bounded. A declared range, inside `-1000000..1000000`, keeps every integer finite. The solver does not walk that range one value at a time.
 
 **Will it pick a winner?** It will show who clashes, the situation, and an example that breaks one requirement in the set. The fix says to ask which requirement should win.
 
@@ -804,7 +811,7 @@ Suggested fix: ask which requirement should win. Removing any one of R1, R2, and
 
 ## A requirement that adds nothing
 
-`examples/order-redundant.ears.md` says a submitted order is fulfilled, and also that a submitted order with inventory is fulfilled. The second one is already required by the first. Lint names it and asks. It does not delete it.
+`examples/order-redundant.ears.md` says a submitted order is fulfilled, and also that a submitted order with inventory is fulfilled. The second one is already required by the first. Lint names it and asks. It does not delete it. If the whole spec already conflicts, nothing is marked redundant.
 
 <!-- verify stdout 1
 build/ears-verify

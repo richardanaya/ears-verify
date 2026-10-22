@@ -228,12 +228,28 @@ if (wording.kind === "report") {
 }
 
 const wide = mustSpec(readFileSync("examples/order-wide.ears.md", "utf8"));
-check("wide space", spaceSize(wide) < 0);
+check("wide space", spaceSize(wide) === 250001);
 const wideLint = lintSpec(wide);
-check("wide lint errors", wideLint.kind === "error" && wideLint.message.indexOf("250000") !== -1);
+check(
+  "wide lint clean",
+  wideLint.kind === "report" &&
+    wideLint.report.conflicts.length === 0 &&
+    wideLint.report.gaps.length === 0 &&
+    wideLint.report.redundant.length === 0,
+);
+const widePolicy = analyzePolicy(wide, "", []);
+check(
+  "wide policy picks the low end",
+  widePolicy.accepted !== null &&
+    widePolicy.accepted.code[0] === 0 &&
+    widePolicy.rejected !== null &&
+    widePolicy.rejected.code[0] === 1,
+);
 
 const exact = mustSpec('output quantity: Int 1..250000 "A count."\n\nR1 The Counter shall quantity = 1.\n');
 check("exact limit", spaceSize(exact) === 250000);
+const exactLint = lintSpec(exact);
+check("exact lint clean", exactLint.kind === "report" && exactLint.report.conflicts.length === 0);
 check("order space", spaceSize(order) === 8);
 
 const selfText = 'output order_fulfilled: Bool "Done."\n\nR3 The Order System shall order_fulfilled and not order_fulfilled.\n';
@@ -717,8 +733,120 @@ if (checkoutLint.kind === "report") {
   );
 }
 
+const clashText =
+  'output x: Int 0..1000000 "X." phrase "the level"\n\nR1 The Box shall the level is at most 10.\nR2 The Box shall the level is at least 500000.\n';
+const clash = lintSpec(mustSpec(clashText));
+check("wide output clash ran", clash.kind === "report");
+if (clash.kind === "report") {
+  check(
+    "wide output clash is one pair",
+    clash.report.conflicts.length === 1 &&
+      clash.report.conflicts[0].minimal &&
+      clash.report.conflicts[0].ids.length === 2 &&
+      clash.report.conflicts[0].ids[0] === "R1" &&
+      clash.report.conflicts[0].ids[1] === "R2" &&
+      clash.report.conflicts[0].everySituation,
+  );
+}
+
+const driverText =
+  'input count: Int 0..300000 "Count." phrase "the count"\noutput ok: Bool "Ok."\n\nR1 The Box shall the count is 0.\n';
+const driverWide = lintSpec(mustSpec(driverText));
+check("wide driver ran", driverWide.kind === "report");
+if (driverWide.kind === "report") {
+  const conflict = driverWide.report.conflicts.length === 1 ? driverWide.report.conflicts[0] : null;
+  const gap = driverWide.report.gaps.length === 1 ? driverWide.report.gaps[0] : null;
+  check(
+    "wide driver singleton",
+    conflict !== null &&
+      conflict.minimal &&
+      conflict.ids.length === 1 &&
+      conflict.ids[0] === "R1" &&
+      conflict.situation.length === 1 &&
+      conflict.situation[0].name === "count" &&
+      conflict.situation[0].value === "1" &&
+      gap !== null &&
+      gap.output === "ok" &&
+      gap.situation.length === 1 &&
+      gap.situation[0].value === "300000" &&
+      spaceSize(mustSpec(driverText)) === 600002,
+  );
+}
+
+const thresholdText =
+  'input count: Int 0..300000 "Count." phrase "the count"\noutput ok: Bool "Ok." phrase "it is ok"\n\nR1 When the count is at least 10, the Box shall it is ok.\n';
+const threshold = lintSpec(mustSpec(thresholdText));
+check("wide threshold ran", threshold.kind === "report");
+if (threshold.kind === "report") {
+  const gap = threshold.report.gaps.length === 1 ? threshold.report.gaps[0] : null;
+  check(
+    "wide threshold gap stops at the boundary",
+    threshold.report.conflicts.length === 0 &&
+      gap !== null &&
+      gap.output === "ok" &&
+      gap.situation.length === 1 &&
+      gap.situation[0].value === "9",
+  );
+}
+
+const coupledText =
+  'input quantity: Int 0..1000000 "Q."\noutput shipped: Int 0..1000000 "S."\n\nR1 The Box shall shipped = quantity + 1.\n';
+const coupled = lintSpec(mustSpec(coupledText));
+check("wide coupled ran", coupled.kind === "report");
+if (coupled.kind === "report") {
+  const conflict = coupled.report.conflicts.length === 1 ? coupled.report.conflicts[0] : null;
+  const accepted = analyzePolicy(mustSpec(coupledText), "", []).accepted;
+  check(
+    "wide coupled equality",
+    conflict !== null &&
+      conflict.minimal &&
+      conflict.ids.length === 1 &&
+      conflict.ids[0] === "R1" &&
+      conflict.situation.length === 1 &&
+      conflict.situation[0].value === "1000000" &&
+      accepted !== null &&
+      accepted.code[0] === 0 &&
+      accepted.code[1] === 1,
+  );
+}
+
+let wideMany = 'event flag: Bool "Flag." phrase "the flag"\n';
+wideMany += 'input count: Int 0..300000 "Count." phrase "the count"\n';
+wideMany += 'output o: Bool "O."\n';
+wideMany += 'output p: Bool "P."\n\n';
+wideMany += "R1 When the flag, the Box shall o.\n";
+wideMany += "R2 When the flag, the Box shall not o.\n";
+wideMany += "R3 When the count is at least 10, the Box shall p.\n";
+wideMany += "R4 When the count is at least 10, the Box shall not p.\n";
+for (let extra = 5; extra <= 13; extra++) wideMany += "R" + String(extra) + " The Box shall true.\n";
+const wideManyLint = lintSpec(mustSpec(wideMany));
+check("wide thirteen ran", wideManyLint.kind === "report");
+if (wideManyLint.kind === "report") {
+  let pairO = false;
+  let pairP = false;
+  let onlyCores = wideManyLint.report.conflicts.length === 2;
+  for (let i = 0; i < wideManyLint.report.conflicts.length; i++) {
+    const ids = wideManyLint.report.conflicts[i].ids;
+    if (!wideManyLint.report.conflicts[i].minimal || ids.length !== 2) onlyCores = false;
+    if (ids.length === 2 && ids[0] === "R1" && ids[1] === "R2") pairO = true;
+    if (ids.length === 2 && ids[0] === "R3" && ids[1] === "R4") pairP = true;
+  }
+  let gapO = false;
+  let gapP = false;
+  for (let i = 0; i < wideManyLint.report.gaps.length; i++) {
+    const gap = wideManyLint.report.gaps[i];
+    if (gap.output === "o" && gap.situation.length === 2 && gap.situation[0].value === "false" && gap.situation[1].value === "300000") {
+      gapO = true;
+    }
+    if (gap.output === "p" && gap.situation.length === 2 && gap.situation[0].value === "true" && gap.situation[1].value === "9") {
+      gapP = true;
+    }
+  }
+  check("wide thirteen keeps both pairs", pairO && pairP && onlyCores && gapO && gapP && wideManyLint.report.redundant.length === 0);
+}
+
 const soundnessSpecs = runSoundness();
-check("soundness specs", soundnessSpecs === 1008);
+check("soundness specs", soundnessSpecs === 1010);
 console.log("soundness specs: " + String(soundnessSpecs));
 
 if (failed !== 0) {
