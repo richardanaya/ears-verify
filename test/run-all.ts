@@ -2,7 +2,9 @@
  * Run the typecheck, ScriptC coverage gate, native build, unit tests,
  * and golden CLI tests. Unit tests and each CLI case run once under Node
  * and once as the native binary; stdout, stderr, and exit status must match
- * each other and the checked-in golden files.
+ * each other and the checked-in golden files. README samples marked with
+ * `<!-- verify stdout|stderr <exit>` are run against build/ears-verify and
+ * must match the fenced bytes.
  *
  * Write or refresh goldens with: node --experimental-strip-types test/run-all.ts --write-golden
  */
@@ -168,12 +170,106 @@ function main(): void {
     comparePair(item.name, nodeResult, binResult);
   }
 
+  checkReadmeSamples();
+
   if (failed !== 0) {
     console.error(String(failed) + " failed");
     process.exit(1);
   }
   console.log("all tests passed");
   process.exit(0);
+}
+
+function checkReadmeSamples(): void {
+  const readme = readFileSync("README.md", "utf8");
+  const startMark = "<!-- verify ";
+  let cursor = 0;
+  let found = 0;
+  while (cursor < readme.length) {
+    const at = readme.indexOf(startMark, cursor);
+    if (at < 0) break;
+    const headerEnd = readme.indexOf("\n", at);
+    if (headerEnd < 0) {
+      fail("readme verify header is truncated");
+      return;
+    }
+    const header = readme.slice(at + startMark.length, headerEnd).trim();
+    const space = header.indexOf(" ");
+    if (space < 0) {
+      fail("readme verify header needs a stream and an exit code");
+      return;
+    }
+    const stream = header.slice(0, space);
+    const exitCode = parseExit(header.slice(space + 1).trim());
+    if ((stream !== "stdout" && stream !== "stderr") || exitCode < 0) {
+      fail("readme verify header " + header);
+      return;
+    }
+    const argsEnd = readme.indexOf("\n-->", headerEnd);
+    if (argsEnd < 0) {
+      fail("readme verify block is missing -->");
+      return;
+    }
+    const args = nonEmptyLines(readme.slice(headerEnd + 1, argsEnd));
+    if (args.length === 0) {
+      fail("readme verify block is missing a command");
+      return;
+    }
+    const fenceAt = readme.indexOf("```", argsEnd);
+    const fenceLineEnd = fenceAt < 0 ? -1 : readme.indexOf("\n", fenceAt);
+    const closeAt = fenceLineEnd < 0 ? -1 : readme.indexOf("\n```", fenceLineEnd);
+    if (fenceAt < 0 || fenceLineEnd < 0 || closeAt < 0) {
+      fail("readme verify block is missing a fence");
+      return;
+    }
+    const body = readme.slice(fenceLineEnd + 1, closeAt + 1);
+    const result = run(args[0], args.slice(1));
+    const actual = stream === "stdout" ? result.stdout : result.stderr;
+    const other = stream === "stdout" ? result.stderr : result.stdout;
+    const label = args.join(" ");
+    if (result.status !== exitCode || actual !== body || other.length !== 0) {
+      fail("readme sample " + label);
+      console.error("expected exit " + String(exitCode) + ", got " + String(result.status));
+      console.error("--- cli ---");
+      console.error(actual);
+      console.error("--- readme ---");
+      console.error(body);
+      if (other.length > 0) console.error("--- other stream ---\n" + other);
+    } else {
+      console.log("PASS readme " + label);
+    }
+    found++;
+    cursor = closeAt + 4;
+  }
+  if (found === 0) fail("readme has no verify blocks");
+}
+
+function parseExit(text: string): number {
+  if (text.length === 0) return -1;
+  let value = 0;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 48 || code > 57) return -1;
+    value = value * 10 + (code - 48);
+  }
+  return value;
+}
+
+function nonEmptyLines(text: string): string[] {
+  const lines: string[] = [];
+  let start = 0;
+  for (let i = 0; i <= text.length; i++) {
+    if (i === text.length || text.charCodeAt(i) === 10) {
+      let line = text.slice(start, i);
+      if (line.length > 0 && line.charCodeAt(line.length - 1) === 13) {
+        line = line.slice(0, line.length - 1);
+      }
+      const trimmed = line.trim();
+      if (trimmed.length > 0) lines.push(trimmed);
+      start = i + 1;
+    }
+  }
+  return lines;
 }
 
 main();

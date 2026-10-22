@@ -1,79 +1,36 @@
+<p align="center"><img src="assets/logo.png" alt="ears-verify" width="480"></p>
+
 # ears-verify
 
-`ears-verify` checks requirements written in [EARS](https://alistairmavin.com/ears/) (Easy Approach to Requirements Syntax) against a concrete input. Milestone 1 checks URLs.
+Requirements written in EARS often hide contradictions and gaps. A sentence looks settled on its own. In a pile of them, two can demand opposite behavior, and a case nobody wrote down falls through. ears-verify is for catching that before any code is written.
 
-A spec is a markdown-ish list of requirement ids and EARS sentences. The tool translates each sentence into one named SMT-LIB assertion, then a small evaluator built in this repository decides that assertion for the URL you pass in. The translation is deterministic: the same spec and the same URL always produce the same bytes.
+Today it checks a real URL against the spec and points at the exact line that URL breaks: the requirement id, the sentence, and the piece of the address that failed. Reading the requirements against each other (contradictions and gaps) is the planned `lint` command.
 
-There is no Z3, cvc5, yices, or other SMT solver, in-process or over a socket. The checker is the TypeScript in `src/`.
+## Quick start
 
-The same source runs on Node and compiles with [ScriptC](https://github.com/vercel-labs/scriptc) 0.4.1 to a native binary. `npm test` runs the unit tests and the golden CLI cases under both and requires identical stdout, stderr, and exit codes.
+You need Node.js 24 or newer, npm, and a linker: `clang` on Linux, Xcode Command Line Tools on macOS, or `zig` on Windows.
 
-## Install and build
-
-You need Node.js 24 or newer (ScriptC's package requirement), npm, and a linker:
-
-- glibc Linux: `clang`
-- macOS: Xcode Command Line Tools
-- Windows and musl Linux: `zig`
-
-ScriptC is pinned to **0.4.1**, the release published on 21 October 2026.
-
-Install method: an exact npm devDependency. `package-lock.json` locks `scriptc@0.4.1` and the matching platform packages (`@scriptc/cli-<os>-<arch>@0.4.1`). On install, `scriptc`'s postinstall script `scripts/install-native.mjs` copies the platform binary into `node_modules/scriptc/bin`. `package.json` sets `allowScripts` so npm 11 is allowed to run that script. `scripts/install-scriptc.sh` repeats the install and checks that `scriptc --version` prints `0.4.1`.
+The native build uses [ScriptC](https://github.com/vercel-labs/scriptc) **0.4.1** (21 October 2026). That version is pinned in `package.json` and `package-lock.json`. `sh scripts/install-scriptc.sh` installs it and checks `scriptc --version`.
 
 ```console
 npm install
-npx scriptc --version
-# 0.4.1
-```
-
-If a policy blocks install scripts, run the installer by hand after `npm install`:
-
-```console
-node node_modules/scriptc/scripts/install-native.mjs
-npx scriptc --version
-```
-
-Build the native CLI:
-
-```console
 npm run build
-# npx scriptc build src/main.ts -o build/ears-verify
-./build/ears-verify check examples/url-safety.ears.md https://example.com/path
+./build/ears-verify check examples/url-safety.ears.md https://bob@evil.com
 ```
 
-`scriptc coverage src/main.ts` on this tree reports 100% of the analyzed statements compiling statically (`fully static`). `npm test` runs that gate with `--fail-on=blockers` for `src/main.ts`, `test/unit.ts`, and `test/run-all.ts`.
+`npm install` fetches ScriptC 0.4.1. `npm run build` writes `./build/ears-verify`. The last line is the whole tool: a spec, a URL, a report.
 
-Run the TypeScript directly while developing:
+## A URL that breaks the spec
 
-```console
-node --experimental-strip-types src/main.ts check examples/url-safety.ears.md https://example.com/path
-```
+`examples/url-safety.ears.md` has three rules. The userinfo must be empty. The host must be `example.com`. And when the scheme is `https` and the host is anything else, the port must be written as `443`. `https://bob@evil.com` breaks all three. The process exits 1.
 
-## Usage
-
-Exit codes:
-
-| Code | Meaning |
-| --- | --- |
-| 0 | `check` found no violations, `emit-smt` printed the script, or `help` ran |
-| 1 | One or more requirements are violated |
-| 2 | Usage error, unreadable spec, spec parse error, or malformed URL |
-| 3 | `policy` or `lint` — recognized, and not implemented yet |
-
-`check` and `emit-smt` print the spec path as you passed it. They do not rewrite it to an absolute path, so a Node run and a native run match.
-
-### check
-
-`examples/url-safety.ears.md` says:
-
-- R1.1 the userinfo must be empty
-- R1.2 the host must be `example.com`
-- R1.3 when the scheme is `https` and the host is anything else, the port must be the explicit integer 443
-
-`https://bob@evil.com` breaks all three (userinfo `bob`, host `evil.com`, port omitted):
-
-```console
-$ ./build/ears-verify check examples/url-safety.ears.md https://bob@evil.com
+<!-- verify stdout 1
+build/ears-verify
+check
+examples/url-safety.ears.md
+https://bob@evil.com
+-->
+```text
 check: 3 violations
 spec: examples/url-safety.ears.md
 url: https://bob@evil.com
@@ -86,61 +43,42 @@ R1.2 line 7
 R1.3 line 9
   sentence: When scheme is "https", if host is not "example.com", the url-parser shall require an explicit port of 443.
   reason: port is omitted; required explicit port 443
-$ echo $?
-1
 ```
 
-`https://example.com/path` satisfies every requirement. R1.3's condition is false because the host is `example.com`, so the implication holds even though the port is omitted:
+`npm test` runs this binary again and fails if any fenced sample in this file drifts from what the CLI prints.
 
-```console
-$ ./build/ears-verify check examples/url-safety.ears.md https://example.com/path
+## Commands
+
+Exit 0 means the check was clean (or `emit-smt` printed the formulas). Exit 1 means at least one requirement failed. Exit 2 means the spec or the URL could not be read. Exit 3 means the command is recognized and still planned.
+
+### `check` — implemented
+
+Pass a spec and a URL. This address satisfies the example spec, so the process exits 0. R1.3 does not apply, because the host is `example.com`.
+
+<!-- verify stdout 0
+build/ears-verify
+check
+examples/url-safety.ears.md
+https://example.com/path
+-->
+```text
 check: 0 violations
 spec: examples/url-safety.ears.md
 url: https://example.com/path
-$ echo $?
-0
 ```
 
-### check --json
+Add `--json` anywhere after `check` when a CI job needs a machine-readable report.
 
-`--json` may appear anywhere after `check`. Violations and parse errors are both a single JSON document on stdout. Parse errors still exit 2.
+### `emit-smt` — implemented
 
-```console
-$ ./build/ears-verify check --json examples/url-safety.ears.md https://bob@evil.com
-{
-  "command": "check",
-  "ok": false,
-  "spec": "examples/url-safety.ears.md",
-  "url": "https://bob@evil.com",
-  "violations": [
-    {
-      "id": "R1.1",
-      "line": 5,
-      "sentence": "The url-parser shall reject a non-empty userinfo.",
-      "reason": "userinfo is \"bob\"; required empty userinfo"
-    },
-    {
-      "id": "R1.2",
-      "line": 7,
-      "sentence": "The url-parser shall accept only host \"example.com\".",
-      "reason": "host is \"evil.com\"; required host \"example.com\""
-    },
-    {
-      "id": "R1.3",
-      "line": 9,
-      "sentence": "When scheme is \"https\", if host is not \"example.com\", the url-parser shall require an explicit port of 443.",
-      "reason": "port is omitted; required explicit port 443"
-    }
-  ]
-}
-```
+Print each requirement as one named SMT-LIB assertion. The comment above an assertion is the spec line and the original sentence. The name is the id plus that line (`R1.1_L5`). This command only prints. It exits 0.
 
-### emit-smt
-
-Prints SMT-LIB 2. One named assertion per requirement. A comment above each assertion records the spec line and the original sentence.
-
-```console
-$ ./build/ears-verify emit-smt examples/url-safety.ears.md
+<!-- verify stdout 0
+build/ears-verify
+emit-smt
+examples/url-safety.ears.md
+-->
+```text
 ; ears-verify SMT-LIB 2
 ; spec: examples/url-safety.ears.md
 ; port is the integer written in the URI, or (- 1) when the port is omitted.
@@ -164,187 +102,89 @@ $ ./build/ears-verify emit-smt examples/url-safety.ears.md
 (assert (! (=> (and (= scheme "https") (not (= host "example.com"))) (= port 443)) :named R1.3_L9))
 ```
 
-A ubiquitous requirement (no while/when/if/where) is `(=> true <shall-result>)`. The name is `<id>_L<line>`, which is a legal SMT-LIB simple symbol.
+### `policy` — planned
 
-### policy and lint
+The name is reserved. Running it today prints one line and exits 3. The planned command searches for a URL that would break a requirement.
 
-Both commands are recognized so later milestones can take the names. They print a fixed line and exit 3. Extra arguments are ignored.
-
-```console
-$ ./build/ears-verify policy
-not implemented yet
-$ echo $?
-3
-
-$ ./build/ears-verify lint examples/url-safety.ears.md
+<!-- verify stdout 3
+build/ears-verify
+policy
+-->
+```text
 not implemented yet
 ```
 
-### Parse errors
+### `lint` — planned
 
-A sentence that does not use `shall` is a spec error (exit 2), on stderr:
+Same status for now: one line, exit 3. The planned command reads the requirements against each other and reports contradictions and gaps.
 
-```console
-$ ./build/ears-verify check test/fixtures/malformed.ears.md https://example.com/
-error: test/fixtures/malformed.ears.md:3: expected "shall"
+<!-- verify stdout 3
+build/ears-verify
+lint
+-->
+```text
+not implemented yet
 ```
 
-A URL that is outside the RFC 3986 grammar this tool accepts is also exit 2:
+## What is EARS?
 
-```console
-$ ./build/ears-verify check examples/url-safety.ears.md "http://ex ample.com"
-error: malformed URL "http://ex ample.com": invalid character in host
-```
-
-With `--json`, that same failure is a JSON object on stdout (`{"command":"check","ok":false,"error":"..."}`) and stderr is empty.
-
-`ears-verify` with no arguments prints usage on stderr and exits 2. `ears-verify help` prints usage on stdout and exits 0.
-
-## Spec language
-
-A requirement line starts with an id: `R` plus a number and optional dot-separated numeric segments (`R1`, `R1.1`, `R1.2.3`). The rest of the line is an EARS sentence, which may continue on following lines until a blank line, a heading, a comment, or the next id. The recorded line number is the line of the id.
-
-Ignored lines: blanks, `#` headings, `//` comments, and lines that start with `<!--`.
-
-Sentence shape. Each clause is optional. Present clauses stay in this order, and each ends with a comma:
+EARS (Easy Approach to Requirements Syntax) writes one requirement as one sentence:
 
 ```text
 While <state>, when <trigger>, if <condition>, where <feature>, the <system> shall <response>.
 ```
 
-`While`/`while`, `When`/`when`, `If`/`if`, `Where`/`where`, and `The`/`the` are accepted. `shall` is lowercase. The system name is one or more words of letters, digits, `_`, and `-` (`url-parser`, `URL parser`). The sentence ends with `.`.
+`While`, `when`, `if`, and `where` are optional. They stay in that order. The sentence always names a system and finishes with **shall**. A requirement with none of the optional clauses applies all the time.
 
-Clauses and responses are a small predicate language, so the translation to SMT-LIB is a function of the syntax and does not guess at English.
+The example spec is three sentences:
 
-Components: `scheme`, `userinfo`, `host`, `path`, `query`, `fragment`, and `port`.
+- `The url-parser shall reject a non-empty userinfo.`
+- `The url-parser shall accept only host "example.com".`
+- `When scheme is "https", if host is not "example.com", the url-parser shall require an explicit port of 443.`
 
-Predicates:
+The first two always apply. The third applies only when both its conditions hold, which is why a normal `https://example.com/path` is fine with the port left off.
 
-- `<component> is empty` / `<component> is not empty`
-- `<component> is "..."` / `<component> is not "..."`
-- `<component> is one of "a" or "b"`
-- `<component> starts with "..."`
-- `port is 443` (the URI writes that integer)
-- `port is omitted` / `port is explicit`
+## How it works
 
-Responses also accept these phrasings, which lower to the same predicates:
+1. Parse the spec. Every requirement keeps its id and the line it came from.
+2. Translate the sentence into SMT-LIB. Each one becomes a named assertion, `(assert (! (=> <condition> <shall-result>) :named R1.1_L5))`, over the URL fields scheme, userinfo, host, port, path, query, and fragment.
+3. Decide that assertion with our own TypeScript. ScriptC compiles the same source into the native binary.
 
-- `reject a non-empty userinfo` → userinfo is empty
-- `accept only host "example.com"` and `accept only host "a" or "b"`
-- `require an explicit port of 443`, `require explicit port 443`, `require port 443`
-- `require an omitted port`, `require port omitted`
+The checker is that TypeScript. It does not call Z3, cvc5, yices, or any other solver. The SMT-LIB is the requirement written down so a person can read it, and so the checker can evaluate it on the URL you passed in. A missing port is the integer `-1` (printed `(- 1)`). The tool leaves it missing, which is what lets a requirement demand an explicit `443`.
 
-`scheme` and `host` literals are lowercased, matching the parser. Other literals keep their case. A string literal is double quotes with no escapes.
+## Inspiration
 
-Several clauses on one sentence are conjoined. The assertion is always an implication from that conjunction (or `true`, when there are no clauses) to the shall-result. Each requirement is checked on its own. A later requirement still runs when an earlier one fails.
+The planned `lint` pass follows the requirements analysis described by AWS Kiro: read a spec for contradictions, duplicates, and missing cases before implementation starts.
 
-## Design
+- [Deep spec analysis](https://kiro.dev/blog/deep-spec-analysis/)
+- [Analyze requirements](https://kiro.dev/docs/specs/analyze-requirements/)
 
-```text
-spec text
-  -> EARS requirement records (id, line, clauses, shall-predicate)
-  -> term AST
-  -> SMT-LIB text, one named assertion per requirement
-  -> ground evaluator on the parsed URL
-  -> violation list (id, line, sentence, component reason)
-```
+## FAQ
 
-`src/smt.ts` is the term AST: booleans, integers, strings, variables, equality, `not`, `and`, `or`, `=>`, and `str.prefixof`. Nodes are plain data. `evalTerm` decides a term in an environment whose fields are the URL components. A later symbolic or automata search can walk those same nodes. Milestone 1 only needs the ground case, so `check` substitutes the parsed URL and evaluates.
+### Why not Z3?
 
-URL variables, in declaration order:
+The decision is code in this repository. A check has no solver to install and no solver version to drift between machines. The assertions are still SMT-LIB, so the formula stays a readable artifact, and a later search can reuse the same terms.
 
-| Symbol | Sort | Meaning |
-| --- | --- | --- |
-| `scheme` | String | lowercased scheme |
-| `userinfo` | String | raw userinfo, empty when absent |
-| `host` | String | lowercased reg-name, or the IPv6 / IPvFuture literal without brackets |
-| `port` | Int | the integer written after `:`, or `-1` when the URI omits the port |
-| `path` | String | path, empty when absent |
-| `query` | String | query without `?`, empty when absent |
-| `fragment` | String | fragment without `#`, empty when absent |
+### Why ScriptC?
 
-`-1` is printed as the SMT-LIB term `(- 1)`. An omitted https port stays `-1`. The tool does not fill in 443 or 80. That is why R1.3 can tell `https://evil.com` from `https://evil.com:443`.
+The checker is ordinary TypeScript, so you can run `src/main.ts` under Node while you edit. ScriptC 0.4.1 compiles that same file to a native binary that runs without Node. The pin is deliberate: ScriptC is experimental, and `npm test` requires `scriptc coverage` to stay at 100% on this source.
 
-The reason string names the component value that made the shall-result false. For an `or` of equalities (an allowlist) it lists the allowed literals. For a false implication the antecedent held, so the reason is the failing consequent.
+### Why RFC 3986, when browsers follow WHATWG?
 
-ScriptC's numeric type is IEEE-754 f64, same as JavaScript `number`. Ports and line numbers are small integers, well inside the exact integer range. The printer uses `Math.trunc` and `String` so SMT integers stay `443` and `(- 1)`. The program does not use FFI. ScriptC's FFI can take a string in, and it cannot return a string or a pointer, which this tool never needs.
+The parser follows the RFC 3986 grammar, so a requirement talks about the URI as written. Browsers follow the WHATWG URL Standard, and a few differences show up in reports:
 
-Output is a pure function of the arguments and the file bytes. Reports use `\n`, fixed field order, and `JSON.stringify` with a two-space indent. The tool does not read the clock, the locale, or `process.argv[0]`.
+- A missing port stays missing. `https://bob@evil.com` is not quietly given port 443.
+- `\` is an illegal character. WHATWG turns it into `/` for schemes such as `https`.
+- A non-ASCII host is rejected. WHATWG runs IDNA.
+- `bob:secret` stays one userinfo string. WHATWG splits a username and a password.
+- An empty host, as in `https:///path`, is accepted. WHATWG rejects an empty host on `https`.
 
-## URL parsing and WHATWG gaps
+### Will two runs disagree?
 
-`src/url.ts` is a recursive-descent parser for the RFC 3986 absolute-URI grammar: scheme, optional `//` authority (`[userinfo@] host [:port]`), path, optional query, optional fragment. Character classes follow the RFC (`unreserved`, `sub-delims`, `pct-encoded`, `pchar`). Bracketed IPv6 (including a dotted IPv4 tail and `::` compression) and `IPvFuture` (`v` + hex + `.` + unreserved/sub-delims/colon) are accepted. IPv4 dotted quads are accepted when they are a legal `reg-name`. Percent-encodings must be well-formed and are kept as written.
-
-Deliberate strictness against the RFC text:
-
-- An empty port (`https://example.com:`) is rejected. RFC 3986's `port = *DIGIT` allows it. The component model has no third state between "omitted" and "an integer".
-- Digit strings longer than five characters are out of range, so a port cannot leave the exact integer range of an f64.
-
-Known gaps relative to the [WHATWG URL Standard](https://url.spec.whatwg.org/):
-
-- Tab and newline are not stripped before parsing. Those characters fail the RFC character classes.
-- `\` is not a path separator. WHATWG special URLs treat it as `/`.
-- Non-ASCII host text is rejected. WHATWG runs IDNA (ToASCII) and the domain-to-ASCII mapping. There is no punycode conversion here.
-- A trailing dot on a reg-name is preserved. WHATWG strips a single trailing dot in the host parser.
-- The userinfo is one string. WHATWG splits username and password and percent-encodes a different set of bytes. `bob:secret` stays `bob:secret`.
-- An omitted port stays `-1`, including for `http` and `https`. WHATWG stores a null port when the written port equals the scheme default, and `URL.port` then serializes as empty.
-- An empty host (`https://` or `https:///path`) is a parsed URI with `host` equal to `""`. WHATWG reports a validation error for an empty host on a special scheme.
-- Invalid bytes are errors. WHATWG percent-encodes many C0 controls and spaces inside the path, query, and fragment states.
-- IPv4 is not parsed with WHATWG's decimal/octal/hex "IPv4 number" rules. A bracket-less host is a reg-name.
-- IPv6 zone identifiers (RFC 6874, a `%` after the address) are rejected.
-- There is no base URL, no `URL` object, and no origin serialization. Inputs are absolute URIs.
-
-## Tests
-
-```console
-npm test
-```
-
-That command:
-
-1. Checks `scriptc --version` is `0.4.1`.
-2. Runs `tsc --noEmit`.
-3. Runs `scriptc coverage --fail-on=blockers` and requires a fully static 100% report.
-4. Builds `build/ears-verify` and `build/unit-tests` with ScriptC.
-5. Runs `test/unit.ts` under Node and as `build/unit-tests`.
-6. Runs the CLI goldens the same way.
-
-Checked-in goldens (`test/golden/<name>.stdout`, `.stderr`, `.exit`):
-
-- `check-bad`, `check-good`, `check-bad-json`
-- `emit-smt`
-- `malformed-spec`, `malformed-url`
-- `unit` (EARS parser and URL parser, plus the evaluator)
-- `policy`, `lint`, `usage`
-
-Refresh the files after an intentional output change with:
-
-```console
-node --experimental-strip-types test/run-all.ts --write-golden
-```
-
-Review the diff. The runner still requires the Node process and the native binary to match before it writes.
-
-CI is `.github/workflows/ci.yml`: Node 24, `clang`, `npm ci`, `npm test`.
+The same spec and the same URL produce the same bytes, from Node and from the native binary. `npm test` runs both and diffs them. The report prints the spec path as you typed it. It does not read the clock or the locale.
 
 ## Roadmap
 
-`policy` will search for a counterexample URL. The search should be an automata (or other finite) construction over the term AST already produced here, still with no external SMT solver. The question is: is there a URL, inside the fragment of the grammar we can decide, for which a named assertion is false?
-
-`lint` will look for conflicts and gaps in a spec: two shall-results that cannot hold together, a clause that makes a requirement vacuously true for every URL the grammar can build, an allowlist that nothing in the spec ever mentions. The shape of that analysis is the one described in AWS Kiro's requirements write-up, [Deep spec analysis](https://kiro.dev/blog/deep-spec-analysis/): read the requirements against each other, and report overlap, contradiction, and missing cases. Milestone 1 only parses and ground-checks.
-
-## Layout
-
-```text
-src/main.ts     CLI
-src/ears.ts     spec and EARS sentence parser
-src/url.ts      RFC 3986 parser
-src/smt.ts      term AST, SMT-LIB printer, ground evaluator
-src/check.ts    violation report, text and JSON
-src/text.ts     quoting and integer formatting
-examples/url-safety.ears.md
-test/unit.ts    parser and evaluator tests (also a ScriptC entry)
-test/run-all.ts npm test
-test/golden/    expected stdout, stderr, and exit code
-scripts/install-scriptc.sh
-```
+- **`policy`.** Search for a counterexample URL with automata over the same terms. Still no external solver.
+- **`lint`.** Report contradictions, overlap, and gaps in the spec, in the spirit of Kiro's requirements analysis.
+- **More than URLs.** Other inputs, once the URL checker has settled.
