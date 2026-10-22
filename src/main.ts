@@ -8,6 +8,7 @@ import { bindScenario, evaluate, formatCheckJson, formatCheckText, formatErrorJs
 import { parseProperty, parseSpec } from "./ears.ts";
 import { parseScenarioJson } from "./jsonvalue.ts";
 import { formatLintJson, formatLintText, lintSpec } from "./lint.ts";
+import { formatScenariosJson, formatScenariosText, listScenarios } from "./scenarios.ts";
 import { analyzePolicy, formatPolicyJson, formatPolicyText } from "./policy.ts";
 import { formatEmitJson, printSmt } from "./smt.ts";
 import { spaceSize } from "./solver.ts";
@@ -45,6 +46,10 @@ function main(): void {
   }
   if (command === "lint") {
     commandLint(args.slice(1));
+    return;
+  }
+  if (command === "scenarios") {
+    commandScenarios(args.slice(1));
     return;
   }
   console.error("error: unknown command " + displayQuote(command));
@@ -154,11 +159,34 @@ function commandLint(args: string[]): void {
   if (!spec.ok) fail(flags.json, specPath + ":" + String(spec.line) + ": " + spec.message);
   const outcome = lintSpec(spec.spec);
   if (outcome.kind === "error") fail(flags.json, outcome.message);
-  const findings = outcome.report.conflicts.length + outcome.report.gaps.length + outcome.report.misuse.length + outcome.report.wording.length;
+  const findings =
+    outcome.report.conflicts.length +
+    outcome.report.gaps.length +
+    outcome.report.misuse.length +
+    outcome.report.wording.length +
+    outcome.report.redundant.length;
   if (flags.json) console.log(formatLintJson(specPath, outcome.report));
   else console.log(formatLintText(specPath, outcome.report));
   if (findings === 0) process.exit(EXIT_OK);
   process.exit(EXIT_VIOLATIONS);
+}
+
+function commandScenarios(args: string[]): void {
+  const flags = parseFlags(args, false, false);
+  if (flags.error.length > 0) fail(flags.json, flags.error);
+  if (flags.positionals.length !== 1) fail(flags.json, "usage: ears-verify scenarios [--json] <spec>");
+  const specPath = flags.positionals[0];
+  const specText = readText(specPath);
+  if (specText === null) fail(flags.json, "cannot read " + specPath);
+  const spec = parseSpec(specText);
+  if (!spec.ok) fail(flags.json, specPath + ":" + String(spec.line) + ": " + spec.message);
+  if (spaceSize(spec.spec) < 0) {
+    fail(flags.json, "search space has more than 250000 assignments. Narrow the integer ranges and try again.");
+  }
+  const rows = listScenarios(spec.spec);
+  if (flags.json) console.log(formatScenariosJson(specPath, rows));
+  else console.log(formatScenariosText(specPath, rows));
+  process.exit(EXIT_OK);
 }
 
 function commandPolicy(args: string[]): void {
@@ -208,6 +236,7 @@ function usage(toStderr: boolean): void {
     "  ears-verify check [--json] <spec> --input <scenario>\n" +
     "  ears-verify emit-smt [--json] <spec>\n" +
     "  ears-verify lint [--json] <spec>\n" +
+    "  ears-verify scenarios [--json] <spec>\n" +
     "  ears-verify policy [--json] <spec> [--property <file>]\n" +
     "  ears-verify help";
   if (toStderr) console.error(text);

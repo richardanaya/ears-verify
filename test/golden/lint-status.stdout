@@ -3,6 +3,7 @@ conflicts: 1
 gaps: 0
 misuse: 0
 wording: 0
+redundant: 0
 
 conflict {R6, R7}
 R6 and R7 cannot both hold.

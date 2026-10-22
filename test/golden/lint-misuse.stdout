@@ -3,7 +3,13 @@ conflicts: 0
 gaps: 0
 misuse: 1
 wording: 0
+redundant: 1
 
 misuse R4 line 6
 "payment fails" is an unwanted event. Write if ... then, not when.
 When payment fails, the Order System shall reject the order.
+
+redundant R4 line 6
+R4 adds nothing. Whenever the other requirements hold, R4 holds too.
+When payment fails, the Order System shall reject the order.
+Suggested fix: remove R4, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.

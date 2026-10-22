@@ -104,7 +104,15 @@ export function evaluateRequirements(spec: Spec, requirements: Requirement[], en
   return violations;
 }
 
+export function explainHold(spec: Spec, env: Binding, antecedent: Term | null, consequent: Term): string {
+  return narrate(spec, env, antecedent, consequent, "and");
+}
+
 function because(spec: Spec, env: Binding, antecedent: Term | null, consequent: Term): string {
+  return narrate(spec, env, antecedent, consequent, "but");
+}
+
+function narrate(spec: Spec, env: Binding, antecedent: Term | null, consequent: Term, join: string): string {
   const indexes = mentionedIndexes(antecedent, consequent);
   if (indexes.length === 0) return "the response is false.";
   if (!usesVoice(spec, indexes)) {
@@ -120,7 +128,7 @@ function because(spec: Spec, env: Binding, antecedent: Term | null, consequent: 
   if (antecedent !== null) collectHeld(spec, env, antecedent, held);
   const actual = describeActual(spec, env, consequent);
   if (held.length === 0) return capitalize(actual) + ".";
-  return capitalize(englishList(held)) + ", but " + actual + ".";
+  return capitalize(englishList(held)) + ", " + join + " " + actual + ".";
 }
 
 function usesVoice(spec: Spec, indexes: number[]): boolean {

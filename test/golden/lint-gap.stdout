@@ -3,6 +3,7 @@ conflicts: 0
 gaps: 1
 misuse: 0
 wording: 0
+redundant: 0
 
 gap order_fulfilled
 Nothing says whether the order was fulfilled when an order was submitted and inventory was not available.

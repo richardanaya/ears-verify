@@ -11,7 +11,7 @@
  * sizes is capped.
  */
 
-import { codeAt, domainSize, isDriver, requirementMentions, type Requirement, type Spec } from "./spec.ts";
+import { codeAt, domainSize, isDriver, requirementMentions, type Requirement, type Spec, type Term } from "./spec.ts";
 import { Binding, evalAssertion, evalBool, T_FALSE, T_TRUE } from "./term.ts";
 
 export const SEARCH_LIMIT = 250000;
@@ -116,9 +116,28 @@ export function conflictingSets(spec: Spec): ConflictGroup[] {
  * Values are tried in the same order as the linter: false, then true.
  */
 export function firstScenario(spec: Spec, mode: number, extra: Requirement[]): Binding | null {
+  if (mode === 1) return firstMatching(spec, [], spec.requirements, null, 0);
+  if (mode === 2) return firstMatching(spec, spec.requirements, extra, null, 0);
+  return firstMatching(spec, spec.requirements, [], null, 0);
+}
+
+/**
+ * Smallest assignment where every mustHold requirement holds and, when
+ * mustFail is non-empty, at least one of those requirements fails.
+ * wantGuard 0 ignores guard, 1 requires it true, 2 requires it false.
+ * A null guard is already true, so wantGuard 2 with a null guard finds nothing.
+ */
+export function firstMatching(
+  spec: Spec,
+  mustHold: Requirement[],
+  mustFail: Requirement[],
+  guard: Term | null,
+  wantGuard: number,
+): Binding | null {
+  if (wantGuard === 2 && guard === null) return null;
   const found = new ScenarioFound();
   const env = new Binding(spec.symbols.length);
-  walkAll(spec, mode, extra, env, 0, found);
+  walkMatch(spec, mustHold, mustFail, guard, wantGuard, env, 0, found);
   return found.env;
 }
 
@@ -130,10 +149,19 @@ class ScenarioFound {
   }
 }
 
-function walkAll(spec: Spec, mode: number, extra: Requirement[], env: Binding, pos: number, found: ScenarioFound): void {
+function walkMatch(
+  spec: Spec,
+  mustHold: Requirement[],
+  mustFail: Requirement[],
+  guard: Term | null,
+  wantGuard: number,
+  env: Binding,
+  pos: number,
+  found: ScenarioFound,
+): void {
   if (found.env !== null) return;
   if (pos === spec.symbols.length) {
-    if (scenarioMatches(spec, mode, extra, env)) found.env = env.copy();
+    if (matching(spec, mustHold, mustFail, guard, wantGuard, env)) found.env = env.copy();
     return;
   }
   const sym = spec.symbols[pos];
@@ -141,17 +169,25 @@ function walkAll(spec: Spec, mode: number, extra: Requirement[], env: Binding, p
   for (let v = 0; v < count; v++) {
     env.known[pos] = true;
     env.code[pos] = codeAt(sym, v);
-    walkAll(spec, mode, extra, env, pos + 1, found);
+    walkMatch(spec, mustHold, mustFail, guard, wantGuard, env, pos + 1, found);
     if (found.env !== null) break;
   }
   env.known[pos] = false;
 }
 
-function scenarioMatches(spec: Spec, mode: number, extra: Requirement[], env: Binding): boolean {
-  if (mode === 1) return anyReqFalse(spec, spec.requirements, env);
-  if (!allReqTrue(spec, spec.requirements, env)) return false;
-  if (mode === 2) return anyReqFalse(spec, extra, env);
-  return true;
+function matching(
+  spec: Spec,
+  mustHold: Requirement[],
+  mustFail: Requirement[],
+  guard: Term | null,
+  wantGuard: number,
+  env: Binding,
+): boolean {
+  if (wantGuard === 1 && guard !== null && evalBool(guard, spec, env) !== T_TRUE) return false;
+  if (wantGuard === 2 && (guard === null || evalBool(guard, spec, env) !== T_FALSE)) return false;
+  if (!allReqTrue(spec, mustHold, env)) return false;
+  if (mustFail.length === 0) return true;
+  return anyReqFalse(spec, mustFail, env);
 }
 
 function allReqTrue(spec: Spec, reqs: Requirement[], env: Binding): boolean {

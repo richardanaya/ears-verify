@@ -1,0 +1,24 @@
+spec: examples/order-status.ears.md
+scenarios: 6
+
+R6 accepted, trigger true
+No scenario satisfies every requirement while this trigger is true.
+
+R6 accepted, trigger false
+R6 has no trigger, so there is no case where the trigger is false.
+
+R6 rejected, trigger true
+{
+  "status": "placed"
+}
+The status was placed.
+
+R7 accepted, trigger true
+No scenario satisfies every requirement while this trigger is true.
+
+R7 accepted, trigger false
+R7 has no trigger, so there is no case where the trigger is false.
+
+R7 rejected, trigger true
+Same scenario as R6 rejected, trigger true.
+The status was placed.

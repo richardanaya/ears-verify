@@ -5,8 +5,8 @@
  * an example, and a fix that does not pick a winner.
  */
 
-import { describeAssignment, displayCode, isDriver, reportBool, requirementMentions, type Spec, type Term } from "./spec.ts";
-import { bestGap, conflictingSets, modelFor, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
+import { describeAssignment, displayCode, isDriver, reportBool, requirementMentions, type Requirement, type Spec, type Term } from "./spec.ts";
+import { bestGap, conflictingSets, firstMatching, modelFor, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
 import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 import { displayQuote, englishList, formatInt, pastVoice } from "./text.ts";
 
@@ -81,11 +81,20 @@ export interface Wording {
   text: string;
 }
 
+export interface Redundant {
+  id: string;
+  line: number;
+  sentence: string;
+  text: string;
+  fix: string;
+}
+
 export interface LintReport {
   conflicts: Conflict[];
   gaps: Gap[];
   misuse: Misuse[];
   wording: Wording[];
+  redundant: Redundant[];
 }
 
 export type LintOutcome = { kind: "report"; report: LintReport } | { kind: "error"; message: string };
@@ -112,7 +121,41 @@ export function lintSpec(spec: Spec): LintOutcome {
     if (eventMentioned(spec, i)) continue;
     gaps.push(explainUnhandled(spec, i));
   }
-  return { kind: "report", report: { conflicts: conflicts, gaps: gaps, misuse: findMisuse(spec), wording: findWording(spec) } };
+  return {
+    kind: "report",
+    report: {
+      conflicts: conflicts,
+      gaps: gaps,
+      misuse: findMisuse(spec),
+      wording: findWording(spec),
+      redundant: findRedundant(spec),
+    },
+  };
+}
+
+function findRedundant(spec: Spec): Redundant[] {
+  const found: Redundant[] = [];
+  if (spec.requirements.length < 2) return found;
+  for (let i = 0; i < spec.requirements.length; i++) {
+    const others: Requirement[] = [];
+    for (let j = 0; j < spec.requirements.length; j++) {
+      if (j !== i) others.push(spec.requirements[j]);
+    }
+    if (firstMatching(spec, others, [], null, 0) === null) continue;
+    const req = spec.requirements[i];
+    if (firstMatching(spec, others, [req], null, 0) !== null) continue;
+    found.push({
+      id: req.id,
+      line: req.line,
+      sentence: req.sentence,
+      text: req.id + " adds nothing. Whenever the other requirements hold, " + req.id + " holds too.",
+      fix:
+        "Suggested fix: remove " +
+        req.id +
+        ", or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.",
+    });
+  }
+  return found;
 }
 
 function eventMentioned(spec: Spec, index: number): boolean {
@@ -434,6 +477,7 @@ export function formatLintText(specPath: string, report: LintReport): string {
   lines.push("gaps: " + formatInt(report.gaps.length));
   lines.push("misuse: " + formatInt(report.misuse.length));
   lines.push("wording: " + formatInt(report.wording.length));
+  lines.push("redundant: " + formatInt(report.redundant.length));
   for (let i = 0; i < report.conflicts.length; i++) {
     const conflict = report.conflicts[i];
     lines.push("");
@@ -480,6 +524,14 @@ export function formatLintText(specPath: string, report: LintReport): string {
     lines.push(item.text);
     lines.push(item.context);
   }
+  for (let i = 0; i < report.redundant.length; i++) {
+    const item = report.redundant[i];
+    lines.push("");
+    lines.push("redundant " + item.id + " line " + formatInt(item.line));
+    lines.push(item.text);
+    lines.push(item.sentence);
+    lines.push(item.fix);
+  }
   return lines.join("\n");
 }
 
@@ -524,14 +576,20 @@ export function formatLintJson(specPath: string, report: LintReport): string {
     const item = report.wording[i];
     wording.push({ line: item.line, word: item.word, kind: item.kind, text: item.text, context: item.context });
   }
+  const redundant = [];
+  for (let i = 0; i < report.redundant.length; i++) {
+    const item = report.redundant[i];
+    redundant.push({ id: item.id, line: item.line, sentence: item.sentence, text: item.text, fix: item.fix });
+  }
   return JSON.stringify(
     {
-      ok: conflicts.length === 0 && gaps.length === 0 && misuse.length === 0 && wording.length === 0,
+      ok: conflicts.length === 0 && gaps.length === 0 && misuse.length === 0 && wording.length === 0 && redundant.length === 0,
       spec: specPath,
       conflicts: conflicts,
       gaps: gaps,
       misuse: misuse,
       wording: wording,
+      redundant: redundant,
     },
     null,
     2,

@@ -33,6 +33,7 @@ conflicts: 1
 gaps: 0
 misuse: 0
 wording: 0
+redundant: 0
 
 conflict {R2, R3}
 R2 and R3 cannot both hold.
@@ -106,6 +107,7 @@ conflicts: 0
 gaps: 1
 misuse: 0
 wording: 0
+redundant: 0
 
 gap order_fulfilled
 Nothing says whether the order was fulfilled when an order was submitted and inventory was not available.
@@ -124,6 +126,7 @@ conflicts: 0
 gaps: 0
 misuse: 0
 wording: 0
+redundant: 0
 ```
 
 ## See the logic
@@ -153,7 +156,8 @@ examples/order.ears.md
 | Command | Question it answers | Status |
 | --- | --- | --- |
 | `check [--json] <spec> --input <scenario>` | Does this scenario fit the requirements? | Implemented |
-| `lint [--json] <spec>` | Do any requirements clash, leave a hole, or use a word a test cannot pin down? | Implemented |
+| `lint [--json] <spec>` | Do any requirements clash, leave a hole, repeat each other, or use a word a test cannot pin down? | Implemented |
+| `scenarios [--json] <spec>` | What accepted and rejected examples show each requirement's trigger? | Implemented |
 | `emit-smt [--json] <spec>` | What is the SMT-LIB for these requirements? | Implemented |
 | `policy [--json] <spec> [--property <file>]` | Which scenarios do the requirements allow and forbid? Does any allowed scenario break a property? | Implemented |
 
@@ -230,7 +234,7 @@ examples/order-fail.json
 }
 ```
 
-`lint` is `ok`, `spec`, `conflicts`, `gaps`, `misuse`, and `wording`. A conflict is `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements` (`id`, `line`, `sentence`), `situation` and `example` (`name`, `value`), `requires` (`id`, `text`), `keeps`, `breaks`, and `fix`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`.
+`lint` is `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, and `redundant`. A conflict is `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements` (`id`, `line`, `sentence`), `situation` and `example` (`name`, `value`), `requires` (`id`, `text`), `keeps`, `breaks`, and `fix`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -299,7 +303,8 @@ examples/order-conflict.ears.md
   ],
   "gaps": [],
   "misuse": [],
-  "wording": []
+  "wording": [],
+  "redundant": []
 }
 ```
 
@@ -437,6 +442,7 @@ conflicts: 0
 gaps: 1
 misuse: 0
 wording: 0
+redundant: 0
 
 gap order_cancelled
 No requirement handles "an order is cancelled". Suggested fix: add a requirement that says what the system shall do, or remove the event.
@@ -453,6 +459,7 @@ conflicts: 0
 gaps: 1
 misuse: 0
 wording: 0
+redundant: 0
 
 gap payment_declined
 No requirement states a response when "payment fails". Suggested fix: add an if ... then requirement, and ask what the system shall do. Do not choose the response.
@@ -469,10 +476,16 @@ conflicts: 0
 gaps: 0
 misuse: 1
 wording: 0
+redundant: 1
 
 misuse R4 line 6
 "payment fails" is an unwanted event. Write if ... then, not when.
 When payment fails, the Order System shall reject the order.
+
+redundant R4 line 6
+R4 adds nothing. Whenever the other requirements hold, R4 holds too.
+When payment fails, the Order System shall reject the order.
+Suggested fix: remove R4, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 ```
 
 <!-- verify stdout 1
@@ -486,6 +499,7 @@ conflicts: 0
 gaps: 0
 misuse: 0
 wording: 3
+redundant: 0
 
 wording line 4
 "fast" is too vague to test. Replace it with something a scenario can check.
@@ -511,6 +525,7 @@ conflicts: 1
 gaps: 0
 misuse: 0
 wording: 0
+redundant: 0
 
 conflict {R4, R5}
 R4 and R5 cannot both hold.
@@ -548,6 +563,7 @@ conflicts: 1
 gaps: 0
 misuse: 0
 wording: 0
+redundant: 0
 
 conflict {R6, R7}
 R6 and R7 cannot both hold.
@@ -649,4 +665,195 @@ examples/status-placed.ears.md
 spec: examples/order-status.ears.md
 property: examples/status-placed.ears.md
 No scenario satisfies every requirement, so none violates the property.
+```
+
+## Three requirements, no pair
+
+`examples/order-chain.ears.md` is unsatisfiable only as a set. A submitted order must be accepted, an accepted order must be shipped, and a submitted order must not be shipped. Each pair can still hold. The example keeps the first two and breaks the third. It is a witness, and it is not a recommendation. Ask which requirement should change.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-chain.ears.md
+-->
+```text
+spec: examples/order-chain.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+
+conflict {R1, R2, R3}
+R1, R2, and R3 cannot all hold.
+
+R1 line 7
+When an order is submitted, the Order System shall accept the order.
+
+R2 line 8
+When accept the order, the Order System shall ship the order.
+
+R3 line 9
+When an order is submitted, the Order System shall not ship the order.
+
+They clash when an order was submitted.
+R1 requires that the order was accepted.
+R3 requires that the order was not shipped.
+
+Example scenario:
+{
+  "order_submitted": true,
+  "order_accepted": true,
+  "order_shipped": true
+}
+This scenario keeps R1 and R2 and breaks R3.
+
+Suggested fix: ask which requirement should win. Removing any one of R1, R2, and R3 leaves the rest consistent.
+```
+
+## A requirement that adds nothing
+
+`examples/order-redundant.ears.md` says a submitted order is fulfilled, and also that a submitted order with inventory is fulfilled. The second one is already required by the first. Lint names it and asks. It does not delete it.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-redundant.ears.md
+-->
+```text
+spec: examples/order-redundant.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 1
+
+redundant R2 line 8
+R2 adds nothing. Whenever the other requirements hold, R2 holds too.
+When an order is submitted and inventory is available, the Order System shall fulfill the order.
+Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+```
+
+## Scenarios
+
+`scenarios` lists a small set of examples so a product manager can check that a requirement means what they think. For each requirement it looks for an accepted scenario with the trigger true, an accepted scenario with the trigger false, and a rejected scenario with the trigger true. Each one is the first assignment the search finds, false before true. A requirement with no trigger says so, instead of inventing a trigger-false case. The same assignment is printed once.
+
+<!-- verify stdout 0
+build/ears-verify
+scenarios
+examples/order.ears.md
+-->
+```text
+spec: examples/order.ears.md
+scenarios: 3
+
+R1 accepted, trigger true
+{
+  "order_submitted": true,
+  "inventory_available": true,
+  "order_fulfilled": true
+}
+An order was submitted and inventory was available, and the order was fulfilled.
+
+R1 accepted, trigger false
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": false
+}
+An order was not submitted and inventory was not available, and the order was not fulfilled.
+
+R1 rejected, trigger true
+{
+  "order_submitted": true,
+  "inventory_available": true,
+  "order_fulfilled": false
+}
+An order was submitted and inventory was available, but the order was not fulfilled.
+```
+
+`--json` is `ok`, `spec`, and `scenarios`. Each row is `id`, `line`, `kind` (`accepted` or `rejected`), `trigger` (`true` or `false`), `found`, `sameAs`, `scenario` (`name` and `value`), and `text`. `scenario` is empty when `found` is false. `sameAs` names an earlier row when the assignment was already listed.
+
+<!-- verify stdout 0
+build/ears-verify
+scenarios
+--json
+examples/order.ears.md
+-->
+```text
+{
+  "ok": true,
+  "spec": "examples/order.ears.md",
+  "scenarios": [
+    {
+      "id": "R1",
+      "line": 7,
+      "kind": "accepted",
+      "trigger": "true",
+      "found": true,
+      "sameAs": "",
+      "scenario": [
+        {
+          "name": "order_submitted",
+          "value": "true"
+        },
+        {
+          "name": "inventory_available",
+          "value": "true"
+        },
+        {
+          "name": "order_fulfilled",
+          "value": "true"
+        }
+      ],
+      "text": "An order was submitted and inventory was available, and the order was fulfilled."
+    },
+    {
+      "id": "R1",
+      "line": 7,
+      "kind": "accepted",
+      "trigger": "false",
+      "found": true,
+      "sameAs": "",
+      "scenario": [
+        {
+          "name": "order_submitted",
+          "value": "false"
+        },
+        {
+          "name": "inventory_available",
+          "value": "false"
+        },
+        {
+          "name": "order_fulfilled",
+          "value": "false"
+        }
+      ],
+      "text": "An order was not submitted and inventory was not available, and the order was not fulfilled."
+    },
+    {
+      "id": "R1",
+      "line": 7,
+      "kind": "rejected",
+      "trigger": "true",
+      "found": true,
+      "sameAs": "",
+      "scenario": [
+        {
+          "name": "order_submitted",
+          "value": "true"
+        },
+        {
+          "name": "inventory_available",
+          "value": "true"
+        },
+        {
+          "name": "order_fulfilled",
+          "value": "false"
+        }
+      ],
+      "text": "An order was submitted and inventory was available, but the order was not fulfilled."
+    }
+  ]
+}
 ```

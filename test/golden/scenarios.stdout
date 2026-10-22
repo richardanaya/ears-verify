@@ -1,0 +1,26 @@
+spec: examples/order.ears.md
+scenarios: 3
+
+R1 accepted, trigger true
+{
+  "order_submitted": true,
+  "inventory_available": true,
+  "order_fulfilled": true
+}
+An order was submitted and inventory was available, and the order was fulfilled.
+
+R1 accepted, trigger false
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": false
+}
+An order was not submitted and inventory was not available, and the order was not fulfilled.
+
+R1 rejected, trigger true
+{
+  "order_submitted": true,
+  "inventory_available": true,
+  "order_fulfilled": false
+}
+An order was submitted and inventory was available, but the order was not fulfilled.

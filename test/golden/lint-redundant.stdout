@@ -1,0 +1,11 @@
+spec: examples/order-redundant.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 1
+
+redundant R2 line 8
+R2 adds nothing. Whenever the other requirements hold, R2 holds too.
+When an order is submitted and inventory is available, the Order System shall fulfill the order.
+Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.

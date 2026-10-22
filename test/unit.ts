@@ -9,6 +9,7 @@ import { parseProperty, parseSpec } from "../src/ears.ts";
 import { analyzePolicy } from "../src/policy.ts";
 import { parseScenarioJson } from "../src/jsonvalue.ts";
 import { lintSpec } from "../src/lint.ts";
+import { listScenarios } from "../src/scenarios.ts";
 import type { Spec } from "../src/spec.ts";
 import { printSmt } from "../src/smt.ts";
 import { spaceSize } from "../src/solver.ts";
@@ -171,7 +172,8 @@ check(
     covered.report.conflicts.length === 0 &&
     covered.report.gaps.length === 0 &&
     covered.report.misuse.length === 0 &&
-    covered.report.wording.length === 0,
+    covered.report.wording.length === 0 &&
+    covered.report.redundant.length === 0,
 );
 
 const misuse = lintSpec(mustSpec(readFileSync("examples/order-misuse.ears.md", "utf8")));
@@ -586,6 +588,60 @@ if (!emptyProp.ok) check("empty property message", emptyProp.message === "expect
 
 const hyphen = mustSpec('event ready: Bool "Ready." phrase "user-friendly checkout"\n\nR1 The Box shall user-friendly checkout.\n');
 check("hyphen phrase", formatTerm(hyphen.requirements[0].consequent) === "user-friendly checkout");
+
+const chain = lintSpec(mustSpec(readFileSync("examples/order-chain.ears.md", "utf8")));
+check("chain ran", chain.kind === "report");
+if (chain.kind === "report") {
+  const item = chain.report.conflicts[0];
+  check(
+    "chain is one triple",
+    chain.report.conflicts.length === 1 &&
+      chain.report.gaps.length === 0 &&
+      chain.report.redundant.length === 0 &&
+      item.minimal === true &&
+      item.ids.length === 3 &&
+      item.ids[0] === "R1" &&
+      item.ids[1] === "R2" &&
+      item.ids[2] === "R3",
+  );
+  check("chain fix", item.fix.indexOf("Removing any one of R1, R2, and R3") !== -1);
+  check("chain keeps both", item.keeps.length === 2 && item.keeps[0] === "R1" && item.keeps[1] === "R2" && item.breaks === "R3");
+}
+
+const redundantLint = lintSpec(mustSpec(readFileSync("examples/order-redundant.ears.md", "utf8")));
+check("redundant ran", redundantLint.kind === "report");
+if (redundantLint.kind === "report") {
+  check(
+    "only R2 is redundant",
+    redundantLint.report.conflicts.length === 0 &&
+      redundantLint.report.gaps.length === 0 &&
+      redundantLint.report.redundant.length === 1 &&
+      redundantLint.report.redundant[0].id === "R2" &&
+      redundantLint.report.redundant[0].text === "R2 adds nothing. Whenever the other requirements hold, R2 holds too.",
+  );
+}
+
+const listedScenarios = listScenarios(order);
+check("scenario rows", listedScenarios.length === 3);
+check(
+  "scenario accepted true",
+  listedScenarios[0].found === true &&
+    listedScenarios[0].kind === "accepted" &&
+    listedScenarios[0].trigger === "true" &&
+    listedScenarios[0].text === "An order was submitted and inventory was available, and the order was fulfilled.",
+);
+check(
+  "scenario rejected",
+  listedScenarios[2].found === true &&
+    listedScenarios[2].kind === "rejected" &&
+    listedScenarios[2].text === "An order was submitted and inventory was available, but the order was not fulfilled.",
+);
+const statusRows = listScenarios(statusSpec);
+check(
+  "ubiquitous has no trigger false",
+  statusRows.length === 6 && statusRows[1].found === false && statusRows[1].text === "R6 has no trigger, so there is no case where the trigger is false.",
+);
+check("status scenarios dedupe", statusRows[5].sameAs === "R6 rejected, trigger true" && statusRows[5].found === true);
 
 if (failed !== 0) {
   console.error(String(failed) + " failed");

@@ -3,6 +3,7 @@ conflicts: 0
 gaps: 0
 misuse: 0
 wording: 3
+redundant: 0
 
 wording line 4
 "fast" is too vague to test. Replace it with something a scenario can check.
