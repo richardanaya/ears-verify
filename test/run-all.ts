@@ -177,8 +177,8 @@ function main(): void {
     comparePair(item.name, nodeResult, binResult);
   }
 
-  checkDocSamples("readme", "README.md");
-  checkDocSamples("skill", "skills/ears-verify/SKILL.md");
+  checkDocSamples("readme", "README.md", false);
+  checkDocSamples("skill", "skills/ears-verify/SKILL.md", true);
   forbidRetiredLanguage();
 
   if (failed !== 0) {
@@ -189,9 +189,10 @@ function main(): void {
   process.exit(0);
 }
 
-function checkDocSamples(label: string, path: string): void {
+function checkDocSamples(label: string, path: string, strictText: boolean): void {
   const text = readFileSync(path, "utf8");
   const startMark = "<!-- verify ";
+  const fences: number[] = [];
   let cursor = 0;
   let found = 0;
   while (cursor < text.length) {
@@ -231,6 +232,7 @@ function checkDocSamples(label: string, path: string): void {
       fail(label + " verify block is missing a fence");
       return;
     }
+    fences.push(fenceAt);
     const body = text.slice(fenceLineEnd + 1, closeAt + 1);
     const native = run(args[0], args.slice(1));
     const nodeArgs: string[] = ["--experimental-strip-types", "src/main.ts"];
@@ -260,6 +262,29 @@ function checkDocSamples(label: string, path: string): void {
     cursor = closeAt + 4;
   }
   if (found === 0) fail(label + " has no verify blocks");
+  if (strictText) requireTextFencesVerified(label, text, fences);
+}
+
+function requireTextFencesVerified(label: string, text: string, fences: number[]): void {
+  const mark = "```text\n";
+  let cursor = 0;
+  let found = 0;
+  while (cursor < text.length) {
+    const at = text.indexOf(mark, cursor);
+    if (at < 0) break;
+    let covered = false;
+    for (let i = 0; i < fences.length; i++) {
+      if (fences[i] === at) covered = true;
+    }
+    if (!covered) {
+      fail(label + " text sample is not tied to a verify block");
+      return;
+    }
+    found++;
+    cursor = at + mark.length;
+  }
+  if (found !== fences.length) fail(label + " verify block is missing a text sample");
+  else console.log("PASS " + label + " text samples are all verified");
 }
 
 function forbidRetiredLanguage(): void {
