@@ -2,9 +2,10 @@
  * Run the typecheck, ScriptC coverage gate, native build, unit tests,
  * and golden CLI tests. Unit tests and each CLI case run once under Node
  * and once as the native binary; stdout, stderr, and exit status must match
- * each other and the checked-in golden files. Samples in README.md and
- * skills/plan-verify/SKILL.md marked with `<!-- verify stdout|stderr <exit>`
- * are run under Node and build/plan-verify and must match the fenced bytes.
+ * each other and the checked-in golden files. Samples in docs/reference.md,
+ * docs/lint.md, docs/json.md, and skills/plan-verify/SKILL.md marked with
+ * `<!-- verify stdout|stderr <exit>` are run under Node and build/plan-verify
+ * and must match the fenced bytes.
  *
  * Write or refresh goldens with: node --experimental-strip-types test/run-all.ts --write-golden
  */
@@ -211,7 +212,9 @@ function main(): void {
     comparePair(item.name, nodeResult, binResult);
   }
 
-  checkDocSamples("readme", "README.md", false);
+  checkDocSamples("docs-reference", "docs/reference.md", false);
+  checkDocSamples("docs-lint", "docs/lint.md", false);
+  checkDocSamples("docs-json", "docs/json.md", false);
   checkDocSamples("skill", "skills/plan-verify/SKILL.md", true);
   checkPlanToProblems();
 
