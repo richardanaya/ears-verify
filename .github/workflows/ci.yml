@@ -17,5 +17,24 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y clang
       - name: Install dependencies
         run: npm ci
-      - name: Test
+      - name: Require ScriptC 0.4.1
+        run: test "$(node_modules/.bin/scriptc --version)" = "0.4.1"
+      - name: Coverage gate
+        run: |
+          set -eu
+          for entry in src/main.ts test/unit.ts test/run-all.ts; do
+            out="$(node_modules/.bin/scriptc coverage "$entry" --fail-on=blockers)"
+            printf '%s\n' "$out"
+            printf '%s\n' "$out" | grep -q '(100%)'
+            printf '%s\n' "$out" | grep -q 'fully static'
+            if printf '%s\n' "$out" | grep -q 'blockers'; then
+              echo "coverage blockers in $entry" >&2
+              exit 1
+            fi
+          done
+      - name: ScriptC build
+        run: |
+          node_modules/.bin/scriptc build src/main.ts -o build/ears-verify
+          node_modules/.bin/scriptc build test/unit.ts -o build/unit-tests
+      - name: Test on Node and native
         run: npm test
