@@ -34,7 +34,6 @@ export function bindScenario(spec: Spec, object: JsonObject): BindResult {
     if (!bound.ok) return bound;
     env.known[s] = true;
     env.code[s] = bound.code;
-    env.text[s] = bound.text;
   }
   for (let k = 0; k < object.keys.length; k++) {
     if (!used[k]) return { ok: false, message: "unexpected " + object.keys[k] };
@@ -42,19 +41,11 @@ export function bindScenario(spec: Spec, object: JsonObject): BindResult {
   return { ok: true, env: env };
 }
 
-function bindValue(
-  spec: Spec,
-  index: number,
-  value: JsonValue,
-): { ok: true; code: number; text: string } | { ok: false; message: string } {
+function bindValue(spec: Spec, index: number, value: JsonValue): { ok: true; code: number } | { ok: false; message: string } {
   const sym = spec.symbols[index];
   if (sym.sort.kind === "bool") {
     if (value.kind !== "bool") return { ok: false, message: sym.name + " must be true or false" };
-    return { ok: true, code: value.value ? 1 : 0, text: "" };
-  }
-  if (sym.sort.kind === "string") {
-    if (value.kind !== "string") return { ok: false, message: sym.name + " must be a string" };
-    return { ok: true, code: 0, text: value.value };
+    return { ok: true, code: value.value ? 1 : 0 };
   }
   if (sym.sort.kind === "int") {
     if (value.kind !== "int") {
@@ -66,7 +57,7 @@ function bindValue(
         message: sym.name + " is " + formatInt(value.value) + ", outside " + formatInt(sym.sort.min) + ".." + formatInt(sym.sort.max),
       };
     }
-    return { ok: true, code: value.value, text: "" };
+    return { ok: true, code: value.value };
   }
   const decl = spec.enums;
   let variants: string[] = [];
@@ -80,7 +71,7 @@ function bindValue(
   }
   if (value.kind !== "string") return { ok: false, message: sym.name + " must be " + expected };
   for (let i = 0; i < variants.length; i++) {
-    if (variants[i] === value.value) return { ok: true, code: i, text: "" };
+    if (variants[i] === value.value) return { ok: true, code: i };
   }
   return { ok: false, message: sym.name + " is " + displayQuote(value.value) + ", expected " + expected };
 }
@@ -115,8 +106,7 @@ function because(spec: Spec, env: Binding, antecedent: import("./spec.ts").Term 
   const parts: string[] = [];
   for (let i = 0; i < indexes.length; i++) {
     const sym = spec.symbols[indexes[i]];
-    const shown = sym.sort.kind === "string" ? displayQuote(env.text[indexes[i]]) : displayCode(spec, sym, env.code[indexes[i]]);
-    parts.push(sym.name + " is " + shown);
+    parts.push(sym.name + " is " + displayCode(spec, sym, env.code[indexes[i]]));
   }
   return englishList(parts) + ".";
 }

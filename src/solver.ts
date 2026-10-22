@@ -11,8 +11,8 @@
  * sizes is capped.
  */
 
-import { codeAt, domainSize, isDriver, requirementMentions, requirementUsesString, type Spec } from "./spec.ts";
-import { Binding, evalAssertion, evalBool, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
+import { codeAt, domainSize, isDriver, requirementMentions, type Spec } from "./spec.ts";
+import { Binding, evalAssertion, evalBool, T_FALSE, T_TRUE } from "./term.ts";
 
 export const SEARCH_LIMIT = 250000;
 
@@ -37,7 +37,6 @@ class GapState {
 export function spaceSize(spec: Spec): number {
   let product = 1;
   for (let i = 0; i < spec.symbols.length; i++) {
-    if (spec.symbols[i].sort.kind === "string") continue;
     const size = domainSize(spec, spec.symbols[i]);
     if (size <= 0) return -1;
     if (product > SEARCH_LIMIT / size) return -1;
@@ -231,10 +230,7 @@ function searchOutputs(spec: Spec, indexes: number[], outputs: number[], env: Bi
 function allTrue(spec: Spec, indexes: number[], env: Binding): boolean {
   for (let i = 0; i < indexes.length; i++) {
     const req = spec.requirements[indexes[i]];
-    const result = evalAssertion(req.antecedent, req.consequent, spec, env);
-    if (result === T_TRUE) continue;
-    if (result === T_UNKNOWN && requirementUsesString(spec, req)) continue;
-    return false;
+    if (evalAssertion(req.antecedent, req.consequent, spec, env) !== T_TRUE) return false;
   }
   return true;
 }
@@ -254,7 +250,6 @@ function clearKnown(env: Binding, indexes: number[]): void {
 function driverIndexes(spec: Spec): number[] {
   const indexes: number[] = [];
   for (let i = 0; i < spec.symbols.length; i++) {
-    if (spec.symbols[i].sort.kind === "string") continue;
     if (isDriver(spec.symbols[i])) indexes.push(i);
   }
   return indexes;
@@ -263,7 +258,6 @@ function driverIndexes(spec: Spec): number[] {
 function outputIndexes(spec: Spec): number[] {
   const indexes: number[] = [];
   for (let i = 0; i < spec.symbols.length; i++) {
-    if (spec.symbols[i].sort.kind === "string") continue;
     if (!isDriver(spec.symbols[i])) indexes.push(i);
   }
   return indexes;

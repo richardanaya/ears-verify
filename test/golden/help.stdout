@@ -2,6 +2,5 @@ usage:
   ears-verify check [--json] <spec> --input <scenario>
   ears-verify emit-smt <spec>
   ears-verify lint [--json] <spec>
-  ears-verify canonicalize [--json] <url>
   ears-verify policy
   ears-verify help

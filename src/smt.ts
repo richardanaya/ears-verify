@@ -25,15 +25,15 @@ export function printSmt(specPath: string, spec: Spec): string {
   for (let i = 0; i < spec.symbols.length; i++) {
     const sym = spec.symbols[i];
     lines.push("; " + symbolComment(spec, sym));
-    lines.push("(declare-fun " + smtName(sym.name) + " () " + sortName(sym) + ")");
+    lines.push("(declare-fun " + sym.name + " () " + sortName(sym) + ")");
     if (sym.sort.kind === "int") {
       lines.push(
         "(assert (and (>= " +
-          smtName(sym.name) +
+          sym.name +
           " " +
           formatSmtInt(sym.sort.min) +
           ") (<= " +
-          smtName(sym.name) +
+          sym.name +
           " " +
           formatSmtInt(sym.sort.max) +
           ")))",
@@ -60,7 +60,6 @@ function symbolComment(spec: Spec, sym: SymbolDecl): string {
 
 function sortComment(spec: Spec, sym: SymbolDecl): string {
   if (sym.sort.kind === "bool") return "Bool";
-  if (sym.sort.kind === "string") return "String";
   if (sym.sort.kind === "int") return "Int " + formatInt(sym.sort.min) + ".." + formatInt(sym.sort.max);
   const decl = findEnum(spec, sym.sort.enumName);
   if (decl === null) return sym.sort.enumName;
@@ -69,18 +68,8 @@ function sortComment(spec: Spec, sym: SymbolDecl): string {
 
 function sortName(sym: SymbolDecl): string {
   if (sym.sort.kind === "bool") return "Bool";
-  if (sym.sort.kind === "string") return "String";
   if (sym.sort.kind === "int") return "Int";
   return sym.sort.enumName;
-}
-
-function smtName(name: string): string {
-  for (let i = 0; i < name.length; i++) {
-    const code = name.charCodeAt(i);
-    const ident = (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95 || (i > 0 && code >= 48 && code <= 57);
-    if (!ident) return "|" + name + "|";
-  }
-  return name;
 }
 
 function escapeComment(text: string): string {

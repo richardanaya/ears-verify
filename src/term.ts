@@ -5,7 +5,7 @@
  */
 
 import { findEnum, type Spec, type SymbolDecl, type Term } from "./spec.ts";
-import { displayQuote, formatInt, formatSmtInt } from "./text.ts";
+import { formatInt, formatSmtInt } from "./text.ts";
 
 export const T_FALSE = 0;
 export const T_TRUE = 1;
@@ -14,16 +14,13 @@ export const T_UNKNOWN = 2;
 export class Binding {
   known: boolean[];
   code: number[];
-  text: string[];
 
   constructor(n: number) {
     this.known = [];
     this.code = [];
-    this.text = [];
     for (let i = 0; i < n; i++) {
       this.known.push(false);
       this.code.push(0);
-      this.text.push("");
     }
   }
 
@@ -32,7 +29,6 @@ export class Binding {
     for (let i = 0; i < this.code.length; i++) {
       next.known[i] = this.known[i];
       next.code[i] = this.code[i];
-      next.text[i] = this.text[i];
     }
     return next;
   }
@@ -42,19 +38,14 @@ interface Value {
   known: boolean;
   kind: string;
   code: number;
-  text: string;
 }
 
 function unknownValue(): Value {
-  return { known: false, kind: "", code: 0, text: "" };
+  return { known: false, kind: "", code: 0 };
 }
 
 function knownValue(kind: string, code: number): Value {
-  return { known: true, kind: kind, code: code, text: "" };
-}
-
-function knownText(text: string): Value {
-  return { known: true, kind: "string", code: 0, text: text };
+  return { known: true, kind: kind, code: code };
 }
 
 export function evalBool(term: Term, spec: Spec, env: Binding): number {
@@ -94,8 +85,6 @@ export function evalBool(term: Term, spec: Spec, env: Binding): number {
   ) {
     return evalCmp(term, spec, env);
   }
-  if (term.kind === "empty") return evalEmpty(term.term, spec, env);
-  if (term.kind === "prefix" || term.kind === "suffix" || term.kind === "contains") return evalTextOp(term, spec, env);
   return T_UNKNOWN;
 }
 
@@ -114,12 +103,6 @@ function evalCmp(term: Term, spec: Spec, env: Binding): number {
   const right = evalValue(term.right, spec, env);
   if (!left.known || !right.known) return T_UNKNOWN;
   if (left.kind !== right.kind) return T_UNKNOWN;
-  if (left.kind === "string") {
-    const same = left.text === right.text;
-    if (term.kind === "eq") return same ? T_TRUE : T_FALSE;
-    if (term.kind === "neq") return same ? T_FALSE : T_TRUE;
-    return T_UNKNOWN;
-  }
   const eq = left.code === right.code;
   if (term.kind === "eq") return eq ? T_TRUE : T_FALSE;
   if (term.kind === "neq") return eq ? T_FALSE : T_TRUE;
@@ -130,48 +113,15 @@ function evalCmp(term: Term, spec: Spec, env: Binding): number {
   return left.code >= right.code ? T_TRUE : T_FALSE;
 }
 
-function evalEmpty(term: Term, spec: Spec, env: Binding): number {
-  const value = evalValue(term, spec, env);
-  if (!value.known) return T_UNKNOWN;
-  if (value.kind === "string") return value.text.length === 0 ? T_TRUE : T_FALSE;
-  if (value.kind === "int") return value.code === -1 ? T_TRUE : T_FALSE;
-  return T_UNKNOWN;
-}
-
-function evalTextOp(term: Term, spec: Spec, env: Binding): number {
-  if (term.kind !== "prefix" && term.kind !== "suffix" && term.kind !== "contains") return T_UNKNOWN;
-  const left = evalValue(term.left, spec, env);
-  const right = evalValue(term.right, spec, env);
-  if (!left.known || !right.known) return T_UNKNOWN;
-  if (left.kind !== "string" || right.kind !== "string") return T_UNKNOWN;
-  let holds = false;
-  if (term.kind === "prefix") holds = hasPrefix(left.text, right.text);
-  else if (term.kind === "suffix") holds = hasSuffix(left.text, right.text);
-  else holds = left.text.indexOf(right.text) >= 0;
-  return holds ? T_TRUE : T_FALSE;
-}
-
-function hasPrefix(text: string, prefix: string): boolean {
-  if (prefix.length > text.length) return false;
-  return text.slice(0, prefix.length) === prefix;
-}
-
-function hasSuffix(text: string, suffix: string): boolean {
-  if (suffix.length > text.length) return false;
-  return text.slice(text.length - suffix.length) === suffix;
-}
-
 function evalValue(term: Term, spec: Spec, env: Binding): Value {
   if (term.kind === "bool") return knownValue("bool", term.value ? 1 : 0);
   if (term.kind === "int") return knownValue("int", term.value);
   if (term.kind === "enum") return knownValue("enum:" + term.enumName, term.index);
-  if (term.kind === "str") return knownText(term.value);
   if (term.kind === "sym") {
     if (!env.known[term.index]) return unknownValue();
     const sym = spec.symbols[term.index];
     if (sym.sort.kind === "bool") return knownValue("bool", env.code[term.index] === 1 ? 1 : 0);
     if (sym.sort.kind === "int") return knownValue("int", env.code[term.index]);
-    if (sym.sort.kind === "string") return knownText(env.text[term.index]);
     return knownValue("enum:" + sym.sort.enumName, env.code[term.index]);
   }
   if (term.kind === "add" || term.kind === "sub") {
@@ -195,7 +145,7 @@ export function evalAssertion(antecedent: Term | null, consequent: Term, spec: S
 }
 
 function isSimple(term: Term): boolean {
-  return term.kind === "bool" || term.kind === "int" || term.kind === "enum" || term.kind === "sym" || term.kind === "str";
+  return term.kind === "bool" || term.kind === "int" || term.kind === "enum" || term.kind === "sym";
 }
 
 export function formatTerm(term: Term): string {
@@ -203,11 +153,6 @@ export function formatTerm(term: Term): string {
   if (term.kind === "int") return formatInt(term.value);
   if (term.kind === "enum") return term.variant;
   if (term.kind === "sym") return term.name;
-  if (term.kind === "str") return displayQuote(term.value);
-  if (term.kind === "empty") return formatTerm(term.term) + " is empty";
-  if (term.kind === "prefix") return formatTerm(term.left) + " starts with " + formatTerm(term.right);
-  if (term.kind === "suffix") return formatTerm(term.left) + " ends with " + formatTerm(term.right);
-  if (term.kind === "contains") return formatTerm(term.left) + " contains " + formatTerm(term.right);
   if (term.kind === "not") {
     if (isSimple(term.term)) return "not " + formatTerm(term.term);
     return "not (" + formatTerm(term.term) + ")";
@@ -251,15 +196,7 @@ export function formatSmtTerm(term: Term): string {
   if (term.kind === "bool") return term.value ? "true" : "false";
   if (term.kind === "int") return formatSmtInt(term.value);
   if (term.kind === "enum") return term.variant;
-  if (term.kind === "sym") return smtSymbol(term.name);
-  if (term.kind === "str") return smtString(term.value);
-  if (term.kind === "empty") {
-    if (term.term.kind === "sym" && term.term.name === "url.port") return "(= " + formatSmtTerm(term.term) + " (- 1))";
-    return "(= " + formatSmtTerm(term.term) + " \"\")";
-  }
-  if (term.kind === "prefix") return "(str.prefixof " + formatSmtTerm(term.right) + " " + formatSmtTerm(term.left) + ")";
-  if (term.kind === "suffix") return "(str.suffixof " + formatSmtTerm(term.right) + " " + formatSmtTerm(term.left) + ")";
-  if (term.kind === "contains") return "(str.contains " + formatSmtTerm(term.left) + " " + formatSmtTerm(term.right) + ")";
+  if (term.kind === "sym") return term.name;
   if (term.kind === "not") return "(not " + formatSmtTerm(term.term) + ")";
   if (term.kind === "and") return "(and " + formatSmtTerm(term.left) + " " + formatSmtTerm(term.right) + ")";
   if (term.kind === "or") return "(or " + formatSmtTerm(term.left) + " " + formatSmtTerm(term.right) + ")";
@@ -273,41 +210,21 @@ export function formatSmtTerm(term: Term): string {
   return "(- " + formatSmtTerm(term.left) + " " + formatSmtTerm(term.right) + ")";
 }
 
-function smtSymbol(name: string): string {
-  for (let i = 0; i < name.length; i++) {
-    const code = name.charCodeAt(i);
-    const ident = (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95 || (i > 0 && code >= 48 && code <= 57);
-    if (!ident) return "|" + name + "|";
-  }
-  return name;
-}
-
-function smtString(value: string): string {
-  let out = "\"";
-  for (let i = 0; i < value.length; i++) {
-    const code = value.charCodeAt(i);
-    if (code === 34) out += "\"\"";
-    else out += value.slice(i, i + 1);
-  }
-  return out + "\"";
-}
-
 export function formatScenario(spec: Spec, env: Binding): string {
   const lines: string[] = [];
   lines.push("{");
   for (let i = 0; i < spec.symbols.length; i++) {
     const sym = spec.symbols[i];
     const comma = i + 1 < spec.symbols.length ? "," : "";
-    lines.push("  \"" + sym.name + "\": " + jsonLiteral(spec, sym, env.code[i], env.text[i]) + comma);
+    lines.push("  \"" + sym.name + "\": " + jsonLiteral(spec, sym, env.code[i]) + comma);
   }
   lines.push("}");
   return lines.join("\n");
 }
 
-function jsonLiteral(spec: Spec, sym: SymbolDecl, code: number, text: string): string {
+function jsonLiteral(spec: Spec, sym: SymbolDecl, code: number): string {
   if (sym.sort.kind === "bool") return code === 1 ? "true" : "false";
   if (sym.sort.kind === "int") return formatInt(code);
-  if (sym.sort.kind === "string") return displayQuote(text);
   const decl = findEnum(spec, sym.sort.enumName);
   const variant = decl === null || code < 0 || code >= decl.variants.length ? "?" : decl.variants[code];
   return "\"" + variant + "\"";
@@ -344,7 +261,7 @@ function collectIndexes(term: Term, found: number[]): void {
     found.push(term.index);
     return;
   }
-  if (term.kind === "not" || term.kind === "empty") {
+  if (term.kind === "not") {
     collectIndexes(term.term, found);
     return;
   }
@@ -358,10 +275,7 @@ function collectIndexes(term: Term, found: number[]): void {
     term.kind === "gt" ||
     term.kind === "ge" ||
     term.kind === "add" ||
-    term.kind === "sub" ||
-    term.kind === "prefix" ||
-    term.kind === "suffix" ||
-    term.kind === "contains"
+    term.kind === "sub"
   ) {
     collectIndexes(term.left, found);
     collectIndexes(term.right, found);

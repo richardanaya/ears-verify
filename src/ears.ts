@@ -8,7 +8,6 @@
  */
 
 import {
-  ensureUrlSymbol,
   findEnum,
   findSymbol,
   findVariant,
@@ -26,7 +25,7 @@ export type SpecResult = { ok: true; spec: Spec } | { ok: false; line: number; m
 
 const RANGE_BOUND = 1000000;
 
-type SortTag = { kind: "bool" } | { kind: "int" } | { kind: "enum"; enumName: string } | { kind: "string" };
+type SortTag = { kind: "bool" } | { kind: "int" } | { kind: "enum"; enumName: string };
 
 type Parsed = { ok: true; term: Term; sort: SortTag } | { ok: false; message: string };
 
@@ -258,38 +257,28 @@ function parseSort(cur: Cur, spec: Spec, role: Role): Sort | string {
 }
 
 function parseDescription(cur: Cur): { ok: true; text: string } | { ok: false; message: string } {
-  const quoted = parseQuoted(cur, false);
-  if (!quoted.ok) {
-    if (quoted.message === "expected a string") return { ok: false, message: "expected a description in quotes" };
-    if (quoted.message === "empty string") return { ok: false, message: "expected a description" };
-    if (quoted.message === "string cannot contain a newline") return { ok: false, message: "description cannot contain a newline" };
-    if (quoted.message === "bad escape in string") return { ok: false, message: "bad escape in description" };
-    return quoted;
-  }
-  return quoted;
-}
-
-function parseQuoted(cur: Cur, allowEmpty: boolean): { ok: true; text: string } | { ok: false; message: string } {
   cur.skip();
-  if (cur.i >= cur.text.length || cur.text.charCodeAt(cur.i) !== 34) return { ok: false, message: "expected a string" };
+  if (cur.i >= cur.text.length || cur.text.charCodeAt(cur.i) !== 34) {
+    return { ok: false, message: "expected a description in quotes" };
+  }
   cur.i++;
   let out = "";
   while (cur.i < cur.text.length) {
     const code = cur.text.charCodeAt(cur.i);
     if (code === 34) {
       cur.i++;
-      if (out.length === 0 && !allowEmpty) return { ok: false, message: "empty string" };
+      if (out.length === 0) return { ok: false, message: "expected a description" };
       return { ok: true, text: out };
     }
-    if (code === 10 || code === 13) return { ok: false, message: "string cannot contain a newline" };
+    if (code === 10 || code === 13) return { ok: false, message: "description cannot contain a newline" };
     if (code === 92) {
       cur.i++;
       if (cur.i >= cur.text.length) return { ok: false, message: "unterminated string" };
       const esc = cur.text.charCodeAt(cur.i);
-      if (esc === 110 || esc === 114) return { ok: false, message: "string cannot contain a newline" };
+      if (esc === 110 || esc === 114) return { ok: false, message: "description cannot contain a newline" };
       if (esc === 34 || esc === 92 || esc === 47) out += cur.text.slice(cur.i, cur.i + 1);
       else if (esc === 116) out += "\t";
-      else return { ok: false, message: "bad escape in string" };
+      else return { ok: false, message: "bad escape in description" };
       cur.i++;
       continue;
     }
@@ -460,8 +449,6 @@ function parseNot(cur: Cur, spec: Spec): Parsed {
 function parseCmp(cur: Cur, spec: Spec): Parsed {
   const left = parseSum(cur, spec);
   if (!left.ok) return left;
-  const textOp = parseTextOp(cur, spec, left);
-  if (textOp !== null) return textOp;
   const op = peekOp(cur);
   if (op.length === 0) return left;
   cur.skip();
@@ -538,30 +525,23 @@ function parseAtom(cur: Cur, spec: Spec): Parsed {
     cur.i++;
     return inner;
   }
-  if (code === 34) {
-    const quoted = parseQuoted(cur, true);
-    if (!quoted.ok) return quoted;
-    return { ok: true, term: { kind: "str", value: quoted.text }, sort: { kind: "string" } };
-  }
   if (isDigit(code)) {
     const value = readPositive(cur);
     if (value === null) return { ok: false, message: "integer is too long" };
     return { ok: true, term: { kind: "int", value: value }, sort: { kind: "int" } };
   }
-  const word = readSymbolWord(cur);
+  const word = readRawIdent(cur);
   if (word === null) return { ok: false, message: "expected an expression" };
   const lower = word.toLowerCase();
   if (lower === "true") return { ok: true, term: { kind: "bool", value: true }, sort: { kind: "bool" } };
   if (lower === "false") return { ok: true, term: { kind: "bool", value: false }, sort: { kind: "bool" } };
   if (isReserved(word)) return { ok: false, message: "unexpected " + displayQuote(word) };
-  let symbol = findSymbol(spec, word);
-  if (symbol < 0) symbol = ensureUrlSymbol(spec, word);
+  const symbol = findSymbol(spec, word);
   if (symbol >= 0) {
     const decl = spec.symbols[symbol];
     let sort: SortTag = { kind: "bool" };
     if (decl.sort.kind === "int") sort = { kind: "int" };
     else if (decl.sort.kind === "enum") sort = { kind: "enum", enumName: decl.sort.enumName };
-    else if (decl.sort.kind === "string") sort = { kind: "string" };
     return { ok: true, term: { kind: "sym", name: decl.name, index: symbol }, sort: sort };
   }
   const variant = findVariant(spec, word);
@@ -611,36 +591,7 @@ function sameSort(left: SortTag, right: SortTag): boolean {
 function sortName(sort: SortTag): string {
   if (sort.kind === "bool") return "Bool";
   if (sort.kind === "int") return "Int";
-  if (sort.kind === "string") return "String";
   return sort.enumName;
-}
-
-function parseTextOp(cur: Cur, spec: Spec, left: Parsed): Parsed | null {
-  if (!left.ok) return null;
-  if (consumeWord(cur, "starts")) return finishTextOp(cur, spec, left, "with", "prefix");
-  if (consumeWord(cur, "ends")) return finishTextOp(cur, spec, left, "with", "suffix");
-  if (consumeWord(cur, "contains")) return finishTextOp(cur, spec, left, "", "contains");
-  if (consumeWord(cur, "is")) {
-    if (!consumeWord(cur, "empty")) return { ok: false, message: "expected \"empty\"" };
-    if (left.sort.kind === "string") return { ok: true, term: { kind: "empty", term: left.term }, sort: { kind: "bool" } };
-    if (left.term.kind === "sym" && left.term.name === "url.port") {
-      return { ok: true, term: { kind: "empty", term: left.term }, sort: { kind: "bool" } };
-    }
-    return { ok: false, message: "is empty expects a string or url.port" };
-  }
-  return null;
-}
-
-function finishTextOp(cur: Cur, spec: Spec, left: Parsed, second: string, kind: "prefix" | "suffix" | "contains"): Parsed {
-  if (!left.ok) return left;
-  if (second.length > 0 && !consumeWord(cur, second)) return { ok: false, message: "expected \"with\"" };
-  if (left.sort.kind !== "string") return { ok: false, message: kind + " expects a string" };
-  const right = parseSum(cur, spec);
-  if (!right.ok) return right;
-  if (right.sort.kind !== "string") return { ok: false, message: kind + " expects a string" };
-  if (kind === "prefix") return { ok: true, term: { kind: "prefix", left: left.term, right: right.term }, sort: { kind: "bool" } };
-  if (kind === "suffix") return { ok: true, term: { kind: "suffix", left: left.term, right: right.term }, sort: { kind: "bool" } };
-  return { ok: true, term: { kind: "contains", left: left.term, right: right.term }, sort: { kind: "bool" } };
 }
 
 function nameClash(spec: Spec, name: string): string {
@@ -732,38 +683,6 @@ function readRawIdent(cur: Cur): string | null {
   cur.i++;
   while (cur.i < cur.text.length && isIdentPart(cur.text.charCodeAt(cur.i))) cur.i++;
   return cur.text.slice(start, cur.i);
-}
-
-function readSymbolWord(cur: Cur): string | null {
-  const word = readRawIdent(cur);
-  if (word === null) return null;
-  if (word.toLowerCase() !== "url") return word;
-  if (cur.i >= cur.text.length || cur.text.charCodeAt(cur.i) !== 46) return word;
-  const save = cur.i;
-  cur.i++;
-  const part = readRawIdent(cur);
-  if (part === null) {
-    cur.i = save;
-    return word;
-  }
-  const canon = "url." + part.toLowerCase();
-  if (!isUrlName(canon)) {
-    cur.i = save;
-    return word;
-  }
-  return canon;
-}
-
-function isUrlName(name: string): boolean {
-  return (
-    name === "url.scheme" ||
-    name === "url.userinfo" ||
-    name === "url.host" ||
-    name === "url.port" ||
-    name === "url.path" ||
-    name === "url.query" ||
-    name === "url.fragment"
-  );
 }
 
 function readSystemWord(cur: Cur): string | null {

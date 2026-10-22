@@ -12,7 +12,6 @@ import type { Spec } from "../src/spec.ts";
 import { printSmt } from "../src/smt.ts";
 import { spaceSize } from "../src/solver.ts";
 import { formatTerm } from "../src/term.ts";
-import { canonicalizeUrl } from "../src/url.ts";
 
 let passed = 0;
 let failed = 0;
@@ -317,122 +316,6 @@ const namedLint = lintSpec(named);
 check("solution in the system name", namedLint.kind === "report" && namedLint.report.wording.length === 1 && namedLint.report.wording[0].word === "api");
 
 check("conflict helper", idsOf(conflict).length === 2);
-
-function canon(input: string): { url: string; rules: string; error: string } {
-  const result = canonicalizeUrl(input);
-  if (!result.ok) return { url: "", rules: "", error: result.message };
-  let rules = "";
-  for (let i = 0; i < result.violations.length; i++) {
-    if (i > 0) rules += "|";
-    rules += result.violations[i];
-  }
-  return { url: result.canonical, rules: rules, error: "" };
-}
-
-const ordersUrl = canon("HTTPS://Example.COM:443/customer/{CustomerId}/order/?status={status}");
-check(
-  "orders canonical",
-  ordersUrl.url === "https://example.com/customers/{customerId}/orders?status={status}" && ordersUrl.error === "",
-);
-check(
-  "orders rules",
-  ordersUrl.rules ===
-    "lowercase the scheme|lowercase the host|omit the default port|no trailing slash except the root|plural collection nouns|use {camelCase} placeholders",
-);
-const ordersAgain = canon(ordersUrl.url);
-check("orders idempotent", ordersAgain.url === ordersUrl.url && ordersAgain.rules === "");
-
-const pasted = canon("HTTPS://bob@Example.COM:443/a/./b/%7Ehome/");
-check("pasted canonical", pasted.url === "https://example.com/a/b/~home" && pasted.error === "");
-check(
-  "pasted rules",
-  pasted.rules ===
-    "lowercase the scheme|lowercase the host|omit the default port|decode unreserved characters|remove dot segments|no trailing slash except the root|no userinfo",
-);
-
-const sorted = canon("https://example.com/items?b=2&a=1#");
-check("sorted canonical", sorted.url === "https://example.com/items?a=1&b=2" && sorted.error === "");
-check("sorted rules", sorted.rules === "no empty fragment|sort query keys");
-
-const hyphen = canon("https://example.com/New-Orders/address/");
-check("hyphen and plural", hyphen.url === "https://example.com/new-orders/addresses");
-check("hyphen rules", hyphen.rules.indexOf("lowercase hyphenated path segments") !== -1 && hyphen.rules.indexOf("plural collection nouns") !== -1);
-
-const camel = canon("https://example.com/customers/{customer_id}/orders");
-check("snake placeholder", camel.url === "https://example.com/customers/{customerId}/orders" && camel.rules === "use {camelCase} placeholders");
-
-const percent = canon("https://example.com/a%2fb");
-check("uppercase hex", percent.url === "https://example.com/a%2Fb" && percent.rules === "uppercase percent-encoding hex");
-
-const httpPort = canon("HTTP://Example.COM:80/Orders");
-check("http default port", httpPort.url === "http://example.com/orders");
-
-const ipv6 = canon("https://[2001:DB8::1]/a/../b");
-check("ipv6 dot", ipv6.url === "https://[2001:db8::1]/b");
-
-const root = canon("https://example.com/");
-check("root slash stays", root.url === "https://example.com/" && root.rules === "");
-
-const emptyPath = canon("https://example.com");
-check("empty path stays", emptyPath.url === "https://example.com" && emptyPath.rules === "");
-
-check("empty url", canon("").error === "empty input");
-check("bad scheme", canon("1https://example.com").error === "invalid scheme");
-check("missing scheme", canon("example.com").error === "missing scheme");
-check("bad port", canon("https://example.com:").error === "empty port");
-check("huge port", canon("https://example.com:99999").error === "port out of range");
-check("bad ipv6", canon("https://[:::]/").error === "invalid IPv6 address");
-check("userinfo ipv6", canon("https://bob@[2001:db8::1]/a").url === "https://[2001:db8::1]/a");
-
-const urlSpec = mustSpec(readFileSync("examples/url-orders.ears.md", "utf8"));
-check("url symbols", urlSpec.symbols.length === 7 && urlSpec.symbols[0].name === "url.scheme" && urlSpec.symbols[3].name === "url.port");
-const portSort = urlSpec.symbols[3].sort;
-check("url port range", portSort.kind === "int" && portSort.min === -1 && portSort.max === 65535);
-const passUrl = scenario(urlSpec, readFileSync("examples/url-orders-pass.json", "utf8"));
-check("url pass", passUrl.violations === 0);
-const failUrl = scenario(urlSpec, readFileSync("examples/url-orders-fail.json", "utf8"));
-check("url fail", failUrl.violations === 1 && failUrl.because === 'url.scheme is "http".');
-const urlSmt = printSmt("examples/url-orders.ears.md", urlSpec);
-check("url smt suffix", urlSmt.indexOf('(str.suffixof ".example.com" |url.host|)') !== -1);
-check("url smt port", urlSmt.indexOf("(= |url.port| (- 1))") !== -1);
-check("url smt empty", urlSmt.indexOf('(= |url.userinfo| "")') !== -1);
-
-const clash = lintSpec(mustSpec(readFileSync("examples/url-scheme-clash.ears.md", "utf8")));
-check("scheme clash", clash.kind === "report" && clash.report.conflicts.length === 1);
-if (clash.kind === "report") {
-  check("scheme clash ids", clash.report.conflicts[0].ids[0] === "R1" && clash.report.conflicts[0].ids[1] === "R2");
-  check("scheme clash example hidden", clash.report.conflicts[0].exampleJson === "");
-  check("scheme clash every", clash.report.conflicts[0].everySituation === true);
-}
-
-const selfUrl = lintSpec(mustSpec('R1 The Shop shall url.scheme = "https" and url.scheme = "http".\n'));
-check("self url clash", selfUrl.kind === "report" && selfUrl.report.conflicts.length === 1 && selfUrl.report.conflicts[0].ids.length === 1);
-
-const either = lintSpec(mustSpec('R1 The Shop shall url.scheme = "https" or url.scheme = "http".\n'));
-check("or is not a clash", either.kind === "report" && either.report.conflicts.length === 0);
-
-const suffixClash = lintSpec(
-  mustSpec('R1 The Shop shall url.host = "evil.com".\nR2 The Shop shall url.host ends with ".example.com".\n'),
-);
-check("suffix clash", suffixClash.kind === "report" && suffixClash.report.conflicts.length === 1);
-
-const textOps = mustSpec(
-  'R1 The Shop shall url.host starts with "shop.".\nR2 The Shop shall url.query contains "status=".\nR3 The Shop shall not url.userinfo is empty.\n',
-);
-check(
-  "starts with holds",
-  scenario(textOps, '{ "url.host": "shop.example.com", "url.query": "status={status}", "url.userinfo": "ada" }').violations === 0,
-);
-check(
-  "contains fails",
-  scenario(textOps, '{ "url.host": "shop.example.com", "url.query": "page=1", "url.userinfo": "ada" }').violations === 1,
-);
-check("string required", scenario(textOps, '{ "url.host": "shop.example.com", "url.query": "status={status}", "url.userinfo": 1 }').because === "url.userinfo must be a string");
-check("starts with term", formatTerm(textOps.requirements[0].consequent) === 'url.host starts with "shop."');
-
-const items = mustSpec(readFileSync("examples/url-items.ears.md", "utf8"));
-check("items pass", scenario(items, readFileSync("examples/url-items-pass.json", "utf8")).violations === 0);
-check("mailto lower", canon("Mailto:User@Example.COM").url === "mailto:User@Example.COM");
 
 if (failed !== 0) {
   console.error(String(failed) + " failed");

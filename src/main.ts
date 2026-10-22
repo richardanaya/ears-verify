@@ -10,7 +10,6 @@ import { parseScenarioJson } from "./jsonvalue.ts";
 import { formatLintJson, formatLintText, lintSpec } from "./lint.ts";
 import { printSmt } from "./smt.ts";
 import { displayQuote } from "./text.ts";
-import { canonicalizeUrl, formatCanonJson, formatCanonText } from "./url.ts";
 
 const EXIT_OK = 0;
 const EXIT_VIOLATIONS = 1;
@@ -44,10 +43,6 @@ function main(): void {
   }
   if (command === "lint") {
     commandLint(args.slice(1));
-    return;
-  }
-  if (command === "canonicalize") {
-    commandCanonicalize(args.slice(1));
     return;
   }
   console.error("error: unknown command " + displayQuote(command));
@@ -124,21 +119,6 @@ function commandEmit(args: string[]): void {
   process.exit(EXIT_OK);
 }
 
-function commandCanonicalize(args: string[]): void {
-  const flags = parseFlags(args);
-  if (flags.error.length > 0) fail(flags.json, flags.error);
-  if (flags.input.length > 0 || flags.positionals.length !== 1) {
-    fail(flags.json, "usage: ears-verify canonicalize [--json] <url>");
-  }
-  const input = flags.positionals[0];
-  const result = canonicalizeUrl(input);
-  if (!result.ok) fail(flags.json, result.message);
-  if (flags.json) console.log(formatCanonJson(input, result.canonical, result.violations));
-  else console.log(formatCanonText(result.canonical, result.violations));
-  if (result.violations.length === 0) process.exit(EXIT_OK);
-  process.exit(EXIT_VIOLATIONS);
-}
-
 function commandLint(args: string[]): void {
   const flags = parseFlags(args);
   if (flags.error.length > 0) fail(flags.json, flags.error);
@@ -177,7 +157,6 @@ function usage(toStderr: boolean): void {
     "  ears-verify check [--json] <spec> --input <scenario>\n" +
     "  ears-verify emit-smt <spec>\n" +
     "  ears-verify lint [--json] <spec>\n" +
-    "  ears-verify canonicalize [--json] <url>\n" +
     "  ears-verify policy\n" +
     "  ears-verify help";
   if (toStderr) console.error(text);
