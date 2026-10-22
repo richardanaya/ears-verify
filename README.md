@@ -59,9 +59,19 @@ Example scenario:
 This scenario keeps R2 and breaks R3.
 
 Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R2
+One repair is to drop R2 and keep R3 as written.
+When an order is submitted, the Order System shall not fulfill the order.
+
+repair drop R3
+One repair is to drop R3 and keep R2 as written.
+When an order is submitted, the Order System shall fulfill the order.
 ```
 
-R2 says the order was fulfilled. R3 says the order was not fulfilled. Both apply when the customer submits an order, so no behavior can satisfy both. The example keeps R2 only because R3 is the last requirement in the set. It is a witness, and it is not a recommendation. Ask which requirement should win, then delete or rewrite the other.
+R2 says the order was fulfilled. R3 says the order was not fulfilled. Both apply when the customer submits an order, so no behavior can satisfy both. The example keeps R2 only because R3 is the last requirement in the set. It is a witness, and it is not a recommendation. Ask which requirement should win, then delete or rewrite the other. The candidate repairs under the clash are the same question in sentence form: drop one requirement, or, when a single extra condition can separate them, the rewritten line. None of those repairs is chosen.
 
 ## A conversation
 
@@ -117,6 +127,16 @@ Example scenario:
 This scenario keeps R2 and breaks R3.
 
 Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R2
+One repair is to drop R2 and keep R3 as written.
+When an order is submitted, the Order System shall not fulfill the order.
+
+repair drop R3
+One repair is to drop R3 and keep R2 as written.
+When an order is submitted, the Order System shall fulfill the order.
 ```
 
 The product manager chooses to keep fulfillment of a submitted order and to remove the refusal. The agent deletes R3. `examples/order-chosen.ears.md` is what remains:
@@ -143,6 +163,72 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+```
+
+## A condition that separates the clash
+
+`examples/order-repair.ears.md` lends a copy that is in the building and refuses a copy that is out on loan. Those two states can both be true, so the requirements clash. Lint still asks which requirement should win. It also shows candidate repairs it has checked: drop either requirement, or add one existing state to one condition. Adding "and the copy is not out on loan" to R1 leaves R2 unchanged, and the patched spec no longer has that conflict. Adding "and the copy is not in the building" to R2 is the other strengthening. The report does not pick one.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-repair.ears.md
+-->
+```text
+spec: examples/order-repair.ears.md
+conflicts: 1
+gaps: 1
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+
+conflict {R1, R2}
+R1 and R2 cannot both hold.
+
+R1 line 8
+While the copy is in the building, when a member asks to take a copy home, the Desk shall allow the loan.
+
+R2 line 9
+While the copy is out on loan, when a member asks to take a copy home, the Desk shall not allow the loan.
+
+They clash when the copy was in the building, the copy was out on loan, and a member asks to take a copy home.
+R1 requires that the loan was allowed.
+R2 requires that the loan was not allowed.
+
+Example scenario:
+{
+  "copy_in_building": true,
+  "copy_on_loan": true,
+  "borrow_requested": true,
+  "loan_allowed": true
+}
+This scenario keeps R1 and breaks R2.
+
+Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R1
+One repair is to drop R1 and keep R2 as written.
+While the copy is out on loan, when a member asks to take a copy home, the Desk shall not allow the loan.
+
+repair drop R2
+One repair is to drop R2 and keep R1 as written.
+While the copy is in the building, when a member asks to take a copy home, the Desk shall allow the loan.
+
+repair strengthen R1
+One repair is to add "and the copy is not out on loan" to the condition of R1. R2 stays as written.
+While the copy is in the building, when a member asks to take a copy home and the copy is not out on loan, the Desk shall allow the loan.
+
+repair strengthen R2
+One repair is to add "and the copy is not in the building" to the condition of R2. R1 stays as written.
+While the copy is out on loan, when a member asks to take a copy home and the copy is not in the building, the Desk shall not allow the loan.
+
+gap loan_allowed
+Nothing says whether the loan was allowed when the copy was in the building, the copy was out on loan, and not a member asks to take a copy home. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
 ```
 
 ## Check one scenario
@@ -406,7 +492,21 @@ examples/order-conflict.ears.md
         "R2"
       ],
       "breaks": "R3",
-      "fix": "Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2."
+      "fix": "Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2.",
+      "repairs": [
+        {
+          "kind": "drop",
+          "id": "R2",
+          "text": "One repair is to drop R2 and keep R3 as written.",
+          "sentence": "When an order is submitted, the Order System shall not fulfill the order."
+        },
+        {
+          "kind": "drop",
+          "id": "R3",
+          "text": "One repair is to drop R3 and keep R2 as written.",
+          "sentence": "When an order is submitted, the Order System shall fulfill the order."
+        }
+      ]
     }
   ],
   "gaps": [],
@@ -709,6 +809,16 @@ Example scenario:
 This scenario keeps R4 and breaks R5.
 
 Suggested fix: ask which requirement should win. To keep R4, remove R5. To keep R5, remove R4.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R4
+One repair is to drop R4 and keep R5 as written.
+When an order is submitted, the Order System shall accept 12 units.
+
+repair drop R5
+One repair is to drop R5 and keep R4 as written.
+When an order is submitted, the Order System shall accept at most 10 units.
 ```
 
 R4 says a submitted order accepts at most 10 units. R5 says that same order accepts exactly 12. The example keeps R4 with a quantity of 0 only because that is the first value that satisfies R4. It is a witness, and it is not a recommendation.
@@ -751,6 +861,16 @@ Example scenario:
 This scenario keeps R6 and breaks R7.
 
 Suggested fix: ask which requirement should win. To keep R6, remove R7. To keep R7, remove R6.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R6
+One repair is to drop R6 and keep R7 as written.
+The Order System shall mark the order cancelled.
+
+repair drop R7
+One repair is to drop R7 and keep R6 as written.
+The Order System shall mark the order shipped.
 
 unused Status.placed
 Status.placed is never mentioned.
@@ -886,6 +1006,27 @@ Example scenario:
 This scenario keeps R1 and R2 and breaks R3.
 
 Suggested fix: ask which requirement should win. Removing any one of R1, R2, and R3 leaves the rest consistent.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R1
+One repair is to drop R1 and keep R2 and R3 as written.
+When the order is accepted, the Order System shall ship the order.
+When an order is submitted, the Order System shall not ship the order.
+
+repair drop R2
+One repair is to drop R2 and keep R1 and R3 as written.
+When an order is submitted, the Order System shall accept the order.
+When an order is submitted, the Order System shall not ship the order.
+
+repair drop R3
+One repair is to drop R3 and keep R1 and R2 as written.
+When an order is submitted, the Order System shall accept the order.
+When the order is accepted, the Order System shall ship the order.
+
+repair strengthen R2
+One repair is to add "and an order is not submitted" to the condition of R2. R1 and R3 stay as written.
+When the order is accepted and an order is not submitted, the Order System shall ship the order.
 ```
 
 ## A requirement that adds nothing
@@ -957,6 +1098,16 @@ Example scenario:
 This scenario keeps R1 and breaks R2.
 
 Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R1
+One repair is to drop R1 and keep R2 as written.
+When an order is submitted, the Order System shall not fulfill the order.
+
+repair drop R2
+One repair is to drop R2 and keep R1 as written.
+When an order is submitted, the Order System shall fulfill the order.
 
 redundant R5 line 12
 R5 adds nothing. Whenever the requirements outside a conflict hold, R5 holds too.

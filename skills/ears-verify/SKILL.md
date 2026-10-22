@@ -210,7 +210,7 @@ The line has to be something a scenario can make true or false. Lint rejects the
 2. Add or reuse declarations. If they describe something you already named, use that name and its phrase. Bind a new phrase to the words they keep using.
 3. Write one EARS line per requirement, using the phrases. Normal triggers use `when`. Unwanted conditions use `if` ... `then`.
 4. Run `build/ears-verify lint <spec>`. Run `build/ears-verify report <spec>` for the logical problems in one plain-language list. Run `build/ears-verify scenarios <spec>` when you want an accepted and a rejected example of each trigger.
-5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Stop until they answer. Do not choose. If a requirement adds nothing, including a repeat that sits outside a conflict, ask whether they meant something the others do not already require. Do not delete it. If two requirements are the same condition and the same response, show the duplicate and ask whether the later line was meant to differ. Do not delete it. If a trigger starts with bare `not`, ask for a positive condition or a positive event. If a condition can never be true, show the suggested fix and ask them to rewrite the condition. Do not invent a response. If a state, an input, an enum variant, or an output is unused, ask whether to use it or remove it. For a gap, read the suggested fix and ask what the system shall do in that situation. Do not choose the response.
+5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Also show the candidate repairs: dropping one requirement in the set, and any rewritten line that adds one Bool, enum equality, or integer bound to one condition. Stop until they answer. Do not choose a requirement or a repair. If a requirement adds nothing, including a repeat that sits outside a conflict, ask whether they meant something the others do not already require. Do not delete it. If two requirements are the same condition and the same response, show the duplicate and ask whether the later line was meant to differ. Do not delete it. If a trigger starts with bare `not`, ask for a positive condition or a positive event. If a condition can never be true, show the suggested fix and ask them to rewrite the condition. Do not invent a response. If a state, an input, an enum variant, or an output is unused, ask whether to use it or remove it. For a gap, read the suggested fix and ask what the system shall do in that situation. Do not choose the response.
 6. When they describe a concrete story, write a flat JSON scenario with every declared name and run `build/ears-verify check <spec> --input <scenario>`. When they hope something is always true, write that hope as a property file of `P` requirements and run `build/ears-verify policy <spec> --property <file>`. A counterexample is a scenario the requirements allow and the property forbids. If you have no property yet, `policy <spec>` prints one allowed scenario and one forbidden scenario. The search tries false before true, so the first hit is not a recommendation.
 7. Report every check violation by requirement ID, line, and sentence, then the values. A passing check can still leave a gap. If lint reported one, say which output is uncovered and in what situation.
 
@@ -242,7 +242,7 @@ examples/order-fail.json
 }
 ```
 
-`lint` returns `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `duplicate`, `vacuous`, and `unused`. A conflict carries `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements`, `situation`, `requires`, `example`, `keeps`, `breaks`, and `fix`. Situation and example entries are `name` and `value`. Requirements are `id`, `line`, and `sentence`. Requires entries are `id` and `text`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. Wording `kind` is `vague`, `solution`, `form`, or `negation`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. An exact duplicate is `id`, `line`, `sameAs`, `sentence`, `text`, and `fix`. A vacuous requirement has the same fields as a redundant requirement. An unused entry is `name`, `kind`, `text`, and `fix`. Unused `kind` is `state`, `input`, `output`, or `variant`. Do not delete a redundant requirement, or an exact duplicate, until the PM agrees. Do not invent a response for a condition that can never be true.
+`lint` returns `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `duplicate`, `vacuous`, and `unused`. A conflict carries `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements`, `situation`, `requires`, `example`, `keeps`, `breaks`, `fix`, and `repairs`. A repair is `kind`, `id`, `text`, and `sentence`. `kind` is `drop` or `strengthen`. Situation and example entries are `name` and `value`. Requirements are `id`, `line`, and `sentence`. Requires entries are `id` and `text`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. Wording `kind` is `vague`, `solution`, `form`, or `negation`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. An exact duplicate is `id`, `line`, `sameAs`, `sentence`, `text`, and `fix`. A vacuous requirement has the same fields as a redundant requirement. An unused entry is `name`, `kind`, `text`, and `fix`. Unused `kind` is `state`, `input`, `output`, or `variant`. Do not delete a redundant requirement, or an exact duplicate, until the PM agrees. Do not invent a response for a condition that can never be true.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -306,7 +306,21 @@ examples/order-conflict.ears.md
         "R2"
       ],
       "breaks": "R3",
-      "fix": "Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2."
+      "fix": "Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2.",
+      "repairs": [
+        {
+          "kind": "drop",
+          "id": "R2",
+          "text": "One repair is to drop R2 and keep R3 as written.",
+          "sentence": "When an order is submitted, the Order System shall not fulfill the order."
+        },
+        {
+          "kind": "drop",
+          "id": "R3",
+          "text": "One repair is to drop R3 and keep R2 as written.",
+          "sentence": "When an order is submitted, the Order System shall fulfill the order."
+        }
+      ]
     }
   ],
   "gaps": [],
@@ -554,9 +568,83 @@ Example scenario:
 This scenario keeps R2 and breaks R3.
 
 Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R2
+One repair is to drop R2 and keep R3 as written.
+When an order is submitted, the Order System shall not fulfill the order.
+
+repair drop R3
+One repair is to drop R3 and keep R2 as written.
+When an order is submitted, the Order System shall fulfill the order.
 ```
 
-Tell the PM: when an order was submitted, R2 says the order was fulfilled and R3 says the order was not fulfilled. The example keeps R2 and breaks R3 only because R3 is the last requirement in the set. It is evidence, not a vote. Ask which requirement should win, and wait.
+Tell the PM: when an order was submitted, R2 says the order was fulfilled and R3 says the order was not fulfilled. The example keeps R2 and breaks R3 only because R3 is the last requirement in the set. It is evidence, not a vote. Ask which requirement should win, and wait. The repairs under the clash are candidates. For this pair the only candidates are to drop R2 or to drop R3, because both lines have the same condition.
+
+`examples/order-repair.ears.md` is a clash that a single extra condition can separate. R1 allows the loan while the copy is in the building. R2 refuses it while the copy is out on loan. Lint checks each candidate on the patched spec and keeps it only when that conflict is gone and no new conflict appears. It still asks which requirement should win.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-repair.ears.md
+-->
+```text
+spec: examples/order-repair.ears.md
+conflicts: 1
+gaps: 1
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+
+conflict {R1, R2}
+R1 and R2 cannot both hold.
+
+R1 line 8
+While the copy is in the building, when a member asks to take a copy home, the Desk shall allow the loan.
+
+R2 line 9
+While the copy is out on loan, when a member asks to take a copy home, the Desk shall not allow the loan.
+
+They clash when the copy was in the building, the copy was out on loan, and a member asks to take a copy home.
+R1 requires that the loan was allowed.
+R2 requires that the loan was not allowed.
+
+Example scenario:
+{
+  "copy_in_building": true,
+  "copy_on_loan": true,
+  "borrow_requested": true,
+  "loan_allowed": true
+}
+This scenario keeps R1 and breaks R2.
+
+Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R1
+One repair is to drop R1 and keep R2 as written.
+While the copy is out on loan, when a member asks to take a copy home, the Desk shall not allow the loan.
+
+repair drop R2
+One repair is to drop R2 and keep R1 as written.
+While the copy is in the building, when a member asks to take a copy home, the Desk shall allow the loan.
+
+repair strengthen R1
+One repair is to add "and the copy is not out on loan" to the condition of R1. R2 stays as written.
+While the copy is in the building, when a member asks to take a copy home and the copy is not out on loan, the Desk shall allow the loan.
+
+repair strengthen R2
+One repair is to add "and the copy is not in the building" to the condition of R2. R1 stays as written.
+While the copy is out on loan, when a member asks to take a copy home and the copy is not in the building, the Desk shall not allow the loan.
+
+gap loan_allowed
+Nothing says whether the loan was allowed when the copy was in the building, the copy was out on loan, and not a member asks to take a copy home. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
+```
 
 ## Unwanted events use if, then
 
@@ -766,6 +854,16 @@ Example scenario:
 This scenario keeps R4 and breaks R5.
 
 Suggested fix: ask which requirement should win. To keep R4, remove R5. To keep R5, remove R4.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R4
+One repair is to drop R4 and keep R5 as written.
+When an order is submitted, the Order System shall accept 12 units.
+
+repair drop R5
+One repair is to drop R5 and keep R4 as written.
+When an order is submitted, the Order System shall accept at most 10 units.
 ```
 
 ## Enum clash
@@ -808,6 +906,16 @@ Example scenario:
 This scenario keeps R6 and breaks R7.
 
 Suggested fix: ask which requirement should win. To keep R6, remove R7. To keep R7, remove R6.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R6
+One repair is to drop R6 and keep R7 as written.
+The Order System shall mark the order cancelled.
+
+repair drop R7
+One repair is to drop R7 and keep R6 as written.
+The Order System shall mark the order shipped.
 
 unused Status.placed
 Status.placed is never mentioned.
@@ -986,6 +1094,27 @@ Example scenario:
 This scenario keeps R1 and R2 and breaks R3.
 
 Suggested fix: ask which requirement should win. Removing any one of R1, R2, and R3 leaves the rest consistent.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R1
+One repair is to drop R1 and keep R2 and R3 as written.
+When the order is accepted, the Order System shall ship the order.
+When an order is submitted, the Order System shall not ship the order.
+
+repair drop R2
+One repair is to drop R2 and keep R1 and R3 as written.
+When an order is submitted, the Order System shall accept the order.
+When an order is submitted, the Order System shall not ship the order.
+
+repair drop R3
+One repair is to drop R3 and keep R1 and R2 as written.
+When an order is submitted, the Order System shall accept the order.
+When the order is accepted, the Order System shall ship the order.
+
+repair strengthen R2
+One repair is to add "and an order is not submitted" to the condition of R2. R1 and R3 stay as written.
+When the order is accepted and an order is not submitted, the Order System shall ship the order.
 ```
 
 ## A requirement that adds nothing
@@ -1055,6 +1184,16 @@ Example scenario:
 This scenario keeps R1 and breaks R2.
 
 Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R1
+One repair is to drop R1 and keep R2 as written.
+When an order is submitted, the Order System shall not fulfill the order.
+
+repair drop R2
+One repair is to drop R2 and keep R1 as written.
+When an order is submitted, the Order System shall fulfill the order.
 
 redundant R5 line 12
 R5 adds nothing. Whenever the requirements outside a conflict hold, R5 holds too.

@@ -53,7 +53,21 @@
         "R2"
       ],
       "breaks": "R3",
-      "fix": "Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2."
+      "fix": "Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2.",
+      "repairs": [
+        {
+          "kind": "drop",
+          "id": "R2",
+          "text": "One repair is to drop R2 and keep R3 as written.",
+          "sentence": "When an order is submitted, the Order System shall not fulfill the order."
+        },
+        {
+          "kind": "drop",
+          "id": "R3",
+          "text": "One repair is to drop R3 and keep R2 as written.",
+          "sentence": "When an order is submitted, the Order System shall fulfill the order."
+        }
+      ]
     }
   ],
   "gaps": [],

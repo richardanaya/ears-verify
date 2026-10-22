@@ -3,10 +3,12 @@
  * Contradictions, uncovered situations, impossible conditions, repeats, and
  * exact duplicates come from lint. A stricter repeat is still explained
  * here by naming the wider requirement. A contradiction asks which
- * requirement should win and does not choose one.
+ * requirement should win and does not choose one. Candidate repairs are
+ * listed after that question, and none of them is selected.
  */
 
 import type { Conflict, Duplicate, Gap, LintReport, Redundant, Vacuous } from "./lint.ts";
+import type { Repair } from "./repair.ts";
 import type { Requirement, Spec, Term } from "./spec.ts";
 import { satisfiable } from "./decide.ts";
 import { termsEqual } from "./term.ts";
@@ -86,6 +88,30 @@ function pushConflict(lines: string[], conflict: Conflict, index: number): void 
   }
   lines.push("");
   lines.push(winnerQuestion(conflict.ids));
+  pushRepairs(lines, conflict.repairs);
+}
+
+function pushRepairs(lines: string[], repairs: Repair[]): void {
+  if (repairs.length === 0) return;
+  lines.push("");
+  lines.push("Candidate repairs follow. This report does not choose one.");
+  for (let i = 0; i < repairs.length; i++) {
+    lines.push("");
+    lines.push(repairs[i].text);
+    pushQuotedLines(lines, repairs[i].sentence);
+  }
+}
+
+function pushQuotedLines(lines: string[], sentence: string): void {
+  if (sentence.length === 0) return;
+  let start = 0;
+  for (let i = 0; i <= sentence.length; i++) {
+    if (i === sentence.length || sentence.charCodeAt(i) === 10) {
+      const part = sentence.slice(start, i);
+      if (part.length > 0) lines.push(displayQuote(part));
+      start = i + 1;
+    }
+  }
 }
 
 function winnerQuestion(ids: string[]): string {

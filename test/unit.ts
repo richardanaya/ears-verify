@@ -9,8 +9,9 @@ import { parseProperty, parseSpec } from "../src/ears.ts";
 import { analyzePolicy } from "../src/policy.ts";
 import { parseScenarioJson } from "../src/jsonvalue.ts";
 import { lintSpec } from "../src/lint.ts";
+import { buildProblems } from "../src/report.ts";
+import type { Requirement, Spec } from "../src/spec.ts";
 import { listScenarios } from "../src/scenarios.ts";
-import type { Spec } from "../src/spec.ts";
 import { printSmt } from "../src/smt.ts";
 import { spaceSize } from "../src/solver.ts";
 import { formatTerm } from "../src/term.ts";
@@ -18,6 +19,17 @@ import { runSoundness } from "./soundness.ts";
 
 let passed = 0;
 let failed = 0;
+
+function applySentence(spec: Spec, id: string, sentence: string): Spec | null {
+  const parsed = parseProperty(id + " " + sentence, spec);
+  if (!parsed.ok || parsed.requirements.length !== 1) return null;
+  const requirements: Requirement[] = [];
+  for (let i = 0; i < spec.requirements.length; i++) {
+    if (spec.requirements[i].id === id) requirements.push(parsed.requirements[0]);
+    else requirements.push(spec.requirements[i]);
+  }
+  return { enums: spec.enums, symbols: spec.symbols, requirements: requirements };
+}
 
 function hasArg(flag: string): boolean {
   for (let i = 2; i < process.argv.length; i++) {
@@ -1188,6 +1200,145 @@ check(
     looseFast.report.wording[0].word === "fast" &&
     looseFast.report.wording[0].kind === "vague",
 );
+
+const repairLint = lintSpec(mustSpec(readFileSync("examples/order-repair.ears.md", "utf8")));
+check("repair example ran", repairLint.kind === "report");
+if (repairLint.kind === "report") {
+  const item = repairLint.report.conflicts[0];
+  let drops = 0;
+  let strengthenR1 = false;
+  let strengthenR2 = false;
+  for (let i = 0; i < item.repairs.length; i++) {
+    const repair = item.repairs[i];
+    if (repair.kind === "drop") drops++;
+    if (repair.kind === "strengthen" && repair.id === "R1" && repair.sentence.indexOf("and the copy is not out on loan") !== -1) {
+      strengthenR1 = true;
+    }
+    if (repair.kind === "strengthen" && repair.id === "R2" && repair.sentence.indexOf("and the copy is not in the building") !== -1) {
+      strengthenR2 = true;
+    }
+  }
+  check(
+    "repair example candidates",
+    repairLint.report.conflicts.length === 1 &&
+      item.ids[0] === "R1" &&
+      item.ids[1] === "R2" &&
+      drops === 2 &&
+      strengthenR1 &&
+      strengthenR2 &&
+      item.repairs.length === 4,
+  );
+  const problems = buildProblems("examples/order-repair.ears.md", mustSpec(readFileSync("examples/order-repair.ears.md", "utf8")), repairLint.report);
+  check(
+    "repair report asks and does not choose",
+    problems.text.indexOf("Which requirement should win?") !== -1 &&
+      problems.text.indexOf("This report does not choose.") !== -1 &&
+      problems.text.indexOf("Candidate repairs follow. This report does not choose one.") !== -1 &&
+      problems.text.indexOf("and the copy is not out on loan") !== -1 &&
+      problems.text.indexOf("keeps ") === -1 &&
+      problems.text.indexOf("breaks ") === -1,
+  );
+  let r1Sentence = "";
+  for (let i = 0; i < item.repairs.length; i++) {
+    if (item.repairs[i].kind === "strengthen" && item.repairs[i].id === "R1") r1Sentence = item.repairs[i].sentence;
+  }
+  const strengthened = applySentence(mustSpec(readFileSync("examples/order-repair.ears.md", "utf8")), "R1", r1Sentence);
+  const again = strengthened === null ? null : lintSpec(strengthened);
+  check(
+    "strengthen removes that conflict",
+    again !== null &&
+      again.kind === "report" &&
+      again.report.conflicts.length === 0,
+  );
+}
+
+const sameTrigger = lintSpec(mustSpec(readFileSync("examples/order-conflict.ears.md", "utf8")));
+check("same trigger has no strengthen", sameTrigger.kind === "report");
+if (sameTrigger.kind === "report") {
+  const repairs = sameTrigger.report.conflicts[0].repairs;
+  let onlyDrops = repairs.length === 2;
+  for (let i = 0; i < repairs.length; i++) {
+    if (repairs[i].kind !== "drop") onlyDrops = false;
+  }
+  check("same trigger repairs are the two drops", onlyDrops && repairs[0].id === "R2" && repairs[1].id === "R3");
+}
+
+const boundRepair = lintSpec(
+  mustSpec(
+    'input length: Int 1..10 "How long." phrase "the length"\n' +
+      'output ok: Bool "Allowed." phrase "allow it" outcome "it was allowed" / "it was not allowed"\n\n' +
+      "R1 When the length is at least 1, the Desk shall allow it.\n" +
+      "R2 When the length is at least 5, the Desk shall not allow it.\n",
+  ),
+);
+check("int bound repair ran", boundRepair.kind === "report");
+if (boundRepair.kind === "report") {
+  const repairs = boundRepair.report.conflicts[0].repairs;
+  let saw = false;
+  let strengthenedR2 = false;
+  for (let i = 0; i < repairs.length; i++) {
+    if (repairs[i].kind === "strengthen" && repairs[i].id === "R1" && repairs[i].sentence.indexOf("less than 5") !== -1) saw = true;
+    if (repairs[i].kind === "strengthen" && repairs[i].id === "R2") strengthenedR2 = true;
+  }
+  check("int bound strengthens only the wider requirement", saw && !strengthenedR2);
+}
+
+const enumRepair = lintSpec(
+  mustSpec(
+    "enum Lane { fast, slow }\n" +
+      'input lane: Lane "Which lane." phrase "the lane"\n' +
+      'state ready: Bool "Ready." phrase "it is ready"\n' +
+      'output go: Bool "Go." phrase "allow it" outcome "it was allowed" / "it was not allowed"\n\n' +
+      "R1 When it is ready, the Desk shall allow it.\n" +
+      "R2 When it is ready and the lane is fast, the Desk shall not allow it.\n",
+  ),
+);
+check("enum repair ran", enumRepair.kind === "report");
+if (enumRepair.kind === "report") {
+  const repairs = enumRepair.report.conflicts[0].repairs;
+  let saw = false;
+  for (let i = 0; i < repairs.length; i++) {
+    if (repairs[i].kind === "strengthen" && repairs[i].id === "R1" && repairs[i].text.indexOf("the lane is slow") !== -1) saw = true;
+  }
+  check("enum equality strengthens the wider requirement", saw);
+}
+
+const openRepair = lintSpec(
+  mustSpec(
+    'state ready: Bool "Ready." phrase "it is ready"\n' +
+      'output go: Bool "Go." phrase "allow it" outcome "it was allowed" / "it was not allowed"\n\n' +
+      "R1 The Desk shall allow it.\n" +
+      "R2 When it is ready, the Desk shall not allow it.\n",
+  ),
+);
+check("ubiquitous repair ran", openRepair.kind === "report");
+if (openRepair.kind === "report") {
+  const repairs = openRepair.report.conflicts[0].repairs;
+  let saw = false;
+  for (let i = 0; i < repairs.length; i++) {
+    if (repairs[i].kind === "strengthen" && repairs[i].sentence === "When it is not ready, the Desk shall allow it.") saw = true;
+  }
+  check("ubiquitous repair adds a when clause", saw);
+}
+
+const orRepair = lintSpec(
+  mustSpec(
+    'state ready: Bool "Ready." phrase "it is ready"\n' +
+      'state open: Bool "Open." phrase "the desk is open"\n' +
+      'output go: Bool "Go." phrase "allow it" outcome "it was allowed" / "it was not allowed"\n\n' +
+      "R1 When it is ready or the desk is open, the Desk shall allow it.\n" +
+      "R2 When it is ready and the desk is open, the Desk shall not allow it.\n",
+  ),
+);
+check("or repair ran", orRepair.kind === "report");
+if (orRepair.kind === "report") {
+  const repairs = orRepair.report.conflicts[0].repairs;
+  let paren = false;
+  for (let i = 0; i < repairs.length; i++) {
+    if (repairs[i].kind === "strengthen" && repairs[i].sentence.indexOf("(it is ready or the desk is open)") !== -1) paren = true;
+  }
+  check("or repair parenthesizes the old condition", paren);
+}
 
 const soundnessSpecs = runSoundness();
 check("soundness specs", soundnessSpecs === 1010);

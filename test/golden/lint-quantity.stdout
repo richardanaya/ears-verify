@@ -29,3 +29,13 @@ Example scenario:
 This scenario keeps R4 and breaks R5.
 
 Suggested fix: ask which requirement should win. To keep R4, remove R5. To keep R5, remove R4.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R4
+One repair is to drop R4 and keep R5 as written.
+When an order is submitted, the Order System shall accept 12 units.
+
+repair drop R5
+One repair is to drop R5 and keep R4 as written.
+When an order is submitted, the Order System shall accept at most 10 units.

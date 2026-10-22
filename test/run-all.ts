@@ -161,6 +161,8 @@ function main(): void {
     { name: "emit-smt-json-usage", args: ["emit-smt", "--json"] },
     { name: "check-pass-json", args: ["check", "--json", "examples/order.ears.md", "--input", "examples/order-pass.json"] },
     { name: "lint-conflict", args: ["lint", "examples/order-conflict.ears.md"] },
+    { name: "lint-repair", args: ["lint", "examples/order-repair.ears.md"] },
+    { name: "lint-repair-json", args: ["lint", "--json", "examples/order-repair.ears.md"] },
     { name: "lint-conflict-json", args: ["lint", "--json", "examples/order-conflict.ears.md"] },
     { name: "lint-gap", args: ["lint", "examples/order.ears.md"] },
     { name: "lint-clean", args: ["lint", "examples/order-covered.ears.md"] },

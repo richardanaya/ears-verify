@@ -121,7 +121,33 @@
         "R1"
       ],
       "breaks": "R2",
-      "fix": "Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1."
+      "fix": "Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1.",
+      "repairs": [
+        {
+          "kind": "drop",
+          "id": "R1",
+          "text": "One repair is to drop R1 and keep R2 as written.",
+          "sentence": "While the copy is out on loan, when a member asks to take a copy home, the Fall Desk shall not allow the loan."
+        },
+        {
+          "kind": "drop",
+          "id": "R2",
+          "text": "One repair is to drop R2 and keep R1 as written.",
+          "sentence": "While the copy is in the building, when a member asks to take a copy home, the Fall Desk shall allow the loan."
+        },
+        {
+          "kind": "strengthen",
+          "id": "R1",
+          "text": "One repair is to add \"and the copy is not out on loan\" to the condition of R1. R2 stays as written.",
+          "sentence": "While the copy is in the building, when a member asks to take a copy home and the copy is not out on loan, the Fall Desk shall allow the loan."
+        },
+        {
+          "kind": "strengthen",
+          "id": "R2",
+          "text": "One repair is to add \"and the copy is not in the building\" to the condition of R2. R1 stays as written.",
+          "sentence": "While the copy is out on loan, when a member asks to take a copy home and the copy is not in the building, the Fall Desk shall not allow the loan."
+        }
+      ]
     },
     {
       "ids": [
@@ -242,7 +268,21 @@
         "R2"
       ],
       "breaks": "R3",
-      "fix": "Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2."
+      "fix": "Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2.",
+      "repairs": [
+        {
+          "kind": "drop",
+          "id": "R2",
+          "text": "One repair is to drop R2 and keep R3 as written.",
+          "sentence": "While the copy is out on loan, when a member asks to take a copy home, the Fall Desk shall allow the loan."
+        },
+        {
+          "kind": "drop",
+          "id": "R3",
+          "text": "One repair is to drop R3 and keep R2 as written.",
+          "sentence": "While the copy is out on loan, when a member asks to take a copy home, the Fall Desk shall not allow the loan."
+        }
+      ]
     },
     {
       "ids": [
@@ -363,7 +403,21 @@
         "R5"
       ],
       "breaks": "R6",
-      "fix": "Suggested fix: ask which requirement should win. To keep R5, remove R6. To keep R6, remove R5."
+      "fix": "Suggested fix: ask which requirement should win. To keep R5, remove R6. To keep R6, remove R5.",
+      "repairs": [
+        {
+          "kind": "drop",
+          "id": "R5",
+          "text": "One repair is to drop R5 and keep R6 as written.",
+          "sentence": "While a fine is owed, when a member asks to renew a copy, the Fall Desk shall allow the renewal."
+        },
+        {
+          "kind": "drop",
+          "id": "R6",
+          "text": "One repair is to drop R6 and keep R5 as written.",
+          "sentence": "While a fine is owed, when a member asks to renew a copy, the Fall Desk shall not allow the renewal."
+        }
+      ]
     }
   ],
   "gaps": [
