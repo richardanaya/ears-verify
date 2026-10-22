@@ -29,3 +29,13 @@ Example scenario:
 This scenario keeps R2 and breaks R3.
 
 Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R2
+One repair is to drop R2 and keep R3 as written.
+When an order is submitted, the Order System shall not fulfill the order.
+
+repair drop R3
+One repair is to drop R3 and keep R2 as written.
+When an order is submitted, the Order System shall fulfill the order.

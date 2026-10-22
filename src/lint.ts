@@ -3,11 +3,12 @@
  * error conditions with no response, EARS pattern mistakes, words a test
  * cannot pin down, conditions that can never be true, and schema the
  * requirements never use. Contradiction reports name the smallest set, the
- * situation, an example, and a fix that does not pick a winner.
+ * situation, an example, and candidate repairs that do not pick a winner.
  */
 
 import { describeAssignment, displayCode, isDriver, literalShown, reportBool, requirementMentions, speakBound, termMentions, type Requirement, type Spec, type SymbolDecl, type Term } from "./spec.ts";
 import { satisfiable } from "./decide.ts";
+import { conflictKey, findRepairs, type Repair } from "./repair.ts";
 import { bestGap, conflictingSets, modelFor, redundantFlags, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
 import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, termsEqual, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 import { displayQuote, englishList, formatInt, pastVoice } from "./text.ts";
@@ -60,6 +61,7 @@ export interface Conflict {
   clash: string;
   fix: string;
   keepsSentence: string;
+  repairs: Repair[];
 }
 
 export interface Gap {
@@ -138,8 +140,10 @@ export function lintSpec(spec: Spec): LintOutcome {
   }
   const conflicts: Conflict[] = [];
   const groups = conflictingSets(spec);
+  const originalKeys: string[] = [];
+  for (let i = 0; i < groups.length; i++) originalKeys.push(conflictKey(spec, groups[i].indexes));
   const earlier = earlierDuplicate(spec);
-  for (let i = 0; i < groups.length; i++) conflicts.push(explainConflict(spec, groups[i]));
+  for (let i = 0; i < groups.length; i++) conflicts.push(explainConflict(spec, groups[i], originalKeys));
   const gaps: Gap[] = [];
   for (let i = 0; i < spec.symbols.length; i++) {
     if (isDriver(spec.symbols[i])) continue;
@@ -418,7 +422,7 @@ function explainUnhandled(spec: Spec, index: number): Gap {
   };
 }
 
-function explainConflict(spec: Spec, group: ConflictGroup): Conflict {
+function explainConflict(spec: Spec, group: ConflictGroup, originalKeys: string[]): Conflict {
   const ids: string[] = [];
   const lines: number[] = [];
   const sentences: string[] = [];
@@ -462,6 +466,7 @@ function explainConflict(spec: Spec, group: ConflictGroup): Conflict {
   const summary = summaryText(ids, group.minimal);
   const clash = clashText(spec, everySituation, situationPairs);
   const fix = fixText(ids, group.minimal);
+  const repairs = findRepairs(spec, group.indexes, originalKeys);
   return {
     ids: ids,
     lines: lines,
@@ -478,6 +483,7 @@ function explainConflict(spec: Spec, group: ConflictGroup): Conflict {
     clash: clash,
     fix: fix,
     keepsSentence: keepsSentence,
+    repairs: repairs,
   };
 }
 
@@ -1020,6 +1026,7 @@ export function formatLintText(specPath: string, report: LintReport): string {
     }
     lines.push("");
     lines.push(conflict.fix);
+    pushRepairLines(lines, conflict.repairs);
   }
   for (let i = 0; i < report.gaps.length; i++) {
     lines.push("");
@@ -1099,6 +1106,7 @@ export function formatLintJson(specPath: string, report: LintReport): string {
       keeps: item.keeps,
       breaks: item.breaks,
       fix: item.fix,
+      repairs: repairJson(item.repairs),
     });
   }
   const gaps = [];
@@ -1167,6 +1175,40 @@ export function formatLintJson(specPath: string, report: LintReport): string {
     null,
     2,
   );
+}
+
+function repairJson(repairs: Repair[]): { kind: string; id: string; text: string; sentence: string }[] {
+  const out: { kind: string; id: string; text: string; sentence: string }[] = [];
+  for (let i = 0; i < repairs.length; i++) {
+    const item = repairs[i];
+    out.push({ kind: item.kind, id: item.id, text: item.text, sentence: item.sentence });
+  }
+  return out;
+}
+
+function pushRepairLines(lines: string[], repairs: Repair[]): void {
+  if (repairs.length === 0) return;
+  lines.push("");
+  lines.push("Candidate repairs follow. This report does not choose one.");
+  for (let i = 0; i < repairs.length; i++) {
+    const item = repairs[i];
+    lines.push("");
+    lines.push("repair " + item.kind + " " + item.id);
+    lines.push(item.text);
+    pushPlainLines(lines, item.sentence);
+  }
+}
+
+function pushPlainLines(lines: string[], sentence: string): void {
+  if (sentence.length === 0) return;
+  let start = 0;
+  for (let i = 0; i <= sentence.length; i++) {
+    if (i === sentence.length || sentence.charCodeAt(i) === 10) {
+      const part = sentence.slice(start, i);
+      if (part.length > 0) lines.push(part);
+      start = i + 1;
+    }
+  }
 }
 
 function brace(ids: string[]): string {

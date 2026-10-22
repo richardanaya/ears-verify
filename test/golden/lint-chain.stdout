@@ -33,3 +33,24 @@ Example scenario:
 This scenario keeps R1 and R2 and breaks R3.
 
 Suggested fix: ask which requirement should win. Removing any one of R1, R2, and R3 leaves the rest consistent.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R1
+One repair is to drop R1 and keep R2 and R3 as written.
+When the order is accepted, the Order System shall ship the order.
+When an order is submitted, the Order System shall not ship the order.
+
+repair drop R2
+One repair is to drop R2 and keep R1 and R3 as written.
+When an order is submitted, the Order System shall accept the order.
+When an order is submitted, the Order System shall not ship the order.
+
+repair drop R3
+One repair is to drop R3 and keep R1 and R2 as written.
+When an order is submitted, the Order System shall accept the order.
+When the order is accepted, the Order System shall ship the order.
+
+repair strengthen R2
+One repair is to add "and an order is not submitted" to the condition of R2. R1 and R3 stay as written.
+When the order is accepted and an order is not submitted, the Order System shall ship the order.

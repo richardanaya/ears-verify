@@ -13,6 +13,8 @@ A product plan goes in as plain English. A list of its logical problems comes ou
 
 Lint names redundancy on the requirements that are not part of any conflict. `R11` repeats `R10`, and neither requirement is in a conflict, so lint reports `R11` itself. The report still explains that `R11` only repeats `R10` in a stricter situation. It does not delete `R11`. A requirement whose condition can never be true stays vacuous only. `R9` is not also called redundant.
 
+For each conflict the report asks which requirement should win, then lists candidate repairs and does not choose one. A repair drops one requirement in the conflicting set, or adds one Bool, enum equality, or integer bound to one requirement's condition. A suggestion is shown only after lint on the patched spec no longer has that conflict and has no new one. `R1` and `R2` can be separated by adding "and the copy is not out on loan" to `R1`, or "and the copy is not in the building" to `R2`. `R2` against `R3`, and `R5` against `R6`, share a condition, so the only candidates are to drop one of the two.
+
 The recorded spec also has findings that were not planted. `R1` and `R2` contradict when the copy is both in the building and out on loan, because those two states are independent. `loan_allowed` is uncovered when a member asks and the copy is neither in the building nor out on loan. `renewal_allowed` is uncovered when nobody asks to renew. `R4` and `R12` negate a trigger with "When not …". Lint flags each one as wording kind `negation` and asks for a positive condition, such as "When a non-member asks", or a positive event.
 
 ## Live command

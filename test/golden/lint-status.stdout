@@ -29,6 +29,16 @@ This scenario keeps R6 and breaks R7.
 
 Suggested fix: ask which requirement should win. To keep R6, remove R7. To keep R7, remove R6.
 
+Candidate repairs follow. This report does not choose one.
+
+repair drop R6
+One repair is to drop R6 and keep R7 as written.
+The Order System shall mark the order cancelled.
+
+repair drop R7
+One repair is to drop R7 and keep R6 as written.
+The Order System shall mark the order shipped.
+
 unused Status.placed
 Status.placed is never mentioned.
 Suggested fix: use placed in a requirement, or remove it from Status.

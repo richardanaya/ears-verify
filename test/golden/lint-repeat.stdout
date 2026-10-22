@@ -32,6 +32,16 @@ This scenario keeps R1 and breaks R2.
 
 Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1.
 
+Candidate repairs follow. This report does not choose one.
+
+repair drop R1
+One repair is to drop R1 and keep R2 as written.
+When an order is submitted, the Order System shall not fulfill the order.
+
+repair drop R2
+One repair is to drop R2 and keep R1 as written.
+When an order is submitted, the Order System shall fulfill the order.
+
 redundant R5 line 12
 R5 adds nothing. Whenever the requirements outside a conflict hold, R5 holds too.
 When an order is submitted and inventory is available, the Order System shall close the order.

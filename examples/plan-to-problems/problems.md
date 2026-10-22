@@ -19,6 +19,20 @@ R2 requires that the loan was not allowed.
 
 Which requirement should win? To keep R1, remove R2. To keep R2, remove R1. This report does not choose.
 
+Candidate repairs follow. This report does not choose one.
+
+One repair is to drop R1 and keep R2 as written.
+"While the copy is out on loan, when a member asks to take a copy home, the Fall Desk shall not allow the loan."
+
+One repair is to drop R2 and keep R1 as written.
+"While the copy is in the building, when a member asks to take a copy home, the Fall Desk shall allow the loan."
+
+One repair is to add "and the copy is not out on loan" to the condition of R1. R2 stays as written.
+"While the copy is in the building, when a member asks to take a copy home and the copy is not out on loan, the Fall Desk shall allow the loan."
+
+One repair is to add "and the copy is not in the building" to the condition of R2. R1 stays as written.
+"While the copy is out on loan, when a member asks to take a copy home and the copy is not in the building, the Fall Desk shall not allow the loan."
+
 ## 2. R2 and R3 cannot both hold.
 
 They clash when a member asks to take a copy home, not a member asks to renew a copy, not a member brings a copy back, the copy was not in the building, the copy was out on loan, a fine was not owed, the loan was not overdue, and the loan length was 1.
@@ -34,6 +48,14 @@ R3 requires that the loan was allowed.
 
 Which requirement should win? To keep R2, remove R3. To keep R3, remove R2. This report does not choose.
 
+Candidate repairs follow. This report does not choose one.
+
+One repair is to drop R2 and keep R3 as written.
+"While the copy is out on loan, when a member asks to take a copy home, the Fall Desk shall allow the loan."
+
+One repair is to drop R3 and keep R2 as written.
+"While the copy is out on loan, when a member asks to take a copy home, the Fall Desk shall not allow the loan."
+
 ## 3. R5 and R6 cannot both hold.
 
 They clash when not a member asks to take a copy home, a member asks to renew a copy, not a member brings a copy back, the copy was not in the building, the copy was not out on loan, a fine was owed, the loan was not overdue, and the loan length was 1.
@@ -48,6 +70,14 @@ R5 requires that the renewal was not allowed.
 R6 requires that the renewal was allowed.
 
 Which requirement should win? To keep R5, remove R6. To keep R6, remove R5. This report does not choose.
+
+Candidate repairs follow. This report does not choose one.
+
+One repair is to drop R5 and keep R6 as written.
+"While a fine is owed, when a member asks to renew a copy, the Fall Desk shall allow the renewal."
+
+One repair is to drop R6 and keep R5 as written.
+"While a fine is owed, when a member asks to renew a copy, the Fall Desk shall not allow the renewal."
 
 ## 4. Nothing covers allow the loan (loan_allowed)
 

@@ -1,0 +1,127 @@
+{
+  "ok": false,
+  "spec": "examples/order-repair.ears.md",
+  "conflicts": [
+    {
+      "ids": [
+        "R1",
+        "R2"
+      ],
+      "minimal": true,
+      "everySituation": false,
+      "summary": "R1 and R2 cannot both hold.",
+      "clash": "They clash when the copy was in the building, the copy was out on loan, and a member asks to take a copy home.",
+      "requirements": [
+        {
+          "id": "R1",
+          "line": 8,
+          "sentence": "While the copy is in the building, when a member asks to take a copy home, the Desk shall allow the loan."
+        },
+        {
+          "id": "R2",
+          "line": 9,
+          "sentence": "While the copy is out on loan, when a member asks to take a copy home, the Desk shall not allow the loan."
+        }
+      ],
+      "situation": [
+        {
+          "name": "copy_in_building",
+          "value": "true"
+        },
+        {
+          "name": "copy_on_loan",
+          "value": "true"
+        },
+        {
+          "name": "borrow_requested",
+          "value": "true"
+        }
+      ],
+      "requires": [
+        {
+          "id": "R1",
+          "text": "that the loan was allowed"
+        },
+        {
+          "id": "R2",
+          "text": "that the loan was not allowed"
+        }
+      ],
+      "example": [
+        {
+          "name": "copy_in_building",
+          "value": "true"
+        },
+        {
+          "name": "copy_on_loan",
+          "value": "true"
+        },
+        {
+          "name": "borrow_requested",
+          "value": "true"
+        },
+        {
+          "name": "loan_allowed",
+          "value": "true"
+        }
+      ],
+      "keeps": [
+        "R1"
+      ],
+      "breaks": "R2",
+      "fix": "Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1.",
+      "repairs": [
+        {
+          "kind": "drop",
+          "id": "R1",
+          "text": "One repair is to drop R1 and keep R2 as written.",
+          "sentence": "While the copy is out on loan, when a member asks to take a copy home, the Desk shall not allow the loan."
+        },
+        {
+          "kind": "drop",
+          "id": "R2",
+          "text": "One repair is to drop R2 and keep R1 as written.",
+          "sentence": "While the copy is in the building, when a member asks to take a copy home, the Desk shall allow the loan."
+        },
+        {
+          "kind": "strengthen",
+          "id": "R1",
+          "text": "One repair is to add \"and the copy is not out on loan\" to the condition of R1. R2 stays as written.",
+          "sentence": "While the copy is in the building, when a member asks to take a copy home and the copy is not out on loan, the Desk shall allow the loan."
+        },
+        {
+          "kind": "strengthen",
+          "id": "R2",
+          "text": "One repair is to add \"and the copy is not in the building\" to the condition of R2. R1 stays as written.",
+          "sentence": "While the copy is out on loan, when a member asks to take a copy home and the copy is not in the building, the Desk shall not allow the loan."
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "output": "loan_allowed",
+      "situation": [
+        {
+          "name": "copy_in_building",
+          "value": "true"
+        },
+        {
+          "name": "copy_on_loan",
+          "value": "true"
+        },
+        {
+          "name": "borrow_requested",
+          "value": "false"
+        }
+      ],
+      "text": "Nothing says whether the loan was allowed when the copy was in the building, the copy was out on loan, and not a member asks to take a copy home. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response."
+    }
+  ],
+  "misuse": [],
+  "wording": [],
+  "redundant": [],
+  "duplicate": [],
+  "vacuous": [],
+  "unused": []
+}

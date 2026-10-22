@@ -48,6 +48,43 @@ This scenario keeps R8 and R12 and breaks R14.
 
 Suggested fix: ask which requirement should win. Removing any one of R8, R12, and R14 leaves the rest consistent.
 
+Candidate repairs follow. This report does not choose one.
+
+repair drop R8
+One repair is to drop R8 and keep R12 and R14 as written.
+When the subscription is started, the Checkout shall route the order to the fulfill lane.
+When the customer is subscribing, the Checkout shall route the order to the hold lane.
+
+repair drop R12
+One repair is to drop R12 and keep R8 and R14 as written.
+When the customer is subscribing and the customer is not cancelling and the customer is signed in, the Checkout shall start the subscription.
+When the customer is subscribing, the Checkout shall route the order to the hold lane.
+
+repair drop R14
+One repair is to drop R14 and keep R8 and R12 as written.
+When the customer is subscribing and the customer is not cancelling and the customer is signed in, the Checkout shall start the subscription.
+When the subscription is started, the Checkout shall route the order to the fulfill lane.
+
+repair strengthen R12
+One repair is to add "and the customer is not subscribing" to the condition of R12. R8 and R14 stay as written.
+When the subscription is started and the customer is not subscribing, the Checkout shall route the order to the fulfill lane.
+
+repair strengthen R12
+One repair is to add "and the customer is cancelling" to the condition of R12. R8 and R14 stay as written.
+When the subscription is started and the customer is cancelling, the Checkout shall route the order to the fulfill lane.
+
+repair strengthen R12
+One repair is to add "and the customer is not signed in" to the condition of R12. R8 and R14 stay as written.
+When the subscription is started and the customer is not signed in, the Checkout shall route the order to the fulfill lane.
+
+repair strengthen R14
+One repair is to add "and the customer is cancelling" to the condition of R14. R8 and R12 stay as written.
+When the customer is subscribing and the customer is cancelling, the Checkout shall route the order to the hold lane.
+
+repair strengthen R14
+One repair is to add "and the customer is not signed in" to the condition of R14. R8 and R12 stay as written.
+When the customer is subscribing and the customer is not signed in, the Checkout shall route the order to the hold lane.
+
 conflict {R1, R4}
 R1 and R4 cannot both hold.
 
@@ -85,6 +122,16 @@ This scenario keeps R1 and breaks R4.
 
 Suggested fix: ask which requirement should win. To keep R1, remove R4. To keep R4, remove R1.
 
+Candidate repairs follow. This report does not choose one.
+
+repair drop R1
+One repair is to drop R1 and keep R4 as written.
+When payment is submitted and the address is confirmed, the Checkout shall not accept the order.
+
+repair drop R4
+One repair is to drop R4 and keep R1 as written.
+When payment is submitted and the address is confirmed, the Checkout shall accept the order.
+
 conflict {R15, R16}
 R15 and R16 cannot both hold.
 
@@ -121,6 +168,16 @@ Example scenario:
 This scenario keeps R15 and breaks R16.
 
 Suggested fix: ask which requirement should win. To keep R15, remove R16. To keep R16, remove R15.
+
+Candidate repairs follow. This report does not choose one.
+
+repair drop R15
+One repair is to drop R15 and keep R16 as written.
+When checkout is started and stock is available, the Checkout shall bill 3 seats.
+
+repair drop R16
+One repair is to drop R16 and keep R15 as written.
+When checkout is started and stock is available, the Checkout shall bill at most 2 seats.
 
 gap receipt_sent
 Nothing says whether a receipt was sent when the cart was open, an item was added, checkout was started, payment was submitted, payment was declined, the address was not confirmed, the customer was subscribing, the customer was cancelling, the customer was signed in, a card was saved, and stock was available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
