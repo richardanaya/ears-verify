@@ -1,8 +1,8 @@
 usage:
-  spec-verify check [--json] <spec> --input <scenario>
-  spec-verify emit-smt [--json] <spec>
-  spec-verify lint [--json] <spec>
-  spec-verify report <spec>
-  spec-verify scenarios [--json] <spec>
-  spec-verify policy [--json] <spec> [--property <file>]
-  spec-verify help
+  plan-verify check [--json] <spec> --input <scenario>
+  plan-verify emit-smt [--json] <spec>
+  plan-verify lint [--json] <spec>
+  plan-verify report <spec>
+  plan-verify scenarios [--json] <spec>
+  plan-verify policy [--json] <spec> [--property <file>]
+  plan-verify help

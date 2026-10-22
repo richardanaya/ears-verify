@@ -54,7 +54,7 @@ async function main() {
 function taskText(plan) {
   return (
     "You have no tools and cannot run the CLI. Do not describe what you will do. " +
-    "Translate the plan below into ONE complete spec-verify spec file (schema declarations plus EARS requirements) exactly as the skill describes. " +
+    "Translate the plan below into ONE complete plan-verify spec file (schema declarations plus EARS requirements) exactly as the skill describes. " +
     "Translate every rule in the plan faithfully, even rules that contradict each other or look wrong; do not fix, drop, merge or resolve anything, because the verifier must find the problems. " +
     "Reply with only the spec file inside a single fenced code block.\n\nPlan:\n" +
     plan

@@ -1,4 +1,4 @@
 {
   "ok": false,
-  "error": "usage: spec-verify emit-smt [--json] <spec>"
+  "error": "usage: plan-verify emit-smt [--json] <spec>"
 }
