@@ -408,6 +408,67 @@ check(
 );
 check("reserved name phrase", parseMessage('event phrase: Bool "Nope."\n') === '1: "phrase" is a reserved word');
 
+const unhandled = lintSpec(mustSpec(readFileSync("examples/order-unhandled.ears.md", "utf8")));
+check("unhandled ran", unhandled.kind === "report");
+if (unhandled.kind === "report") {
+  check("unhandled only that event", unhandled.report.gaps.length === 1 && unhandled.report.conflicts.length === 0);
+  check("unhandled output", unhandled.report.gaps[0].output === "order_cancelled");
+  check(
+    "unhandled text",
+    unhandled.report.gaps[0].text ===
+      'No requirement handles "an order is cancelled". Suggested fix: add a requirement that says what the system shall do, or remove the event.',
+  );
+}
+const bareEvent = lintSpec(mustSpec('event ping: Bool "Ping."\noutput done: Bool "Done."\n\nR1 The Box shall done.\n'));
+check(
+  "unhandled name",
+  bareEvent.kind === "report" &&
+    bareEvent.report.gaps.length === 1 &&
+    bareEvent.report.gaps[0].output === "ping" &&
+    bareEvent.report.gaps[0].text.indexOf("No requirement handles ping.") === 0,
+);
+
+const unanswered = lintSpec(mustSpec(readFileSync("examples/order-unanswered.ears.md", "utf8")));
+check("unanswered ran", unanswered.kind === "report");
+if (unanswered.kind === "report") {
+  check("unanswered gap", unanswered.report.gaps.length === 1 && unanswered.report.gaps[0].output === "payment_declined");
+  check(
+    "unanswered text",
+    unanswered.report.gaps[0].text ===
+      'No requirement states a response when "payment fails". Suggested fix: add an if ... then requirement, and ask what the system shall do. Do not choose the response.',
+  );
+}
+
+const vague = lintSpec(mustSpec(readFileSync("examples/order-vague.ears.md", "utf8")));
+check("vague ran", vague.kind === "report");
+if (vague.kind === "report") {
+  check("vague count", vague.report.wording.length === 3 && vague.report.gaps.length === 0);
+  check("vague fast", vague.report.wording[0].word === "fast" && vague.report.wording[0].kind === "vague");
+  check("vague appropriate", vague.report.wording[1].word === "appropriate");
+  check("vague friendly", vague.report.wording[2].word === "user-friendly");
+}
+
+const quantityLint = lintSpec(mustSpec(readFileSync("examples/order-quantity.ears.md", "utf8")));
+check("quantity ran", quantityLint.kind === "report");
+if (quantityLint.kind === "report") {
+  const item = quantityLint.report.conflicts[0];
+  check("quantity ids", quantityLint.report.conflicts.length === 1 && quantityLint.report.gaps.length === 0 && item.ids[0] === "R4" && item.ids[1] === "R5");
+  check("quantity not every", item.everySituation === false);
+  check("quantity requires", item.requires[0].value === "the quantity is at most 10" && item.requires[1].value === "the quantity is 12");
+  check("quantity example", item.example.length === 2 && item.example[1].name === "quantity" && item.example[1].value === "0");
+  check("quantity keeps", item.keeps.length === 1 && item.keeps[0] === "R4" && item.breaks === "R5");
+}
+
+const statusLint = lintSpec(mustSpec(readFileSync("examples/order-status.ears.md", "utf8")));
+check("status ran", statusLint.kind === "report");
+if (statusLint.kind === "report") {
+  const item = statusLint.report.conflicts[0];
+  check("status ids", item.ids[0] === "R6" && item.ids[1] === "R7");
+  check("status every", item.everySituation === true);
+  check("status requires", item.requires[0].value === "the status is shipped" && item.requires[1].value === "the status is cancelled");
+  check("status example", item.example.length === 1 && item.example[0].value === "shipped");
+}
+
 const hyphen = mustSpec('event ready: Bool "Ready." phrase "user-friendly checkout"\n\nR1 The Box shall user-friendly checkout.\n');
 check("hyphen phrase", formatTerm(hyphen.requirements[0].consequent) === "user-friendly checkout");
 

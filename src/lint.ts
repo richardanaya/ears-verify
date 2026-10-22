@@ -1,10 +1,11 @@
 /**
- * Lint a spec for contradictions, uncovered outputs, EARS pattern mistakes,
- * and words a test cannot pin down. Contradiction reports name the smallest
- * set, the situation, an example, and a fix that does not pick a winner.
+ * Lint a spec for contradictions, uncovered outputs, events nobody handles,
+ * error conditions with no response, EARS pattern mistakes, and words a test
+ * cannot pin down. Contradiction reports name the smallest set, the situation,
+ * an example, and a fix that does not pick a winner.
  */
 
-import { describeAssignment, displayCode, isDriver, type Spec } from "./spec.ts";
+import { describeAssignment, displayCode, isDriver, requirementMentions, type Spec } from "./spec.ts";
 import { bestGap, conflictingSets, modelFor, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
 import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 import { displayQuote, englishList, formatInt } from "./text.ts";
@@ -106,7 +107,42 @@ export function lintSpec(spec: Spec): LintOutcome {
     if (situation === null) continue;
     gaps.push(explainGap(spec, i, situation));
   }
+  for (let i = 0; i < spec.symbols.length; i++) {
+    if (spec.symbols[i].role !== "event") continue;
+    if (eventMentioned(spec, i)) continue;
+    gaps.push(explainUnhandled(spec, i));
+  }
   return { kind: "report", report: { conflicts: conflicts, gaps: gaps, misuse: findMisuse(spec), wording: findWording(spec) } };
+}
+
+function eventMentioned(spec: Spec, index: number): boolean {
+  for (let r = 0; r < spec.requirements.length; r++) {
+    if (requirementMentions(spec.requirements[r], index)) return true;
+  }
+  return false;
+}
+
+function explainUnhandled(spec: Spec, index: number): Gap {
+  const sym = spec.symbols[index];
+  const label = sym.phrase.length > 0 ? displayQuote(sym.phrase) : sym.name;
+  if (sym.unwanted) {
+    return {
+      output: sym.name,
+      situation: [],
+      text:
+        "No requirement states a response when " +
+        label +
+        ". Suggested fix: add an if ... then requirement, and ask what the system shall do. Do not choose the response.",
+    };
+  }
+  return {
+    output: sym.name,
+    situation: [],
+    text:
+      "No requirement handles " +
+      label +
+      ". Suggested fix: add a requirement that says what the system shall do, or remove the event.",
+  };
 }
 
 function explainConflict(spec: Spec, group: ConflictGroup): Conflict {

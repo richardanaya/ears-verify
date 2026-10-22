@@ -223,6 +223,153 @@ error: search space has more than 250000 assignments. Narrow the integer ranges 
 
 There are no strings in the logic. Descriptions and phrases stay next to the names. Vague words (`quickly`, `appropriate`, `user-friendly`) and solution words (`database`, `api`, `microservice`) are caught in descriptions and in requirement sentences.
 
+Lint also reports an event no requirement handles, an error condition with no response, an unwanted event written with `when`, and vague words. An integer cap can clash with a larger accepted quantity, and an enum can be pinned to two variants at once. The fix still asks which requirement should win.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-unhandled.ears.md
+-->
+```text
+spec: examples/order-unhandled.ears.md
+conflicts: 0
+gaps: 1
+misuse: 0
+wording: 0
+
+gap order_cancelled
+No requirement handles "an order is cancelled". Suggested fix: add a requirement that says what the system shall do, or remove the event.
+```
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-unanswered.ears.md
+-->
+```text
+spec: examples/order-unanswered.ears.md
+conflicts: 0
+gaps: 1
+misuse: 0
+wording: 0
+
+gap payment_declined
+No requirement states a response when "payment fails". Suggested fix: add an if ... then requirement, and ask what the system shall do. Do not choose the response.
+```
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-misuse.ears.md
+-->
+```text
+spec: examples/order-misuse.ears.md
+conflicts: 0
+gaps: 0
+misuse: 1
+wording: 0
+
+misuse R4 line 6
+"payment fails" is an unwanted event. Write if ... then, not when.
+When payment fails, the Order System shall reject the order.
+```
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-vague.ears.md
+-->
+```text
+spec: examples/order-vague.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 3
+
+wording line 4
+"fast" is too vague to test. Replace it with something a scenario can check.
+output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order"
+
+wording line 4
+"appropriate" is too vague to test. Replace it with something a scenario can check.
+output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order"
+
+wording line 4
+"user-friendly" is too vague to test. Replace it with something a scenario can check.
+output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order"
+```
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-quantity.ears.md
+-->
+```text
+spec: examples/order-quantity.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+
+conflict {R4, R5}
+R4 and R5 cannot both hold.
+
+R4 line 7
+When an order is submitted, the Order System shall the quantity is at most 10.
+
+R5 line 8
+When an order is submitted, the Order System shall the quantity is 12.
+
+They clash when an order is submitted.
+R4 requires the quantity is at most 10.
+R5 requires the quantity is 12.
+
+Example scenario:
+{
+  "order_submitted": true,
+  "quantity": 0
+}
+This scenario keeps R4 and breaks R5.
+
+Suggested fix: ask which requirement should win. To keep R4, remove R5. To keep R5, remove R4.
+```
+
+R4 says a submitted order accepts at most 10 units. R5 says that same order accepts exactly 12. The example keeps R4 with a quantity of 0 only because that is the first value that satisfies R4. It is a witness, and it is not a recommendation.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-status.ears.md
+-->
+```text
+spec: examples/order-status.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+
+conflict {R6, R7}
+R6 and R7 cannot both hold.
+
+R6 line 6
+The Order System shall the status is shipped.
+
+R7 line 7
+The Order System shall the status is cancelled.
+
+They clash in every situation.
+R6 requires the status is shipped.
+R7 requires the status is cancelled.
+
+Example scenario:
+{
+  "status": "shipped"
+}
+This scenario keeps R6 and breaks R7.
+
+Suggested fix: ask which requirement should win. To keep R6, remove R7. To keep R7, remove R6.
+```
+
 ## Where this comes from
 
 The shape of the analysis follows Kiro's requirements analysis: separate behavior from design, and look for what the requirements refuse to allow.

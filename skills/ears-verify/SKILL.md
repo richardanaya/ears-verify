@@ -354,6 +354,152 @@ wording line 5
 state saved: Bool "Store the order in the database." phrase "the order is saved"
 ```
 
+## An event nobody handles
+
+`examples/order-unhandled.ears.md` declares "an order is cancelled" and never says what the system shall do. Tell the PM, and ask them to add the requirement or drop the event. Do not invent the response.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-unhandled.ears.md
+-->
+```text
+spec: examples/order-unhandled.ears.md
+conflicts: 0
+gaps: 1
+misuse: 0
+wording: 0
+
+gap order_cancelled
+No requirement handles "an order is cancelled". Suggested fix: add a requirement that says what the system shall do, or remove the event.
+```
+
+## An error condition with no response
+
+`examples/order-unanswered.ears.md` declares "payment fails" and no `if` ... `then` says what happens. Ask what the system shall do. Do not choose.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-unanswered.ears.md
+-->
+```text
+spec: examples/order-unanswered.ears.md
+conflicts: 0
+gaps: 1
+misuse: 0
+wording: 0
+
+gap payment_declined
+No requirement states a response when "payment fails". Suggested fix: add an if ... then requirement, and ask what the system shall do. Do not choose the response.
+```
+
+## Vague: fast, appropriate, user-friendly
+
+`examples/order-vague.ears.md` describes the checkout as fast, appropriate, and user-friendly. Each word is a separate finding. Ask what a scenario can check instead.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-vague.ears.md
+-->
+```text
+spec: examples/order-vague.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 3
+
+wording line 4
+"fast" is too vague to test. Replace it with something a scenario can check.
+output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order"
+
+wording line 4
+"appropriate" is too vague to test. Replace it with something a scenario can check.
+output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order"
+
+wording line 4
+"user-friendly" is too vague to test. Replace it with something a scenario can check.
+output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order"
+```
+
+## Integer clash
+
+`examples/order-quantity.ears.md` says a submitted order accepts at most 10 units, and also that it accepts exactly 12. Show both sentences, the situation, and the example. The example quantity is 0 because that is the first value that keeps R4. Ask which requirement should win.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-quantity.ears.md
+-->
+```text
+spec: examples/order-quantity.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+
+conflict {R4, R5}
+R4 and R5 cannot both hold.
+
+R4 line 7
+When an order is submitted, the Order System shall the quantity is at most 10.
+
+R5 line 8
+When an order is submitted, the Order System shall the quantity is 12.
+
+They clash when an order is submitted.
+R4 requires the quantity is at most 10.
+R5 requires the quantity is 12.
+
+Example scenario:
+{
+  "order_submitted": true,
+  "quantity": 0
+}
+This scenario keeps R4 and breaks R5.
+
+Suggested fix: ask which requirement should win. To keep R4, remove R5. To keep R5, remove R4.
+```
+
+## Enum clash
+
+`examples/order-status.ears.md` requires the status to be shipped and cancelled. They clash in every situation. Ask which requirement should win.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-status.ears.md
+-->
+```text
+spec: examples/order-status.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+
+conflict {R6, R7}
+R6 and R7 cannot both hold.
+
+R6 line 6
+The Order System shall the status is shipped.
+
+R7 line 7
+The Order System shall the status is cancelled.
+
+They clash in every situation.
+R6 requires the status is shipped.
+R7 requires the status is cancelled.
+
+Example scenario:
+{
+  "status": "shipped"
+}
+This scenario keeps R6 and breaks R7.
+
+Suggested fix: ask which requirement should win. To keep R6, remove R7. To keep R7, remove R6.
+```
+
 ## policy is planned
 
 `policy` will search for a scenario that breaks a property stated apart from the requirements. The command exists so the workflow has a place to call it. This is the whole behavior today:

@@ -1,0 +1,26 @@
+spec: examples/order-status.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+
+conflict {R6, R7}
+R6 and R7 cannot both hold.
+
+R6 line 6
+The Order System shall the status is shipped.
+
+R7 line 7
+The Order System shall the status is cancelled.
+
+They clash in every situation.
+R6 requires the status is shipped.
+R7 requires the status is cancelled.
+
+Example scenario:
+{
+  "status": "shipped"
+}
+This scenario keeps R6 and breaks R7.
+
+Suggested fix: ask which requirement should win. To keep R6, remove R7. To keep R7, remove R6.
