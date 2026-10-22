@@ -1,5 +1,5 @@
 /**
- * ears-verify command line.
+ * spec-verify command line.
  * User arguments start at process.argv index 2 under both Node and ScriptC.
  */
 
@@ -117,7 +117,7 @@ function commandCheck(args: string[]): void {
   const flags = parseFlags(args, true, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
   if (flags.positionals.length !== 1 || flags.input.length === 0) {
-    fail(flags.json, "usage: ears-verify check [--json] <spec> --input <scenario>");
+    fail(flags.json, "usage: spec-verify check [--json] <spec> --input <scenario>");
   }
   const specPath = flags.positionals[0];
   const scenarioPath = flags.input;
@@ -141,7 +141,7 @@ function commandCheck(args: string[]): void {
 function commandEmit(args: string[]): void {
   const flags = parseFlags(args, false, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
-  if (flags.positionals.length !== 1) fail(flags.json, "usage: ears-verify emit-smt [--json] <spec>");
+  if (flags.positionals.length !== 1) fail(flags.json, "usage: spec-verify emit-smt [--json] <spec>");
   const specPath = flags.positionals[0];
   const specText = readText(specPath);
   if (specText === null) fail(flags.json, "cannot read " + specPath);
@@ -156,7 +156,7 @@ function commandEmit(args: string[]): void {
 function commandLint(args: string[]): void {
   const flags = parseFlags(args, false, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
-  if (flags.input.length > 0 || flags.positionals.length !== 1) fail(flags.json, "usage: ears-verify lint [--json] <spec>");
+  if (flags.input.length > 0 || flags.positionals.length !== 1) fail(flags.json, "usage: spec-verify lint [--json] <spec>");
   const specPath = flags.positionals[0];
   const specText = readText(specPath);
   if (specText === null) fail(flags.json, "cannot read " + specPath);
@@ -182,8 +182,8 @@ function commandLint(args: string[]): void {
 function commandReport(args: string[]): void {
   const flags = parseFlags(args, false, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
-  if (flags.json) fail(true, "usage: ears-verify report <spec>");
-  if (flags.positionals.length !== 1) fail(false, "usage: ears-verify report <spec>");
+  if (flags.json) fail(true, "usage: spec-verify report <spec>");
+  if (flags.positionals.length !== 1) fail(false, "usage: spec-verify report <spec>");
   const specPath = flags.positionals[0];
   const specText = readText(specPath);
   if (specText === null) fail(false, "cannot read " + specPath);
@@ -200,7 +200,7 @@ function commandReport(args: string[]): void {
 function commandScenarios(args: string[]): void {
   const flags = parseFlags(args, false, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
-  if (flags.positionals.length !== 1) fail(flags.json, "usage: ears-verify scenarios [--json] <spec>");
+  if (flags.positionals.length !== 1) fail(flags.json, "usage: spec-verify scenarios [--json] <spec>");
   const specPath = flags.positionals[0];
   const specText = readText(specPath);
   if (specText === null) fail(flags.json, "cannot read " + specPath);
@@ -218,7 +218,7 @@ function commandScenarios(args: string[]): void {
 function commandPolicy(args: string[]): void {
   const flags = parseFlags(args, false, true);
   if (flags.error.length > 0) fail(flags.json, flags.error);
-  if (flags.positionals.length !== 1) fail(flags.json, "usage: ears-verify policy [--json] <spec> [--property <file>]");
+  if (flags.positionals.length !== 1) fail(flags.json, "usage: spec-verify policy [--json] <spec> [--property <file>]");
   const specPath = flags.positionals[0];
   const specText = readText(specPath);
   if (specText === null) fail(flags.json, "cannot read " + specPath);
@@ -259,13 +259,13 @@ function fail(json: boolean, message: string): never {
 function usage(toStderr: boolean): void {
   const text =
     "usage:\n" +
-    "  ears-verify check [--json] <spec> --input <scenario>\n" +
-    "  ears-verify emit-smt [--json] <spec>\n" +
-    "  ears-verify lint [--json] <spec>\n" +
-    "  ears-verify report <spec>\n" +
-    "  ears-verify scenarios [--json] <spec>\n" +
-    "  ears-verify policy [--json] <spec> [--property <file>]\n" +
-    "  ears-verify help";
+    "  spec-verify check [--json] <spec> --input <scenario>\n" +
+    "  spec-verify emit-smt [--json] <spec>\n" +
+    "  spec-verify lint [--json] <spec>\n" +
+    "  spec-verify report <spec>\n" +
+    "  spec-verify scenarios [--json] <spec>\n" +
+    "  spec-verify policy [--json] <spec> [--property <file>]\n" +
+    "  spec-verify help";
   if (toStderr) console.error(text);
   else console.log(text);
 }

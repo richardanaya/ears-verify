@@ -42,7 +42,7 @@ jobs:
           done
       - name: ScriptC build
         run: |
-          node_modules/.bin/scriptc build src/main.ts -o build/ears-verify
+          node_modules/.bin/scriptc build src/main.ts -o build/spec-verify
           node_modules/.bin/scriptc build test/unit.ts -o build/unit-tests
       - name: Test on Node and native
         run: npm test

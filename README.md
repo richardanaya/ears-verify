@@ -1,10 +1,12 @@
-<p align="center"><img src="assets/logo.png" alt="ears-verify" width="480"></p>
+<p align="center"><img src="assets/logo.png" alt="spec-verify" width="480"></p>
 
-# ears-verify
+# spec-verify
+
+Formerly ears-verify.
 
 Catch contradictions in your requirements before anyone builds them.
 
-ears-verify is for product managers, and for the AI agents who write requirements with them. You talk through what the product should do. The agent turns that into [EARS](https://alistairmavin.com/ears/) requirements. Each name in the schema is bound to a phrase, and the requirement is written with those phrases, so a line reads the way you would say it. ears-verify then looks for requirements that cannot all be true, and explains the clash in plain language: which requirements disagree, in what situation, a concrete example, and a fix.
+spec-verify is for product managers, and for the AI agents who write requirements with them. You talk through what the product should do. The agent turns that into [EARS](https://alistairmavin.com/ears/) requirements. Each name in the schema is bound to a phrase, and the requirement is written with those phrases, so a line reads the way you would say it. spec-verify then looks for requirements that cannot all be true, and explains the clash in plain language: which requirements disagree, in what situation, a concrete example, and a fix.
 
 It will not choose which requirement wins. That question goes back to you.
 
@@ -17,13 +19,13 @@ You need Node 24 and clang. `npm install` installs ScriptC 0.4.1.
 ```bash
 npm install
 npm run build
-./build/ears-verify lint examples/order-conflict.ears.md
+./build/spec-verify lint examples/order-conflict.ears.md
 ```
 
 `node --experimental-strip-types src/main.ts` runs the same program and prints the same bytes. The tests fail if the two ever drift.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-conflict.ears.md
 -->
@@ -91,7 +93,7 @@ R3 When an order is submitted, the Order System shall not fulfill the order.
 That is `examples/order-conflict.ears.md`. Lint names the clash. R2 and R3 both apply when an order was submitted, and the example keeps R2 and breaks R3.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-conflict.ears.md
 -->
@@ -149,7 +151,7 @@ R2 When an order is submitted, the Order System shall fulfill the order.
 Lint again, and the spec is clean:
 
 <!-- verify stdout 0
-build/ears-verify
+build/spec-verify
 lint
 examples/order-chosen.ears.md
 -->
@@ -170,7 +172,7 @@ unused: 0
 `examples/order-repair.ears.md` lends a copy that is in the building and refuses a copy that is out on loan. Those two states can both be true, so the requirements clash. Lint still asks which requirement should win. It also shows candidate repairs it has checked: drop either requirement, or add one existing state to one condition. Adding "and the copy is not out on loan" to R1 leaves R2 unchanged, and the patched spec no longer has that conflict. Adding "and the copy is not in the building" to R2 is the other strengthening. The report does not pick one.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-repair.ears.md
 -->
@@ -236,7 +238,7 @@ Nothing says whether the loan was allowed when the copy was in the building, the
 `examples/order.ears.md` is a single rule: when an order is submitted and inventory is available, the order is fulfilled. A scenario is a JSON object with one value for every declared name.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 check
 examples/order.ears.md
 --input
@@ -253,7 +255,7 @@ An order was submitted and inventory was available, but the order was not fulfil
 ```
 
 <!-- verify stdout 0
-build/ears-verify
+build/spec-verify
 check
 examples/order.ears.md
 --input
@@ -268,7 +270,7 @@ violations: 0
 `check` answers a different question from `lint`. The passing scenario fits R1. Lint still finds a hole, because nothing says what fulfillment should be when the order was submitted and the inventory is not available:
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order.ears.md
 -->
@@ -290,7 +292,7 @@ Nothing says whether the order was fulfilled when an order was submitted and inv
 `examples/order-covered.ears.md` gives every situation a response. Lint is quiet:
 
 <!-- verify stdout 0
-build/ears-verify
+build/spec-verify
 lint
 examples/order-covered.ears.md
 -->
@@ -311,7 +313,7 @@ unused: 0
 `emit-smt` prints each requirement as one named implication. The comment above the assertion points back at the line and the sentence.
 
 <!-- verify stdout 0
-build/ears-verify
+build/spec-verify
 emit-smt
 examples/order.ears.md
 -->
@@ -341,24 +343,24 @@ examples/order.ears.md
 | `help` | What commands are available? | Implemented |
 
 <!-- verify stdout 0
-build/ears-verify
+build/spec-verify
 help
 -->
 ```text
 usage:
-  ears-verify check [--json] <spec> --input <scenario>
-  ears-verify emit-smt [--json] <spec>
-  ears-verify lint [--json] <spec>
-  ears-verify report <spec>
-  ears-verify scenarios [--json] <spec>
-  ears-verify policy [--json] <spec> [--property <file>]
-  ears-verify help
+  spec-verify check [--json] <spec> --input <scenario>
+  spec-verify emit-smt [--json] <spec>
+  spec-verify lint [--json] <spec>
+  spec-verify report <spec>
+  spec-verify scenarios [--json] <spec>
+  spec-verify policy [--json] <spec> [--property <file>]
+  spec-verify help
 ```
 
 With no property, `policy` prints one scenario the requirements allow and one they forbid. Both are the first assignment the search finds, false before true. A requirement whose condition is false counts as satisfied, so the allowed scenario is not a recommendation.
 
 <!-- verify stdout 0
-build/ears-verify
+build/spec-verify
 policy
 examples/order.ears.md
 -->
@@ -391,21 +393,21 @@ Exit status is `0` when the command is clean, `1` when a scenario violates a req
 `--json` prints one object on stdout and leaves stderr empty. The keys below do not change. Wrong arguments, and a file that cannot be read or parsed, are exit 2:
 
 <!-- verify stdout 2
-build/ears-verify
+build/spec-verify
 emit-smt
 --json
 -->
 ```text
 {
   "ok": false,
-  "error": "usage: ears-verify emit-smt [--json] <spec>"
+  "error": "usage: spec-verify emit-smt [--json] <spec>"
 }
 ```
 
 `check` is `ok`, `spec`, `scenario`, and `violations`. Each violation is `id`, `line`, `sentence`, and `because`. `ok` is true when `violations` is empty.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 check
 --json
 examples/order.ears.md
@@ -431,7 +433,7 @@ examples/order-fail.json
 `lint` is `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `duplicate`, `vacuous`, and `unused`. A conflict is `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements` (`id`, `line`, `sentence`), `situation` and `example` (`name`, `value`), `requires` (`id`, `text`), `keeps`, `breaks`, and `fix`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. `kind` is `vague`, `solution`, `form`, or `negation`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. An exact duplicate is `id`, `line`, `sameAs`, `sentence`, `text`, and `fix`. A vacuous requirement has the same fields as a redundant requirement. An unused entry is `name`, `kind` (`state`, `input`, `output`, or `variant`), `text`, and `fix`.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 --json
 examples/order-conflict.ears.md
@@ -522,7 +524,7 @@ examples/order-conflict.ears.md
 `policy` is `ok`, `spec`, `property`, `holds`, `note`, `acceptedFound`, `accepted`, `rejectedFound`, `rejected`, `counterexampleFound`, `counterexample`, and `breaks`. A scenario is a list of `name` and `value`. The list is empty when the matching `Found` flag is false. A break is `id`, `line`, `sentence`, and `because`.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 policy
 --json
 examples/order.ears.md
@@ -569,7 +571,7 @@ examples/order-always.ears.md
 `emit-smt` is `ok`, `spec`, and `smt`. `smt` is the same SMT-LIB text as the plain command, with a newline between lines and none after the last line.
 
 <!-- verify stdout 0
-build/ears-verify
+build/spec-verify
 emit-smt
 --json
 examples/order.ears.md
@@ -605,7 +607,7 @@ The phrase is the only wording a requirement may use for that name. `not fulfill
 A Bool can also say how a report states the result, after the phrase: `outcome "the order was fulfilled" / "the order was not fulfilled"`. One string is enough. The false form inserts `not` after the first `was`, `were`, or `is`, or prefixes `not` when none of those words is there. Two strings separated by `/` are used as written. `outcome` is only for Bool, and `not` is allowed in that wording. When it is left off, a phrase that contains `is` is reported with `was` or `was not`. The violation line for the order above is `An order was submitted and inventory was available, but the order was not fulfilled.`
 
 <!-- verify stderr 2
-build/ears-verify
+build/spec-verify
 lint
 test/fixtures/unknown-phrase.ears.md
 -->
@@ -630,7 +632,7 @@ A set such as `{R2, R3}` is reported when some situation has no allowed response
 An integer has to declare `min..max`, inside `-1000000..1000000`. The procedure decides the range. It does not list every value, so a wide range is still checked:
 
 <!-- verify stdout 0
-build/ears-verify
+build/spec-verify
 lint
 examples/order-wide.ears.md
 -->
@@ -653,7 +655,7 @@ There are no strings in the logic. Descriptions and phrases stay next to the nam
 Lint also reports an event no requirement handles, an error condition with no response, an unwanted event written with `when`, and vague words. An integer cap can clash with a larger accepted quantity, and an enum can be pinned to two variants at once. The fix still asks which requirement should win. A condition that can never be true, a state or input no requirement mentions, an enum variant no requirement mentions, and an output no response sets are reported on their own. An output no requirement mentions at all stays a gap. An event nobody handles stays a gap. A free input that some requirement already mentions is not a finding: the environment is allowed to choose it.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-unhandled.ears.md
 -->
@@ -673,7 +675,7 @@ No requirement handles "an order is cancelled". Suggested fix: add a requirement
 ```
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-unanswered.ears.md
 -->
@@ -693,7 +695,7 @@ No requirement states a response when "payment fails". Suggested fix: add an if 
 ```
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-misuse.ears.md
 -->
@@ -719,7 +721,7 @@ Suggested fix: remove R4, or ask whether it was meant to say something the other
 ```
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-vague.ears.md
 -->
@@ -752,7 +754,7 @@ output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friend
 `examples/order-unmeasured.ears.md` says "as needed" in a description. That phrase is not a schema item. The requirements also say "respond quickly", and that phrase is declared, so "quickly" is bound and is not a finding.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-unmeasured.ears.md
 -->
@@ -773,7 +775,7 @@ output order_fulfilled: Bool "Handle it as needed." phrase "fulfill the order" o
 ```
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-quantity.ears.md
 -->
@@ -826,7 +828,7 @@ R4 says a submitted order accepts at most 10 units. R5 says that same order acce
 `examples/order-status.ears.md` requires the status to be shipped and cancelled in every situation. `placed` is declared on the enum and no requirement mentions it.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-status.ears.md
 -->
@@ -890,7 +892,7 @@ The shape of the analysis follows Kiro's requirements analysis: separate behavio
 
 ## For the agent in the conversation
 
-The skill at [`skills/ears-verify/SKILL.md`](skills/ears-verify/SKILL.md) tells an agent how to sit with a product manager. It lists the grammar the parser accepts, shows real `check`, `lint`, `report`, `scenarios`, `emit-smt`, `policy`, and `help` output, including the sentences a product manager would read, and says to ask which requirement should win.
+The skill at [`skills/spec-verify/SKILL.md`](skills/spec-verify/SKILL.md) tells an agent how to sit with a product manager. It lists the grammar the parser accepts, shows real `check`, `lint`, `report`, `scenarios`, `emit-smt`, `policy`, and `help` output, including the sentences a product manager would read, and says to ask which requirement should win.
 
 ## Questions
 
@@ -909,7 +911,7 @@ A property is a separate file of requirement lines. It uses the spec's names and
 `examples/order-always.ears.md` hopes the order is fulfilled in every scenario. The requirements do not say that. The counterexample is a scenario they allow where the order is not fulfilled:
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 policy
 examples/order.ears.md
 --property
@@ -934,7 +936,7 @@ The order was not fulfilled.
 `examples/order-same.ears.md` repeats R1. Nothing the requirements allow can break it:
 
 <!-- verify stdout 0
-build/ears-verify
+build/spec-verify
 policy
 examples/order.ears.md
 --property
@@ -949,7 +951,7 @@ No scenario satisfies every requirement and violates the property.
 When the requirements themselves cannot all hold, there is no scenario to test the property against. `examples/order-status.ears.md` is that spec: the status would have to be shipped and cancelled.
 
 <!-- verify stdout 0
-build/ears-verify
+build/spec-verify
 policy
 examples/order-status.ears.md
 --property
@@ -966,7 +968,7 @@ No scenario satisfies every requirement, so none violates the property.
 `examples/order-chain.ears.md` is unsatisfiable only as a set. A submitted order must be accepted, an accepted order must be shipped, and a submitted order must not be shipped. Each pair can still hold. The example keeps the first two and breaks the third. It is a witness, and it is not a recommendation. Ask which requirement should change.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-chain.ears.md
 -->
@@ -1034,7 +1036,7 @@ When the order is accepted and an order is not submitted, the Order System shall
 `examples/order-redundant.ears.md` says a submitted order is fulfilled, and also that a submitted order with inventory is fulfilled. The second one is already required by the first. Lint names it and asks. It does not delete it. A conflict does not hide a repeat that sits outside that conflict. Lint checks redundancy on the requirements that are not part of any conflict.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-redundant.ears.md
 -->
@@ -1060,7 +1062,7 @@ Suggested fix: remove R2, or ask whether it was meant to say something the other
 `examples/order-repeat.ears.md` conflicts on whether a submitted order is fulfilled. Separately, closing a submitted order already requires closing it when inventory is available. `R5` is not part of the conflict, so lint still names it.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-repeat.ears.md
 -->
@@ -1120,7 +1122,7 @@ Suggested fix: remove R5, or ask whether it was meant to say something the other
 `examples/order-duplicate.ears.md` states the fulfilled-order rule twice. That is a duplicate, not a redundant requirement: the two lines are the same condition and the same response. Lint names the later line and the earlier id. It does not call it redundant.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-duplicate.ears.md
 -->
@@ -1142,7 +1144,7 @@ Suggested fix: remove R2, or ask whether it was meant to differ from R1. Do not 
 ```
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 report
 examples/order-duplicate.ears.md
 -->
@@ -1171,7 +1173,7 @@ Suggested fix: remove R2, or ask whether it was meant to differ from R1. Do not 
 `examples/order-negation.ears.md` says `When not a member asks`. The trigger is a bare negation. Lint asks for a positive condition, such as `When a non-member asks`, or a positive event. `is not` stays the normal way to negate a phrase that contains `is`.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-negation.ears.md
 -->
@@ -1196,7 +1198,7 @@ When not a member asks to take a copy home, the Desk shall not allow the loan.
 `examples/order-vacuous.ears.md` has a condition that contradicts itself, and a quantity comparison outside the declared range. The response is never demanded. Lint names each one as vacuous. It does not also call that requirement redundant or a duplicate, because a condition that can never be true is implied by anything. The vacuous line says to rewrite the condition. It does not pick a response.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-vacuous.ears.md
 -->
@@ -1227,7 +1229,7 @@ Suggested fix: rewrite the condition in R2 so a real situation can make it true,
 `examples/order-unused.ears.md` declares a state and an input that no sentence mentions, an enum variant that no sentence mentions, and an output that requirements only read. An output that no requirement mentions at all is still a gap, not a second finding. An event that nobody handles stays a gap.
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 examples/order-unused.ears.md
 -->
@@ -1260,7 +1262,7 @@ Suggested fix: use refund in a requirement, or remove it from Lane.
 ```
 
 <!-- verify stdout 1
-build/ears-verify
+build/spec-verify
 lint
 --json
 examples/order-unused.ears.md
@@ -1310,7 +1312,7 @@ examples/order-unused.ears.md
 `scenarios` lists a small set of examples so a product manager can check that a requirement means what they think. For each requirement it looks for an accepted scenario with the trigger true, an accepted scenario with the trigger false, and a rejected scenario with the trigger true. Each one is the first assignment the search finds, false before true. A requirement with no trigger says so, instead of inventing a trigger-false case. The same assignment is printed once.
 
 <!-- verify stdout 0
-build/ears-verify
+build/spec-verify
 scenarios
 examples/order.ears.md
 -->
@@ -1346,7 +1348,7 @@ An order was submitted and inventory was available, but the order was not fulfil
 `--json` is `ok`, `spec`, and `scenarios`. Each row is `id`, `line`, `kind` (`accepted` or `rejected`), `trigger` (`true` or `false`), `found`, `sameAs`, `scenario` (`name` and `value`), and `text`. `scenario` is empty when `found` is false. `sameAs` names an earlier row when the assignment was already listed.
 
 <!-- verify stdout 0
-build/ears-verify
+build/spec-verify
 scenarios
 --json
 examples/order.ears.md

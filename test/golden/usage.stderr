@@ -1,9 +1,9 @@
 error: missing command
 usage:
-  ears-verify check [--json] <spec> --input <scenario>
-  ears-verify emit-smt [--json] <spec>
-  ears-verify lint [--json] <spec>
-  ears-verify report <spec>
-  ears-verify scenarios [--json] <spec>
-  ears-verify policy [--json] <spec> [--property <file>]
-  ears-verify help
+  spec-verify check [--json] <spec> --input <scenario>
+  spec-verify emit-smt [--json] <spec>
+  spec-verify lint [--json] <spec>
+  spec-verify report <spec>
+  spec-verify scenarios [--json] <spec>
+  spec-verify policy [--json] <spec> [--property <file>]
+  spec-verify help

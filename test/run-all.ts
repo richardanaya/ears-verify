@@ -3,8 +3,8 @@
  * and golden CLI tests. Unit tests and each CLI case run once under Node
  * and once as the native binary; stdout, stderr, and exit status must match
  * each other and the checked-in golden files. Samples in README.md and
- * skills/ears-verify/SKILL.md marked with `<!-- verify stdout|stderr <exit>`
- * are run under Node and build/ears-verify and must match the fenced bytes.
+ * skills/spec-verify/SKILL.md marked with `<!-- verify stdout|stderr <exit>`
+ * are run under Node and build/spec-verify and must match the fenced bytes.
  *
  * Write or refresh goldens with: node --experimental-strip-types test/run-all.ts --write-golden
  */
@@ -140,7 +140,7 @@ function main(): void {
   requireCoverage("test/unit.ts");
   requireCoverage("test/run-all.ts");
 
-  requireBuild("src/main.ts", "build/ears-verify");
+  requireBuild("src/main.ts", "build/spec-verify");
   requireBuild("test/unit.ts", "build/unit-tests");
 
   if (failed !== 0) {
@@ -207,12 +207,12 @@ function main(): void {
   for (let i = 0; i < cases.length; i++) {
     const item = cases[i];
     const nodeResult = nodeRun("src/main.ts", item.args);
-    const binResult = run("build/ears-verify", item.args);
+    const binResult = run("build/spec-verify", item.args);
     comparePair(item.name, nodeResult, binResult);
   }
 
   checkDocSamples("readme", "README.md", false);
-  checkDocSamples("skill", "skills/ears-verify/SKILL.md", true);
+  checkDocSamples("skill", "skills/spec-verify/SKILL.md", true);
   checkPlanToProblems();
 
   if (failed !== 0) {
@@ -227,10 +227,10 @@ function checkPlanToProblems(): void {
   const dir = "examples/plan-to-problems/";
   const spec = dir + "generated.ears.md";
   const lintNode = nodeRun("src/main.ts", ["lint", "--json", spec]);
-  const lintBin = run("build/ears-verify", ["lint", "--json", spec]);
+  const lintBin = run("build/spec-verify", ["lint", "--json", spec]);
   const lintOk = sameSaved("plan-to-problems lint", lintNode, lintBin, dir + "lint.json", 1);
   const reportNode = nodeRun("src/main.ts", ["report", spec]);
-  const reportBin = run("build/ears-verify", ["report", spec]);
+  const reportBin = run("build/spec-verify", ["report", spec]);
   const reportOk = sameSaved("plan-to-problems report", reportNode, reportBin, dir + "problems.md", 1);
   if (!lintOk || !reportOk) return;
   const planted = readFileSync(dir + "planted.txt", "utf8");
@@ -402,8 +402,8 @@ function checkDocSamples(label: string, path: string, strictText: boolean): void
       return;
     }
     const args = nonEmptyLines(text.slice(headerEnd + 1, argsEnd));
-    if (args.length === 0 || args[0] !== "build/ears-verify") {
-      fail(label + " verify block must start with build/ears-verify");
+    if (args.length === 0 || args[0] !== "build/spec-verify") {
+      fail(label + " verify block must start with build/spec-verify");
       return;
     }
     const fenceAt = text.indexOf("```", argsEnd);
