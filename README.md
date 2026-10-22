@@ -60,6 +60,82 @@ Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep 
 
 R2 says the order was fulfilled. R3 says the order was not fulfilled. Both apply when the customer submits an order, so no behavior can satisfy both. The example keeps R2 only because R3 is the last requirement in the set. It is a witness, and it is not a recommendation. Ask which requirement should win, then delete or rewrite the other.
 
+## A conversation
+
+A product manager says: "When no order has been submitted, do not fulfill it. When an order is submitted, fulfill it. And when an order is submitted, do not fulfill it."
+
+The agent writes that as EARS. Each declared name is bound to a phrase, and the requirements use those phrases:
+
+```ears
+event order_submitted: Bool "The customer submits an order." phrase "an order is submitted"
+output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
+
+R1 When not an order is submitted, the Order System shall not fulfill the order.
+R2 When an order is submitted, the Order System shall fulfill the order.
+R3 When an order is submitted, the Order System shall not fulfill the order.
+```
+
+That is `examples/order-conflict.ears.md`. Lint names the clash. R2 and R3 both apply when an order was submitted, and the example keeps R2 and breaks R3.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-conflict.ears.md
+-->
+```text
+spec: examples/order-conflict.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+
+conflict {R2, R3}
+R2 and R3 cannot both hold.
+
+R2 line 7
+When an order is submitted, the Order System shall fulfill the order.
+
+R3 line 8
+When an order is submitted, the Order System shall not fulfill the order.
+
+They clash when an order was submitted.
+R2 requires that the order was fulfilled.
+R3 requires that the order was not fulfilled.
+
+Example scenario:
+{
+  "order_submitted": true,
+  "order_fulfilled": true
+}
+This scenario keeps R2 and breaks R3.
+
+Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2.
+```
+
+The product manager chooses to keep fulfillment of a submitted order and to remove the refusal. The agent deletes R3. `examples/order-chosen.ears.md` is what remains:
+
+```ears
+R1 When not an order is submitted, the Order System shall not fulfill the order.
+R2 When an order is submitted, the Order System shall fulfill the order.
+```
+
+Lint again, and the spec is clean:
+
+<!-- verify stdout 0
+build/ears-verify
+lint
+examples/order-chosen.ears.md
+-->
+```text
+spec: examples/order-chosen.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+```
+
 ## Check one scenario
 
 `examples/order.ears.md` is a single rule: when an order is submitted and inventory is available, the order is fulfilled. A scenario is a JSON object with one value for every declared name.
