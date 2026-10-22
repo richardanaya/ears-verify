@@ -14,9 +14,25 @@ import type { Spec } from "../src/spec.ts";
 import { printSmt } from "../src/smt.ts";
 import { spaceSize } from "../src/solver.ts";
 import { formatTerm } from "../src/term.ts";
+import { runSoundness } from "./soundness.ts";
 
 let passed = 0;
 let failed = 0;
+
+function hasArg(flag: string): boolean {
+  for (let i = 2; i < process.argv.length; i++) {
+    if (process.argv[i] === flag) return true;
+  }
+  return false;
+}
+
+if (hasArg("--soundness-only")) {
+  const started = Date.now();
+  const specs = runSoundness();
+  console.log("soundness specs: " + String(specs));
+  console.log("soundness ms: " + String(Date.now() - started));
+  process.exit(0);
+}
 
 function check(name: string, cond: boolean): void {
   if (cond) {
@@ -642,6 +658,10 @@ check(
   statusRows.length === 6 && statusRows[1].found === false && statusRows[1].text === "R6 has no trigger, so there is no case where the trigger is false.",
 );
 check("status scenarios dedupe", statusRows[5].sameAs === "R6 rejected, trigger true" && statusRows[5].found === true);
+
+const soundnessSpecs = runSoundness();
+check("soundness specs", soundnessSpecs === 1008);
+console.log("soundness specs: " + String(soundnessSpecs));
 
 if (failed !== 0) {
   console.error(String(failed) + " failed");

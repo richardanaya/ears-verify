@@ -6,7 +6,7 @@
  */
 
 import { describeAssignment, displayCode, isDriver, reportBool, requirementMentions, type Requirement, type Spec, type Term } from "./spec.ts";
-import { bestGap, conflictingSets, firstMatching, modelFor, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
+import { bestGap, conflictingSets, modelFor, redundantFlags, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
 import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 import { displayQuote, englishList, formatInt, pastVoice } from "./text.ts";
 
@@ -135,15 +135,10 @@ export function lintSpec(spec: Spec): LintOutcome {
 
 function findRedundant(spec: Spec): Redundant[] {
   const found: Redundant[] = [];
-  if (spec.requirements.length < 2) return found;
-  for (let i = 0; i < spec.requirements.length; i++) {
-    const others: Requirement[] = [];
-    for (let j = 0; j < spec.requirements.length; j++) {
-      if (j !== i) others.push(spec.requirements[j]);
-    }
-    if (firstMatching(spec, others, [], null, 0) === null) continue;
+  const flags = redundantFlags(spec);
+  for (let i = 0; i < flags.length; i++) {
+    if (!flags[i]) continue;
     const req = spec.requirements[i];
-    if (firstMatching(spec, others, [req], null, 0) !== null) continue;
     found.push({
       id: req.id,
       line: req.line,

@@ -62,13 +62,7 @@ export function modelFor(spec: Spec, indexes: number[], situation: Binding): Bin
 
 export function conflictingSets(spec: Spec): ConflictGroup[] {
   const n = spec.requirements.length;
-  if (n > 12) {
-    const all: number[] = [];
-    for (let i = 0; i < n; i++) all.push(i);
-    const scan = scanRequirements(spec, all);
-    if (scan.unsat === null) return [];
-    return [{ indexes: all, minimal: false }];
-  }
+  if (n > 12) return coresByDeletion(spec);
   let size = 1;
   for (let i = 0; i < n; i++) size = size * 2;
   const cacheKnown: boolean[] = [];
@@ -202,6 +196,73 @@ function anyReqFalse(spec: Spec, reqs: Requirement[], env: Binding): boolean {
     if (evalAssertion(reqs[i].antecedent, reqs[i].consequent, spec, env) === T_FALSE) return true;
   }
   return false;
+}
+
+/**
+ * True when the other requirements are realizable and every full assignment
+ * that satisfies them satisfies this requirement too.
+ * An unrealizable spec has none: if the others were realizable and this
+ * requirement followed from them, the whole spec would be realizable.
+ */
+export function redundantFlags(spec: Spec): boolean[] {
+  const n = spec.requirements.length;
+  const flags: boolean[] = [];
+  for (let i = 0; i < n; i++) flags.push(false);
+  if (n < 2) return flags;
+  const all: number[] = [];
+  for (let i = 0; i < n; i++) all.push(i);
+  if (scanRequirements(spec, all).unsat !== null) return flags;
+  const witnessed: boolean[] = [];
+  const broken: boolean[] = [];
+  for (let i = 0; i < n; i++) {
+    witnessed.push(false);
+    broken.push(false);
+  }
+  const env = new Binding(spec.symbols.length);
+  walkRedundant(spec, env, 0, witnessed, broken);
+  for (let i = 0; i < n; i++) {
+    if (witnessed[i] && !broken[i]) flags[i] = true;
+  }
+  return flags;
+}
+
+function walkRedundant(spec: Spec, env: Binding, pos: number, witnessed: boolean[], broken: boolean[]): void {
+  if (pos === spec.symbols.length) {
+    noteRedundant(spec, env, witnessed, broken);
+    return;
+  }
+  const sym = spec.symbols[pos];
+  const count = domainSize(spec, sym);
+  for (let v = 0; v < count; v++) {
+    env.known[pos] = true;
+    env.code[pos] = codeAt(sym, v);
+    walkRedundant(spec, env, pos + 1, witnessed, broken);
+  }
+  env.known[pos] = false;
+}
+
+function noteRedundant(spec: Spec, env: Binding, witnessed: boolean[], broken: boolean[]): void {
+  const n = spec.requirements.length;
+  let trueCount = 0;
+  let falseCount = 0;
+  let falseIndex = 0;
+  for (let i = 0; i < n; i++) {
+    const req = spec.requirements[i];
+    const value = evalAssertion(req.antecedent, req.consequent, spec, env);
+    if (value === T_TRUE) trueCount++;
+    else if (value === T_FALSE) {
+      falseCount++;
+      falseIndex = i;
+    }
+  }
+  if (falseCount === 0 && trueCount === n) {
+    for (let i = 0; i < n; i++) witnessed[i] = true;
+    return;
+  }
+  if (falseCount === 1 && trueCount === n - 1) {
+    witnessed[falseIndex] = true;
+    broken[falseIndex] = true;
+  }
 }
 
 export function bestGap(spec: Spec, outputIndex: number): Binding | null {
@@ -357,6 +418,137 @@ function outputIndexes(spec: Spec): number[] {
     if (!isDriver(spec.symbols[i])) indexes.push(i);
   }
   return indexes;
+}
+
+/**
+ * More than 12 requirements is too many subsets to list. Walk each driver
+ * situation instead, and shrink the requirements that fail there by deletion.
+ * Cores that share a requirement and are unsatisfiable in exactly the same
+ * situations can collapse to one of those cores.
+ */
+function coresByDeletion(spec: Spec): ConflictGroup[] {
+  const cores: ConflictGroup[] = [];
+  const drivers = driverIndexes(spec);
+  const outputs = outputIndexes(spec);
+  const env = new Binding(spec.symbols.length);
+  const all: number[] = [];
+  for (let i = 0; i < spec.requirements.length; i++) all.push(i);
+  walkCores(spec, all, drivers, outputs, env, 0, cores);
+  return cores;
+}
+
+function walkCores(
+  spec: Spec,
+  all: number[],
+  drivers: number[],
+  outputs: number[],
+  env: Binding,
+  pos: number,
+  cores: ConflictGroup[],
+): void {
+  if (pos === drivers.length) {
+    harvestCores(spec, all, outputs, env, cores);
+    return;
+  }
+  const si = drivers[pos];
+  const sym = spec.symbols[si];
+  const count = domainSize(spec, sym);
+  for (let v = 0; v < count; v++) {
+    env.known[si] = true;
+    env.code[si] = codeAt(sym, v);
+    walkCores(spec, all, drivers, outputs, env, pos + 1, cores);
+  }
+  env.known[si] = false;
+}
+
+function harvestCores(spec: Spec, all: number[], outputs: number[], env: Binding, cores: ConflictGroup[]): void {
+  let pool = copyIndexes(all);
+  while (situationUnsat(spec, pool, outputs, env)) {
+    let removed = false;
+    for (let c = 0; c < cores.length; c++) {
+      if (!situationUnsat(spec, cores[c].indexes, outputs, env)) continue;
+      const next = subtractIndexes(pool, cores[c].indexes);
+      if (next.length < pool.length) {
+        pool = next;
+        removed = true;
+      }
+    }
+    if (removed) continue;
+    const local = minimizeSituation(spec, pool, outputs, env);
+    const global = minimizeGlobal(spec, local);
+    if (global.length === 0) return;
+    if (!hasCore(cores, global)) cores.push({ indexes: global, minimal: true });
+    const next = subtractIndexes(pool, global);
+    if (next.length === pool.length) return;
+    pool = next;
+  }
+}
+
+function minimizeSituation(spec: Spec, indexes: number[], outputs: number[], env: Binding): number[] {
+  let current = copyIndexes(indexes);
+  let i = 0;
+  while (i < current.length) {
+    const trial = withoutAt(current, i);
+    if (situationUnsat(spec, trial, outputs, env)) current = trial;
+    else i++;
+  }
+  return current;
+}
+
+function minimizeGlobal(spec: Spec, indexes: number[]): number[] {
+  let current = copyIndexes(indexes);
+  let i = 0;
+  while (i < current.length) {
+    const trial = withoutAt(current, i);
+    if (scanRequirements(spec, trial).unsat !== null) current = trial;
+    else i++;
+  }
+  return current;
+}
+
+function situationUnsat(spec: Spec, indexes: number[], outputs: number[], env: Binding): boolean {
+  if (indexes.length === 0) return false;
+  clearKnown(env, outputs);
+  return !searchOutputs(spec, indexes, outputs, env, 0);
+}
+
+function hasCore(cores: ConflictGroup[], indexes: number[]): boolean {
+  for (let i = 0; i < cores.length; i++) {
+    const known = cores[i].indexes;
+    if (known.length !== indexes.length) continue;
+    let same = true;
+    for (let j = 0; j < known.length; j++) {
+      if (known[j] !== indexes[j]) same = false;
+    }
+    if (same) return true;
+  }
+  return false;
+}
+
+function copyIndexes(indexes: number[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < indexes.length; i++) out.push(indexes[i]);
+  return out;
+}
+
+function withoutAt(indexes: number[], drop: number): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < indexes.length; i++) {
+    if (i !== drop) out.push(indexes[i]);
+  }
+  return out;
+}
+
+function subtractIndexes(indexes: number[], remove: number[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < indexes.length; i++) {
+    let drop = false;
+    for (let j = 0; j < remove.length; j++) {
+      if (indexes[i] === remove[j]) drop = true;
+    }
+    if (!drop) out.push(indexes[i]);
+  }
+  return out;
 }
 
 function maskRealizable(spec: Spec, mask: number, n: number, cacheKnown: boolean[], cacheReal: boolean[]): boolean {
