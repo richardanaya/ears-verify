@@ -7,7 +7,23 @@ description: Use when a product manager is stating or revising requirements. Tur
 
 You are in a conversation with a product manager. They are telling you what a system should do, often in a few passes, sometimes contradicting what they said earlier. Turn what they say into EARS requirements with the grammar below, then run ears-verify.
 
-Lint is implemented, and it is the check that matters. When it reports a conflict, explain it in plain words: which requirements clash, under what situation, the example scenario, and the suggested fix. Ask which requirement should win. Do not choose one, and do not paper over the clash with a new sentence they did not ask for.
+Lint is implemented, and it is the check that matters. When it reports a conflict, explain it in plain words: which requirements clash, under what situation, the example scenario, and the suggested fix. Ask which requirement should win. Do not choose one, and do not paper over the clash with a new sentence they did not ask for. A requirement that adds nothing stays until the PM agrees to remove it. `scenarios` prints accepted and rejected examples so you can check that you heard them correctly.
+
+`help` lists every command:
+
+<!-- verify stdout 0
+build/ears-verify
+help
+-->
+```text
+usage:
+  ears-verify check [--json] <spec> --input <scenario>
+  ears-verify emit-smt [--json] <spec>
+  ears-verify lint [--json] <spec>
+  ears-verify scenarios [--json] <spec>
+  ears-verify policy [--json] <spec> [--property <file>]
+  ears-verify help
+```
 
 `policy` searches the same finite domain as lint. With no property it prints one scenario the requirements allow and one they forbid. With a property file it looks for a scenario the requirements allow and the property forbids. Do not treat either scenario as the behavior the PM agreed to, and do not pick a winning requirement.
 

@@ -160,6 +160,21 @@ examples/order.ears.md
 | `scenarios [--json] <spec>` | What accepted and rejected examples show each requirement's trigger? | Implemented |
 | `emit-smt [--json] <spec>` | What is the SMT-LIB for these requirements? | Implemented |
 | `policy [--json] <spec> [--property <file>]` | Which scenarios do the requirements allow and forbid? Does any allowed scenario break a property? | Implemented |
+| `help` | What commands are available? | Implemented |
+
+<!-- verify stdout 0
+build/ears-verify
+help
+-->
+```text
+usage:
+  ears-verify check [--json] <spec> --input <scenario>
+  ears-verify emit-smt [--json] <spec>
+  ears-verify lint [--json] <spec>
+  ears-verify scenarios [--json] <spec>
+  ears-verify policy [--json] <spec> [--property <file>]
+  ears-verify help
+```
 
 With no property, `policy` prints one scenario the requirements allow and one they forbid. Both are the first assignment the search finds, false before true. A requirement whose condition is false counts as satisfied, so the allowed scenario is not a recommendation.
 
@@ -596,7 +611,7 @@ The shape of the analysis follows Kiro's requirements analysis: separate behavio
 
 ## For the agent in the conversation
 
-The skill at [`skills/ears-verify/SKILL.md`](skills/ears-verify/SKILL.md) tells an agent how to sit with a product manager. It lists the grammar the parser accepts, shows real `check`, `emit-smt`, `lint`, and `policy` output, and says to ask which requirement should win.
+The skill at [`skills/ears-verify/SKILL.md`](skills/ears-verify/SKILL.md) tells an agent how to sit with a product manager. It lists the grammar the parser accepts, shows real `check`, `lint`, `scenarios`, `emit-smt`, `policy`, and `help` output, including the sentences a product manager would read, and says to ask which requirement should win.
 
 ## Questions
 
