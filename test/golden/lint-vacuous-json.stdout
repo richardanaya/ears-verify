@@ -21,6 +21,7 @@
       "fix": "Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees."
     }
   ],
+  "duplicate": [],
   "vacuous": [
     {
       "id": "R1",

@@ -80,3 +80,11 @@ R10 line 25
 "When a member brings a copy back, the Fall Desk shall close the loan."
 
 Ask whether R11 was meant to say something R10 does not already require. Do not delete it until the product manager agrees.
+
+## 9. R9 adds nothing
+
+R9 line 24
+"When a member asks to take a copy home and the loan length is at least 40, the Fall Desk shall allow the loan."
+
+R9 adds nothing. Whenever the requirements outside a conflict hold, R9 holds too.
+Suggested fix: remove R9, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.

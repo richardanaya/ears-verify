@@ -170,6 +170,7 @@ function commandLint(args: string[]): void {
     outcome.report.misuse.length +
     outcome.report.wording.length +
     outcome.report.redundant.length +
+    outcome.report.duplicate.length +
     outcome.report.vacuous.length +
     outcome.report.unused.length;
   if (flags.json) console.log(formatLintJson(specPath, outcome.report));

@@ -285,23 +285,28 @@ export function firstMatching(
 }
 
 /**
- * True when the other requirements are realizable and every full assignment
- * that satisfies them satisfies this requirement too.
- * An unrealizable spec has none: if the others were realizable and this
- * requirement followed from them, the whole spec would be realizable.
+ * True when this requirement follows from the other eligible requirements
+ * and those others are realizable.
+ * eligible[i] is set for requirements that are outside every conflict and
+ * are not an exact copy of an earlier requirement. A conflict no longer
+ * hides a repeat that sits entirely outside it. An unrealizable eligible
+ * set has none.
  */
-export function redundantFlags(spec: Spec): boolean[] {
+export function redundantFlags(spec: Spec, eligible: boolean[]): boolean[] {
   const n = spec.requirements.length;
   const flags: boolean[] = [];
   for (let i = 0; i < n; i++) flags.push(false);
-  if (n < 2) return flags;
-  const all: number[] = [];
-  for (let i = 0; i < n; i++) all.push(i);
-  if (firstUnsatDrivers(spec, reqsOf(spec, all)) !== null) return flags;
+  const pool: number[] = [];
   for (let i = 0; i < n; i++) {
+    if (i < eligible.length && eligible[i]) pool.push(i);
+  }
+  if (pool.length < 2) return flags;
+  if (firstUnsatDrivers(spec, reqsOf(spec, pool)) !== null) return flags;
+  for (let p = 0; p < pool.length; p++) {
+    const i = pool[p];
     const others: Requirement[] = [];
-    for (let j = 0; j < n; j++) {
-      if (j !== i) others.push(spec.requirements[j]);
+    for (let q = 0; q < pool.length; q++) {
+      if (q !== p) others.push(spec.requirements[pool[q]]);
     }
     if (!satisfiable(spec, others)) continue;
     const fails: Requirement[] = [];

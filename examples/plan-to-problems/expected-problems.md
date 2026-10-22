@@ -22,4 +22,4 @@ Closing the loan when a copy comes back already requires the overdue case too. S
 
 ## Negated triggers
 
-R4 line 19 says "When not a member asks to take a copy home". R12 line 27 says "When not a member brings a copy back". Lint accepts that negation. It does not mark either sentence as awkward wording.
+R4 line 19 says "When not a member asks to take a copy home". R12 line 27 says "When not a member brings a copy back". Lint flags each sentence as wording kind `negation`. The suggested rewrite is a positive condition, such as "When a non-member asks", or a positive event.

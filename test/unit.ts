@@ -718,6 +718,18 @@ if (checkoutLint.kind === "report") {
   }
   const gapNames: string[] = [];
   for (let i = 0; i < checkoutLint.report.gaps.length; i++) gapNames.push(checkoutLint.report.gaps[i].output);
+  const outside: string[] = [];
+  for (let i = 0; i < checkoutLint.report.redundant.length; i++) outside.push(checkoutLint.report.redundant[i].id);
+  let sawR10 = false;
+  let sawR25 = false;
+  let sawR49 = false;
+  let sawHidden = false;
+  for (let i = 0; i < outside.length; i++) {
+    if (outside[i] === "R10") sawR10 = true;
+    if (outside[i] === "R25") sawR25 = true;
+    if (outside[i] === "R49") sawR49 = true;
+    if (outside[i] === "R18" || outside[i] === "R1" || outside[i] === "R8") sawHidden = true;
+  }
   check(
     "checkout conflicts and gaps",
     accept &&
@@ -729,7 +741,12 @@ if (checkoutLint.kind === "report") {
       gapNames[1] === "billed_seats" &&
       checkoutLint.report.misuse.length === 0 &&
       checkoutLint.report.wording.length === 0 &&
-      checkoutLint.report.redundant.length === 0,
+      checkoutLint.report.duplicate.length === 0 &&
+      outside.length === 23 &&
+      sawR10 &&
+      sawR25 &&
+      sawR49 &&
+      !sawHidden,
   );
 }
 
@@ -954,7 +971,11 @@ if (formLint.kind === "report") {
     if (item.kind === "form" && item.word === "when") whens++;
     if (item.kind === "form" && item.word === "not") nots++;
   }
-  check("awkward forms", shalls === 2 && whens === 2 && nots === 0 && formLint.report.wording.length === 4);
+  let negations = 0;
+  for (let i = 0; i < formLint.report.wording.length; i++) {
+    if (formLint.report.wording[i].kind === "negation") negations++;
+  }
+  check("awkward forms", shalls === 2 && whens === 2 && nots === 0 && negations === 1 && formLint.report.wording.length === 5);
 }
 const clearLint = lintSpec(mustSpec(readFileSync("examples/order-clear.ears.md", "utf8")));
 check(
@@ -981,6 +1002,165 @@ check(
   acted.requirements[0].antecedent !== null &&
     acted.requirements[0].antecedent.kind === "sym" &&
     acted.requirements[0].consequent.kind === "sym",
+);
+
+const repeatLint = lintSpec(mustSpec(readFileSync("examples/order-repeat.ears.md", "utf8")));
+check("repeat under conflict ran", repeatLint.kind === "report");
+if (repeatLint.kind === "report") {
+  check(
+    "repeat survives the clash",
+    repeatLint.report.conflicts.length === 1 &&
+      repeatLint.report.conflicts[0].ids[0] === "R1" &&
+      repeatLint.report.conflicts[0].ids[1] === "R2" &&
+      repeatLint.report.redundant.length === 1 &&
+      repeatLint.report.redundant[0].id === "R5" &&
+      repeatLint.report.redundant[0].text ===
+        "R5 adds nothing. Whenever the requirements outside a conflict hold, R5 holds too." &&
+      repeatLint.report.duplicate.length === 0 &&
+      repeatLint.report.gaps.length === 0,
+  );
+}
+const copyLint = lintSpec(mustSpec(readFileSync("examples/order-duplicate.ears.md", "utf8")));
+check("duplicate ran", copyLint.kind === "report");
+if (copyLint.kind === "report") {
+  check(
+    "exact copy is not called redundant",
+    copyLint.report.duplicate.length === 1 &&
+      copyLint.report.duplicate[0].id === "R2" &&
+      copyLint.report.duplicate[0].sameAs === "R1" &&
+      copyLint.report.duplicate[0].text === "R2 duplicates R1. The condition and the response are the same." &&
+      copyLint.report.redundant.length === 0 &&
+      copyLint.report.conflicts.length === 0 &&
+      copyLint.report.gaps.length === 0,
+  );
+}
+const tripleCopy = lintSpec(
+  mustSpec(
+    'event order_submitted: Bool "Submitted." phrase "an order is submitted"\n' +
+      'output order_fulfilled: Bool "Fulfilled." phrase "fulfill the order"\n\n' +
+      "R1 When an order is submitted, the Box shall fulfill the order.\n" +
+      "R2 When an order is submitted, the Box shall fulfill the order.\n" +
+      "R3 When an order is submitted, the Box shall fulfill the order.\n" +
+      "R4 When an order is not submitted, the Box shall not fulfill the order.\n",
+  ),
+);
+check(
+  "three copies name the first",
+  tripleCopy.kind === "report" &&
+    tripleCopy.report.duplicate.length === 2 &&
+    tripleCopy.report.duplicate[0].sameAs === "R1" &&
+    tripleCopy.report.duplicate[1].id === "R3" &&
+    tripleCopy.report.duplicate[1].sameAs === "R1" &&
+    tripleCopy.report.redundant.length === 0,
+);
+const negationLint = lintSpec(mustSpec(readFileSync("examples/order-negation.ears.md", "utf8")));
+check("negated trigger ran", negationLint.kind === "report");
+if (negationLint.kind === "report") {
+  check(
+    "when not a member",
+    negationLint.report.wording.length === 1 &&
+      negationLint.report.wording[0].kind === "negation" &&
+      negationLint.report.wording[0].word === "not" &&
+      negationLint.report.wording[0].line === 6 &&
+      negationLint.report.conflicts.length === 0 &&
+      negationLint.report.gaps.length === 0,
+  );
+}
+const whileNot = lintSpec(
+  mustSpec(
+    'state member: Bool "A member." phrase "a member is here"\n' +
+      'output open: Bool "Open." phrase "open the desk"\n\n' +
+      "R1 While not a member is here, the Desk shall open the desk.\n" +
+      "R2 While a member is here, the Desk shall not open the desk.\n",
+  ),
+);
+check(
+  "while not stays a form issue",
+  whileNot.kind === "report" && whileNot.report.wording.length === 1 && whileNot.report.wording[0].kind === "form",
+);
+const bareWhile = lintSpec(
+  mustSpec(
+    'event ping: Bool "Ping." phrase "a member asks"\n' +
+      'output open: Bool "Open." phrase "open the desk"\n\n' +
+      "R1 While not a member asks, the Desk shall open the desk.\n" +
+      "R2 While a member asks, the Desk shall not open the desk.\n",
+  ),
+);
+check(
+  "while not without is",
+  bareWhile.kind === "report" && bareWhile.report.wording.length === 1 && bareWhile.report.wording[0].kind === "negation",
+);
+const whereNot = lintSpec(
+  mustSpec(
+    'input region: Int 1..2 "Region." phrase "the region"\n' +
+      'event ping: Bool "Ping." phrase "a member asks"\n' +
+      'output open: Bool "Open." phrase "open the desk"\n\n' +
+      "R1 Where not a member asks, the Desk shall open the desk.\n" +
+      "R2 Where a member asks, the Desk shall not open the desk.\n",
+  ),
+);
+check(
+  "where not",
+  whereNot.kind === "report" && whereNot.report.wording.length === 1 && whereNot.report.wording[0].kind === "negation",
+);
+const ifNot = lintSpec(
+  mustSpec(
+    'unwanted event ping: Bool "Ping." phrase "a member asks"\n' +
+      'output open: Bool "Open." phrase "open the desk"\n\n' +
+      "R1 If not a member asks, then the Desk shall open the desk.\n" +
+      "R2 If a member asks, then the Desk shall not open the desk.\n",
+  ),
+);
+check(
+  "if not",
+  ifNot.kind === "report" && ifNot.report.wording.length === 1 && ifNot.report.wording[0].kind === "negation",
+);
+const isNot = lintSpec(
+  mustSpec(
+    'state fine_owed: Bool "A fine." phrase "a fine is owed"\n' +
+      'output open: Bool "Open." phrase "open the desk"\n\n' +
+      "R1 While a fine is not owed, the Desk shall open the desk.\n" +
+      "R2 While a fine is owed, the Desk shall not open the desk.\n",
+  ),
+);
+check("is not is not a bare negation", isNot.kind === "report" && isNot.report.wording.length === 0 && isNot.report.gaps.length === 0);
+const measured = lintSpec(mustSpec(readFileSync("examples/order-unmeasured.ears.md", "utf8")));
+check("unmeasured ran", measured.kind === "report");
+if (measured.kind === "report") {
+  check(
+    "as needed and not the bound phrase",
+    measured.report.wording.length === 1 &&
+      measured.report.wording[0].word === "as needed" &&
+      measured.report.wording[0].kind === "vague" &&
+      measured.report.gaps.length === 0,
+  );
+}
+const boundNeeded = lintSpec(
+  mustSpec(
+    'event order_submitted: Bool "Submitted." phrase "an order is submitted"\n' +
+      'output shipped: Bool "Left." phrase "ship as needed"\n\n' +
+      "R1 When an order is submitted, the Box shall ship as needed.\n" +
+      "R2 When an order is not submitted, the Box shall not ship as needed.\n",
+  ),
+);
+check(
+  "bound as needed",
+  boundNeeded.kind === "report" && boundNeeded.report.wording.length === 0 && boundNeeded.report.gaps.length === 0,
+);
+const looseFast = lintSpec(
+  mustSpec(
+    'event order_submitted: Bool "Submitted." phrase "an order is submitted"\n' +
+      'output order_fulfilled: Bool "Fulfilled." phrase "fulfill the order"\n\n' +
+      "R1 When an order is submitted, the Fast Desk shall fulfill the order.\n" +
+      "R2 When an order is not submitted, the Desk shall not fulfill the order.\n",
+  ),
+);
+check(
+  "unbound fast in the sentence",
+  looseFast.kind === "report" &&
+    looseFast.report.wording.length === 1 &&
+    looseFast.report.wording[0].word === "fast" &&
+    looseFast.report.wording[0].kind === "vague",
 );
 
 const soundnessSpecs = runSoundness();

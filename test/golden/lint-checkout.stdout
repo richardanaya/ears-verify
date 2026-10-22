@@ -3,7 +3,8 @@ conflicts: 3
 gaps: 2
 misuse: 0
 wording: 0
-redundant: 0
+redundant: 23
+duplicate: 0
 vacuous: 0
 unused: 0
 
@@ -126,3 +127,118 @@ Nothing says whether a receipt was sent when the cart was open, an item was adde
 
 gap billed_seats
 Nothing covers the billed seats when the cart was open, an item was added, checkout was started, payment was submitted, payment was declined, the address was confirmed, the customer was subscribing, the customer was cancelling, the customer was signed in, a card was saved, and stock was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
+
+redundant R10 line 34
+R10 adds nothing. Whenever the requirements outside a conflict hold, R10 holds too.
+When the customer is cancelling, the Checkout shall not start the subscription.
+Suggested fix: remove R10, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R25 line 49
+R25 adds nothing. Whenever the requirements outside a conflict hold, R25 holds too.
+When payment is submitted and the address is not confirmed and the customer is signed in, the Checkout shall not accept the order.
+Suggested fix: remove R25, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R26 line 50
+R26 adds nothing. Whenever the requirements outside a conflict hold, R26 holds too.
+When payment is submitted and the address is not confirmed and the cart is open, the Checkout shall not accept the order.
+Suggested fix: remove R26, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R27 line 51
+R27 adds nothing. Whenever the requirements outside a conflict hold, R27 holds too.
+When payment is submitted and the address is not confirmed and an item is added, the Checkout shall not accept the order.
+Suggested fix: remove R27, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R28 line 52
+R28 adds nothing. Whenever the requirements outside a conflict hold, R28 holds too.
+When payment is submitted and the address is not confirmed and a card is saved, the Checkout shall not accept the order.
+Suggested fix: remove R28, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R29 line 53
+R29 adds nothing. Whenever the requirements outside a conflict hold, R29 holds too.
+When payment is not submitted and the cart is open, the Checkout shall not accept the order.
+Suggested fix: remove R29, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R30 line 54
+R30 adds nothing. Whenever the requirements outside a conflict hold, R30 holds too.
+When payment is not submitted and an item is added, the Checkout shall not accept the order.
+Suggested fix: remove R30, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R31 line 55
+R31 adds nothing. Whenever the requirements outside a conflict hold, R31 holds too.
+When payment is not submitted and checkout is started, the Checkout shall not accept the order.
+Suggested fix: remove R31, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R32 line 56
+R32 adds nothing. Whenever the requirements outside a conflict hold, R32 holds too.
+When payment is not submitted and the customer is signed in, the Checkout shall not accept the order.
+Suggested fix: remove R32, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R33 line 57
+R33 adds nothing. Whenever the requirements outside a conflict hold, R33 holds too.
+When payment is not submitted and a card is saved, the Checkout shall not accept the order.
+Suggested fix: remove R33, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R34 line 58
+R34 adds nothing. Whenever the requirements outside a conflict hold, R34 holds too.
+When payment is not submitted and stock is available, the Checkout shall not accept the order.
+Suggested fix: remove R34, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R35 line 59
+R35 adds nothing. Whenever the requirements outside a conflict hold, R35 holds too.
+When payment is not submitted and the customer is subscribing, the Checkout shall not accept the order.
+Suggested fix: remove R35, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R39 line 63
+R39 adds nothing. Whenever the requirements outside a conflict hold, R39 holds too.
+When the customer is subscribing and the customer is cancelling, the Checkout shall not start the subscription.
+Suggested fix: remove R39, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R40 line 64
+R40 adds nothing. Whenever the requirements outside a conflict hold, R40 holds too.
+When the customer is cancelling and the cart is open, the Checkout shall not start the subscription.
+Suggested fix: remove R40, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R41 line 65
+R41 adds nothing. Whenever the requirements outside a conflict hold, R41 holds too.
+When the customer is cancelling and an item is added, the Checkout shall not start the subscription.
+Suggested fix: remove R41, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R42 line 66
+R42 adds nothing. Whenever the requirements outside a conflict hold, R42 holds too.
+When the customer is not subscribing and the cart is open, the Checkout shall not start the subscription.
+Suggested fix: remove R42, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R43 line 67
+R43 adds nothing. Whenever the requirements outside a conflict hold, R43 holds too.
+When the customer is not subscribing and an item is added, the Checkout shall not start the subscription.
+Suggested fix: remove R43, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R44 line 68
+R44 adds nothing. Whenever the requirements outside a conflict hold, R44 holds too.
+When the customer is not subscribing and a card is saved, the Checkout shall not start the subscription.
+Suggested fix: remove R44, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R45 line 69
+R45 adds nothing. Whenever the requirements outside a conflict hold, R45 holds too.
+When the customer is subscribing and the customer is not cancelling and the customer is not signed in and the cart is open, the Checkout shall not start the subscription.
+Suggested fix: remove R45, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R46 line 70
+R46 adds nothing. Whenever the requirements outside a conflict hold, R46 holds too.
+When the subscription is not started and the cart is open, the Checkout shall route the order to the hold lane.
+Suggested fix: remove R46, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R47 line 71
+R47 adds nothing. Whenever the requirements outside a conflict hold, R47 holds too.
+When the subscription is not started and an item is added, the Checkout shall route the order to the hold lane.
+Suggested fix: remove R47, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R49 line 73
+R49 adds nothing. Whenever the requirements outside a conflict hold, R49 holds too.
+When payment is submitted and the address is confirmed and the customer is signed in, the Checkout shall send a receipt.
+Suggested fix: remove R49, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R50 line 74
+R50 adds nothing. Whenever the requirements outside a conflict hold, R50 holds too.
+When payment is submitted and the address is confirmed and the cart is open, the Checkout shall send a receipt.
+Suggested fix: remove R50, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.

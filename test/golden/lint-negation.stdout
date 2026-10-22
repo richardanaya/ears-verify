@@ -1,0 +1,13 @@
+spec: examples/order-negation.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 1
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+
+wording line 6
+The trigger is a bare negation. Write a positive condition, such as "When a non-member asks", or declare a positive event.
+When not a member asks to take a copy home, the Desk shall not allow the loan.

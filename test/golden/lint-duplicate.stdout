@@ -1,0 +1,14 @@
+spec: examples/order-duplicate.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 1
+vacuous: 0
+unused: 0
+
+duplicate R2 line 7
+R2 duplicates R1. The condition and the response are the same.
+When an order is submitted, the Order System shall fulfill the order.
+Suggested fix: remove R2, or ask whether it was meant to differ from R1. Do not delete it until the PM agrees.

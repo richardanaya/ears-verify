@@ -9,7 +9,7 @@
 import { describeAssignment, displayCode, isDriver, literalShown, reportBool, requirementMentions, speakBound, termMentions, type Requirement, type Spec, type SymbolDecl, type Term } from "./spec.ts";
 import { satisfiable } from "./decide.ts";
 import { bestGap, conflictingSets, modelFor, redundantFlags, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
-import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
+import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, termsEqual, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 import { displayQuote, englishList, formatInt, pastVoice } from "./text.ts";
 
 interface WordRule {
@@ -18,6 +18,7 @@ interface WordRule {
 }
 
 const WORD_RULES: WordRule[] = [
+  { word: "as needed", kind: "vague" },
   { word: "user-friendly", kind: "vague" },
   { word: "appropriate", kind: "vague" },
   { word: "efficient", kind: "vague" },
@@ -79,13 +80,22 @@ export interface Wording {
   line: number;
   word: string;
   kind: string;
-  context: string;
   text: string;
+  context: string;
 }
 
 export interface Redundant {
   id: string;
   line: number;
+  sentence: string;
+  text: string;
+  fix: string;
+}
+
+export interface Duplicate {
+  id: string;
+  line: number;
+  sameAs: string;
   sentence: string;
   text: string;
   fix: string;
@@ -112,6 +122,7 @@ export interface LintReport {
   misuse: Misuse[];
   wording: Wording[];
   redundant: Redundant[];
+  duplicate: Duplicate[];
   vacuous: Vacuous[];
   unused: Unused[];
 }
@@ -127,6 +138,7 @@ export function lintSpec(spec: Spec): LintOutcome {
   }
   const conflicts: Conflict[] = [];
   const groups = conflictingSets(spec);
+  const earlier = earlierDuplicate(spec);
   for (let i = 0; i < groups.length; i++) conflicts.push(explainConflict(spec, groups[i]));
   const gaps: Gap[] = [];
   for (let i = 0; i < spec.symbols.length; i++) {
@@ -147,7 +159,8 @@ export function lintSpec(spec: Spec): LintOutcome {
       gaps: gaps,
       misuse: findMisuse(spec),
       wording: findWording(spec),
-      redundant: findRedundant(spec),
+      redundant: findRedundant(spec, groups, earlier),
+      duplicate: findDuplicates(spec, earlier),
       vacuous: findVacuous(spec),
       unused: findUnused(spec),
     },
@@ -292,17 +305,27 @@ function termHasVariant(term: Term, enumName: string, variant: string): boolean 
   return false;
 }
 
-function findRedundant(spec: Spec): Redundant[] {
+function findRedundant(spec: Spec, groups: ConflictGroup[], earlier: number[]): Redundant[] {
+  const eligible: boolean[] = [];
+  for (let i = 0; i < spec.requirements.length; i++) eligible.push(earlier[i] < 0);
+  for (let g = 0; g < groups.length; g++) {
+    const indexes = groups[g].indexes;
+    for (let k = 0; k < indexes.length; k++) eligible[indexes[k]] = false;
+  }
+  const narrowed = groups.length > 0;
+  const flags = redundantFlags(spec, eligible);
   const found: Redundant[] = [];
-  const flags = redundantFlags(spec);
   for (let i = 0; i < flags.length; i++) {
     if (!flags[i]) continue;
     const req = spec.requirements[i];
+    const held = narrowed
+      ? "Whenever the requirements outside a conflict hold, "
+      : "Whenever the other requirements hold, ";
     found.push({
       id: req.id,
       line: req.line,
       sentence: req.sentence,
-      text: req.id + " adds nothing. Whenever the other requirements hold, " + req.id + " holds too.",
+      text: req.id + " adds nothing. " + held + req.id + " holds too.",
       fix:
         "Suggested fix: remove " +
         req.id +
@@ -310,6 +333,53 @@ function findRedundant(spec: Spec): Redundant[] {
     });
   }
   return found;
+}
+
+function findDuplicates(spec: Spec, earlier: number[]): Duplicate[] {
+  const found: Duplicate[] = [];
+  for (let i = 0; i < earlier.length; i++) {
+    if (earlier[i] < 0) continue;
+    const req = spec.requirements[i];
+    const prior = spec.requirements[earlier[i]];
+    found.push({
+      id: req.id,
+      line: req.line,
+      sameAs: prior.id,
+      sentence: req.sentence,
+      text: req.id + " duplicates " + prior.id + ". The condition and the response are the same.",
+      fix:
+        "Suggested fix: remove " +
+        req.id +
+        ", or ask whether it was meant to differ from " +
+        prior.id +
+        ". Do not delete it until the PM agrees.",
+    });
+  }
+  return found;
+}
+
+function earlierDuplicate(spec: Spec): number[] {
+  const earlier: number[] = [];
+  const reqs = spec.requirements;
+  for (let i = 0; i < reqs.length; i++) earlier.push(-1);
+  for (let i = 0; i < reqs.length; i++) {
+    for (let j = 0; j < i; j++) {
+      if (sameRequirement(reqs[j], reqs[i])) {
+        earlier[i] = j;
+        break;
+      }
+    }
+  }
+  return earlier;
+}
+
+function sameRequirement(left: Requirement, right: Requirement): boolean {
+  return termsEqual(guardTerm(left), guardTerm(right)) && termsEqual(left.consequent, right.consequent);
+}
+
+function guardTerm(req: Requirement): Term {
+  if (req.antecedent === null) return { kind: "bool", value: true };
+  return req.antecedent;
 }
 
 function eventMentioned(spec: Spec, index: number): boolean {
@@ -518,10 +588,10 @@ function findMisuse(spec: Spec): Misuse[] {
 function findWording(spec: Spec): Wording[] {
   const found: Wording[] = [];
   for (let i = 0; i < spec.symbols.length; i++) {
-    collectWords(spec.symbols[i].description, spec.symbols[i].line, spec.symbols[i].source, found);
+    collectWords(null, spec.symbols[i].description, spec.symbols[i].line, spec.symbols[i].source, found);
   }
   for (let i = 0; i < spec.requirements.length; i++) {
-    collectWords(spec.requirements[i].sentence, spec.requirements[i].line, spec.requirements[i].sentence, found);
+    collectWords(spec, spec.requirements[i].sentence, spec.requirements[i].line, spec.requirements[i].sentence, found);
     collectForm(spec, spec.requirements[i].sentence, spec.requirements[i].line, found);
   }
   return found;
@@ -555,6 +625,16 @@ function collectForm(spec: Spec, text: string, line: number, found: Wording[]): 
       kind: "form",
       context: text,
       text: 'Put "not" after "is": "the customer is not cancelling", not "not the customer is cancelling".',
+    });
+  }
+  if (hasBareNegation(lower)) {
+    found.push({
+      line: line,
+      word: "not",
+      kind: "negation",
+      context: text,
+      text:
+        'The trigger is a bare negation. Write a positive condition, such as "When a non-member asks", or declare a positive event.',
     });
   }
 }
@@ -643,6 +723,42 @@ function trimSpaces(text: string): string {
   return text.slice(start, end);
 }
 
+function hasBareNegation(lower: string): boolean {
+  let kind = 0;
+  while (kind < 4) {
+    const key = triggerKey(kind);
+    let from = 0;
+    while (from < lower.length) {
+      const at = wordIndex(lower, key, from);
+      if (at < 0) break;
+      const stop = clauseEnd(lower, at + key.length);
+      if (clauseHasBareNot(lower.slice(at + key.length, stop))) return true;
+      from = stop + 1;
+    }
+    kind++;
+  }
+  return false;
+}
+
+function triggerKey(kind: number): string {
+  if (kind === 0) return "when";
+  if (kind === 1) return "while";
+  if (kind === 2) return "where";
+  return "if";
+}
+
+function clauseHasBareNot(clause: string): boolean {
+  const parts = splitConjuncts(clause);
+  for (let i = 0; i < parts.length; i++) {
+    const part = trimSpaces(parts[i]);
+    if (!startsWithWord(part, "not")) continue;
+    const notAt = wordIndex(part, "not", 0);
+    const rest = trimSpaces(part.slice(notAt + 3));
+    if (wordIndex(rest, "is", 0) < 0) return true;
+  }
+  return false;
+}
+
 function hasMisplacedNot(lower: string): boolean {
   let from = 0;
   while (from < lower.length) {
@@ -712,7 +828,7 @@ function previousWord(text: string, index: number): string {
   return text.slice(i + 1, end);
 }
 
-function collectWords(text: string, line: number, context: string, found: Wording[]): void {
+function collectWords(spec: Spec | null, text: string, line: number, context: string, found: Wording[]): void {
   const lower = lowerAscii(text);
   let i = 0;
   while (i < lower.length) {
@@ -732,13 +848,42 @@ function collectWords(text: string, line: number, context: string, found: Wordin
       continue;
     }
     const rule = WORD_RULES[matched];
+    const end = i + rule.word.length;
+    if (spec !== null && coveredBySchema(spec, lower, i, end)) {
+      i = end;
+      continue;
+    }
     const message =
       rule.kind === "vague"
         ? "\"" + rule.word + "\" is too vague to test. Replace it with something a scenario can check."
         : "\"" + rule.word + "\" names a solution. Say what the system must do, not how to build it.";
     found.push({ line: line, word: rule.word, kind: rule.kind, context: context, text: message });
-    i += rule.word.length;
+    i = end;
   }
+}
+
+function coveredBySchema(spec: Spec, lower: string, start: number, end: number): boolean {
+  for (let s = 0; s < spec.symbols.length; s++) {
+    const sym = spec.symbols[s];
+    if (insidePhrase(lower, start, end, sym.phrase)) return true;
+    if (insidePhrase(lower, start, end, sym.action)) return true;
+    if (sym.phrase.length === 0 && insidePhrase(lower, start, end, sym.name)) return true;
+  }
+  return false;
+}
+
+function insidePhrase(lower: string, start: number, end: number, phrase: string): boolean {
+  const target = lowerAscii(phrase);
+  if (target.length === 0) return false;
+  let from = 0;
+  while (from < lower.length) {
+    const at = lower.indexOf(target, from);
+    if (at < 0) return false;
+    const after = at + target.length;
+    if (boundaryBefore(lower, at) && boundaryAfter(lower, after) && start >= at && end <= after) return true;
+    from = at + 1;
+  }
+  return false;
 }
 
 function mentions(term: import("./spec.ts").Term, index: number): boolean {
@@ -840,6 +985,7 @@ export function formatLintText(specPath: string, report: LintReport): string {
   lines.push("misuse: " + formatInt(report.misuse.length));
   lines.push("wording: " + formatInt(report.wording.length));
   lines.push("redundant: " + formatInt(report.redundant.length));
+  lines.push("duplicate: " + formatInt(report.duplicate.length));
   lines.push("vacuous: " + formatInt(report.vacuous.length));
   lines.push("unused: " + formatInt(report.unused.length));
   for (let i = 0; i < report.conflicts.length; i++) {
@@ -892,6 +1038,14 @@ export function formatLintText(specPath: string, report: LintReport): string {
     const item = report.redundant[i];
     lines.push("");
     lines.push("redundant " + item.id + " line " + formatInt(item.line));
+    lines.push(item.text);
+    lines.push(item.sentence);
+    lines.push(item.fix);
+  }
+  for (let i = 0; i < report.duplicate.length; i++) {
+    const item = report.duplicate[i];
+    lines.push("");
+    lines.push("duplicate " + item.id + " line " + formatInt(item.line));
     lines.push(item.text);
     lines.push(item.sentence);
     lines.push(item.fix);
@@ -960,6 +1114,18 @@ export function formatLintJson(specPath: string, report: LintReport): string {
     const item = report.redundant[i];
     redundant.push({ id: item.id, line: item.line, sentence: item.sentence, text: item.text, fix: item.fix });
   }
+  const duplicate = [];
+  for (let i = 0; i < report.duplicate.length; i++) {
+    const item = report.duplicate[i];
+    duplicate.push({
+      id: item.id,
+      line: item.line,
+      sameAs: item.sameAs,
+      sentence: item.sentence,
+      text: item.text,
+      fix: item.fix,
+    });
+  }
   const vacuous = [];
   for (let i = 0; i < report.vacuous.length; i++) {
     const item = report.vacuous[i];
@@ -976,6 +1142,7 @@ export function formatLintJson(specPath: string, report: LintReport): string {
     misuse.length === 0 &&
     wording.length === 0 &&
     redundant.length === 0 &&
+    duplicate.length === 0 &&
     vacuous.length === 0 &&
     unused.length === 0;
   return JSON.stringify(
@@ -987,6 +1154,7 @@ export function formatLintJson(specPath: string, report: LintReport): string {
       misuse: misuse,
       wording: wording,
       redundant: redundant,
+      duplicate: duplicate,
       vacuous: vacuous,
       unused: unused,
     },
