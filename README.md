@@ -4,7 +4,10 @@
 
 Catch contradictions in your requirements before anyone builds them.
 
-<p align="center"><a href="assets/demo.mp4"><img src="assets/demo-poster.jpg" alt="Watch the plan-verify demo (2:19)" width="720"></a></p>
+
+https://github.com/user-attachments/assets/2653ac92-2f97-4aec-9852-73baa3745d2f
+
+
 
 *Watch the 2-minute demo.*
 
