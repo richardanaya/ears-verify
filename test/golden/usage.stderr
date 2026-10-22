@@ -1,0 +1,7 @@
+error: missing command
+usage:
+  ears-verify check [--json] <spec> <url>
+  ears-verify emit-smt <spec>
+  ears-verify policy
+  ears-verify lint
+  ears-verify help

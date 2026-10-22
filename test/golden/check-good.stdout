@@ -1,0 +1,3 @@
+check: 0 violations
+spec: examples/url-safety.ears.md
+url: https://example.com/path
