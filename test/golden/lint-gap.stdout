@@ -1,0 +1,8 @@
+spec: examples/order.ears.md
+conflicts: 0
+gaps: 1
+misuse: 0
+wording: 0
+
+gap order_fulfilled
+Nothing covers order_fulfilled when order_submitted is true and inventory_available is false.

@@ -2,109 +2,160 @@
 
 # ears-verify
 
-Requirements written in EARS often hide contradictions and gaps. A sentence looks settled on its own. In a pile of them, two can demand opposite behavior, and a case nobody wrote down falls through. ears-verify is for catching that before any code is written.
+Catch contradictions in your requirements before anyone builds them.
 
-Today it checks a real URL against the spec and points at the exact line that URL breaks: the requirement id, the sentence, and the piece of the address that failed. Reading the requirements against each other (contradictions and gaps) is the planned `lint` command.
+ears-verify is for product managers, and for the AI agents who write requirements with them. You talk through what the product should do. The agent turns that into [EARS](https://alistairmavin.com/ears/) requirements with a fixed vocabulary. ears-verify then looks for requirements that cannot all be true, and explains the clash in plain language: which requirements disagree, in what situation, a concrete example, and a fix.
 
-## Quick start
+It will not choose which requirement wins. That question goes back to you.
 
-You need Node.js 24 or newer, npm, and a linker: `clang` on Linux, Xcode Command Line Tools on macOS, or `zig` on Windows.
+The same TypeScript runs on Node 24 and compiles to a native binary with [ScriptC](https://scriptc.dev) 0.4.1. A requirement is checked by our own solver. The logic is booleans, integers in a declared range, and enums.
 
-The native build uses [ScriptC](https://github.com/vercel-labs/scriptc) **0.4.1** (21 October 2026). That version is pinned in `package.json` and `package-lock.json`. `sh scripts/install-scriptc.sh` installs it and checks `scriptc --version`.
+## Try it
 
-```console
+You need Node 24 and clang. `npm install` installs ScriptC 0.4.1.
+
+```bash
 npm install
 npm run build
-./build/ears-verify check examples/url-safety.ears.md https://bob@evil.com
+./build/ears-verify lint examples/order-conflict.ears.md
 ```
 
-`npm install` fetches ScriptC 0.4.1. `npm run build` writes `./build/ears-verify`. The last line is the whole tool: a spec, a URL, a report.
+`node --experimental-strip-types src/main.ts` runs the same program and prints the same bytes. The tests fail if the two ever drift.
 
-## A URL that breaks the spec
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-conflict.ears.md
+-->
+```text
+spec: examples/order-conflict.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
 
-`examples/url-safety.ears.md` has three rules. The userinfo must be empty. The host must be `example.com`. And when the scheme is `https` and the host is anything else, the port must be written as `443`. `https://bob@evil.com` breaks all three. The process exits 1.
+conflict {R2, R3}
+R2 and R3 cannot both hold.
+
+R2 line 7
+When order_submitted, the Order System shall order_fulfilled.
+
+R3 line 8
+When order_submitted, the Order System shall not order_fulfilled.
+
+They clash when order_submitted is true.
+R2 requires order_fulfilled.
+R3 requires not order_fulfilled.
+
+Example scenario:
+{
+  "order_submitted": true,
+  "order_fulfilled": true
+}
+This scenario keeps R2 and breaks R3.
+
+Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2.
+```
+
+R2 says a submitted order is fulfilled. R3 says it is not. Both apply when the customer submits an order, so no behavior can satisfy both. The example keeps R2 only because R3 is the last requirement in the set. It is a witness, and it is not a recommendation. Ask which requirement should win, then delete or rewrite the other.
+
+## Check one scenario
+
+`examples/order.ears.md` is a single rule: when an order is submitted and inventory is available, the order is fulfilled. A scenario is a JSON object with one value for every declared name.
 
 <!-- verify stdout 1
 build/ears-verify
 check
-examples/url-safety.ears.md
-https://bob@evil.com
+examples/order.ears.md
+--input
+examples/order-fail.json
 -->
 ```text
-check: 3 violations
-spec: examples/url-safety.ears.md
-url: https://bob@evil.com
-R1.1 line 5
-  sentence: The url-parser shall reject a non-empty userinfo.
-  reason: userinfo is "bob"; required empty userinfo
-R1.2 line 7
-  sentence: The url-parser shall accept only host "example.com".
-  reason: host is "evil.com"; required host "example.com"
-R1.3 line 9
-  sentence: When scheme is "https", if host is not "example.com", the url-parser shall require an explicit port of 443.
-  reason: port is omitted; required explicit port 443
+spec: examples/order.ears.md
+scenario: examples/order-fail.json
+violations: 1
+
+R1 line 7
+When order_submitted and inventory_available, the Order System shall order_fulfilled.
+order_submitted is true, inventory_available is true, and order_fulfilled is false.
 ```
-
-`npm test` runs this binary again and fails if any fenced sample in this file drifts from what the CLI prints.
-
-## Commands
-
-Exit 0 means the check was clean (or `emit-smt` printed the formulas). Exit 1 means at least one requirement failed. Exit 2 means the spec or the URL could not be read. Exit 3 means the command is recognized and still planned.
-
-### `check` — implemented
-
-Pass a spec and a URL. This address satisfies the example spec, so the process exits 0. R1.3 does not apply, because the host is `example.com`.
 
 <!-- verify stdout 0
 build/ears-verify
 check
-examples/url-safety.ears.md
-https://example.com/path
+examples/order.ears.md
+--input
+examples/order-pass.json
 -->
 ```text
-check: 0 violations
-spec: examples/url-safety.ears.md
-url: https://example.com/path
+spec: examples/order.ears.md
+scenario: examples/order-pass.json
+violations: 0
 ```
 
-Add `--json` anywhere after `check` when a CI job needs a machine-readable report.
+`check` answers a different question from `lint`. The passing scenario fits R1. Lint still finds a hole, because nothing says what fulfillment should be when the order was submitted and the inventory is not available:
 
-### `emit-smt` — implemented
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order.ears.md
+-->
+```text
+spec: examples/order.ears.md
+conflicts: 0
+gaps: 1
+misuse: 0
+wording: 0
 
-Print each requirement as one named SMT-LIB assertion. The comment above an assertion is the spec line and the original sentence. The name is the id plus that line (`R1.1_L5`). This command only prints. It exits 0.
+gap order_fulfilled
+Nothing covers order_fulfilled when order_submitted is true and inventory_available is false.
+```
+
+`examples/order-covered.ears.md` gives every situation a response. Lint is quiet:
+
+<!-- verify stdout 0
+build/ears-verify
+lint
+examples/order-covered.ears.md
+-->
+```text
+spec: examples/order-covered.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+```
+
+## See the logic
+
+`emit-smt` prints each requirement as one named implication. The comment above the assertion points back at the line and the sentence.
 
 <!-- verify stdout 0
 build/ears-verify
 emit-smt
-examples/url-safety.ears.md
+examples/order.ears.md
 -->
 ```text
-; ears-verify SMT-LIB 2
-; spec: examples/url-safety.ears.md
-; port is the integer written in the URI, or (- 1) when the port is omitted.
-; Scheme defaults are not filled in. No solver is invoked by ears-verify.
+; spec: examples/order.ears.md
 (set-logic ALL)
-(declare-fun scheme () String)
-(declare-fun userinfo () String)
-(declare-fun host () String)
-(declare-fun port () Int)
-(declare-fun path () String)
-(declare-fun query () String)
-(declare-fun fragment () String)
-
-; R1.1_L5 line 5: The url-parser shall reject a non-empty userinfo.
-(assert (! (=> true (= userinfo "")) :named R1.1_L5))
-
-; R1.2_L7 line 7: The url-parser shall accept only host "example.com".
-(assert (! (=> true (= host "example.com")) :named R1.2_L7))
-
-; R1.3_L9 line 9: When scheme is "https", if host is not "example.com", the url-parser shall require an explicit port of 443.
-(assert (! (=> (and (= scheme "https") (not (= host "example.com"))) (= port 443)) :named R1.3_L9))
+; event order_submitted: Bool "The customer submits an order."
+(declare-fun order_submitted () Bool)
+; state inventory_available: Bool "Enough stock is on hand to fill the order."
+(declare-fun inventory_available () Bool)
+; output order_fulfilled: Bool "The order is fulfilled."
+(declare-fun order_fulfilled () Bool)
+; R1_L7 line 7: When order_submitted and inventory_available, the Order System shall order_fulfilled.
+(assert (! (=> (and order_submitted inventory_available) order_fulfilled) :named R1_L7))
 ```
 
-### `policy` — planned
+## Commands
 
-The name is reserved. Running it today prints one line and exits 3. The planned command searches for a URL that would break a requirement.
+| Command | Question it answers | Status |
+| --- | --- | --- |
+| `check [--json] <spec> --input <scenario>` | Does this scenario fit the requirements? | Implemented |
+| `lint [--json] <spec>` | Do any requirements clash, leave a hole, or use a word a test cannot pin down? | Implemented |
+| `emit-smt <spec>` | What is the SMT-LIB for these requirements? | Implemented |
+| `policy` | Which scenario breaks a property you hoped was true? | Planned |
 
 <!-- verify stdout 3
 build/ears-verify
@@ -114,77 +165,72 @@ policy
 not implemented yet
 ```
 
-### `lint` — planned
+Exit status is `0` when the command is clean, `1` when a scenario violates a requirement or lint finds something, `2` when the spec, the scenario, or the arguments are wrong, and `3` when the command is not implemented yet. `--json` is for the agent. The text report is for the product manager.
 
-Same status for now: one line, exit 3. The planned command reads the requirements against each other and reports contradictions and gaps.
+## What EARS is
 
-<!-- verify stdout 3
+An EARS line is one testable response, with the condition in front of it:
+
+```text
+While <state>, when <trigger>, if <condition>, where <feature>, then the <system> shall <response>.
+```
+
+Each piece is optional. `then` belongs in the line exactly when `if` is there. The names come from declarations at the top of the spec, so the same idea cannot be spelled two ways:
+
+```text
+event order_submitted: Bool "The customer submits an order."
+state inventory_available: Bool "Enough stock is on hand to fill the order."
+input quantity: Int 1..10 "How many units the customer asked for."
+output order_fulfilled: Bool "The order is fulfilled."
+unwanted event payment_declined: Bool "The payment was declined."
+```
+
+Events and states are booleans. Inputs and outputs are booleans, integers with an inclusive range, or enums. An unwanted event, such as a payment being declined, is written with `if` ... `then`. Writing it with `when` is a lint finding, because `when` reads like the normal trigger for the response.
+
+A line with no condition is ubiquitous: the response is always required. `While` is a state that holds. `When` is the trigger. `If` ... `then` is the unwanted or exceptional case. `Where` is a feature or a variant, such as a region.
+
+## How a contradiction is found
+
+Each requirement becomes an implication: when its condition is true, its response must be true. `check` plugs in the scenario you wrote. `lint` searches.
+
+A set such as `{R2, R3}` is reported when some situation has no allowed response, even if other situations are fine. The set is minimal: drop any one requirement and the rest can be satisfied. Sets are listed smallest first. Specs with more than 12 requirements are still checked as a whole; the report says when that list was not narrowed to the smallest set.
+
+The search tries `false` before `true`, enum values in the order you declared them, and integers from the low end of the range to the high end. The example scenario is the first assignment that search finds. Run it twice and you get the same bytes.
+
+An integer has to declare `min..max`, inside `-1000000..1000000`. The product of the domain sizes has to be at most 250000 or lint stops:
+
+<!-- verify stderr 2
 build/ears-verify
 lint
+examples/order-wide.ears.md
 -->
 ```text
-not implemented yet
+error: search space has more than 250000 assignments. Narrow the integer ranges and try again.
 ```
 
-## What is EARS?
+There are no strings in the logic. Descriptions stay in the spec, next to the names, and they are where vague words (`quickly`, `appropriate`, `user-friendly`) and solution words (`database`, `api`, `microservice`) are caught.
 
-EARS (Easy Approach to Requirements Syntax) writes one requirement as one sentence:
+## Where this comes from
 
-```text
-While <state>, when <trigger>, if <condition>, where <feature>, the <system> shall <response>.
-```
-
-`While`, `when`, `if`, and `where` are optional. They stay in that order. The sentence always names a system and finishes with **shall**. A requirement with none of the optional clauses applies all the time.
-
-The example spec is three sentences:
-
-- `The url-parser shall reject a non-empty userinfo.`
-- `The url-parser shall accept only host "example.com".`
-- `When scheme is "https", if host is not "example.com", the url-parser shall require an explicit port of 443.`
-
-The first two always apply. The third applies only when both its conditions hold, which is why a normal `https://example.com/path` is fine with the port left off.
-
-## How it works
-
-1. Parse the spec. Every requirement keeps its id and the line it came from.
-2. Translate the sentence into SMT-LIB. Each one becomes a named assertion, `(assert (! (=> <condition> <shall-result>) :named R1.1_L5))`, over the URL fields scheme, userinfo, host, port, path, query, and fragment.
-3. Decide that assertion with our own TypeScript. ScriptC compiles the same source into the native binary.
-
-The checker is that TypeScript. It does not call Z3, cvc5, yices, or any other solver. The SMT-LIB is the requirement written down so a person can read it, and so the checker can evaluate it on the URL you passed in. A missing port is the integer `-1` (printed `(- 1)`). The tool leaves it missing, which is what lets a requirement demand an explicit `443`.
-
-## Inspiration
-
-The planned `lint` pass follows the requirements analysis described by AWS Kiro: read a spec for contradictions, duplicates, and missing cases before implementation starts.
+The shape of the analysis follows Kiro's requirements analysis: separate behavior from design, and look for what the requirements refuse to allow.
 
 - [Deep spec analysis](https://kiro.dev/blog/deep-spec-analysis/)
 - [Analyze requirements](https://kiro.dev/docs/specs/analyze-requirements/)
 
-## FAQ
+## For the agent in the conversation
 
-### Why not Z3?
+The skill at [`skills/ears-verify/SKILL.md`](skills/ears-verify/SKILL.md) tells an agent how to sit with a product manager: turn their words into this vocabulary, run lint, explain a conflict in plain words, and ask which requirement should win.
 
-The decision is code in this repository. A check has no solver to install and no solver version to drift between machines. The assertions are still SMT-LIB, so the formula stays a readable artifact, and a later search can reuse the same terms.
+## Questions
 
-### Why ScriptC?
+**Why our own solver?** The fragment is small and finite, so the binary can decide it directly. There is no Z3, cvc5, or yices to install, and the Node run and the native binary are tested to print the same bytes.
 
-The checker is ordinary TypeScript, so you can run `src/main.ts` under Node while you edit. ScriptC 0.4.1 compiles that same file to a native binary that runs without Node. The pin is deliberate: ScriptC is experimental, and `npm test` requires `scriptc coverage` to stay at 100% on this source.
+**Why ScriptC?** One TypeScript program is the product. ScriptC 0.4.1 compiles that program to a native binary, and `scriptc coverage` stays fully static. Node 24 runs the same files for day-to-day edits.
 
-### Why RFC 3986, when browsers follow WHATWG?
+**Why do integers need a range?** The search enumerates every allowed value. A declared range keeps that finite, and a range that would blow past 250000 assignments is an error you can fix by narrowing it.
 
-The parser follows the RFC 3986 grammar, so a requirement talks about the URI as written. Browsers follow the WHATWG URL Standard, and a few differences show up in reports:
-
-- A missing port stays missing. `https://bob@evil.com` is not quietly given port 443.
-- `\` is an illegal character. WHATWG turns it into `/` for schemes such as `https`.
-- A non-ASCII host is rejected. WHATWG runs IDNA.
-- `bob:secret` stays one userinfo string. WHATWG splits a username and a password.
-- An empty host, as in `https:///path`, is accepted. WHATWG rejects an empty host on `https`.
-
-### Will two runs disagree?
-
-The same spec and the same URL produce the same bytes, from Node and from the native binary. `npm test` runs both and diffs them. The report prints the spec path as you typed it. It does not read the clock or the locale.
+**Will it pick a winner?** It will show who clashes, the situation, and an example that breaks one requirement in the set. The fix says to ask which requirement should win.
 
 ## Roadmap
 
-- **`policy`.** Search for a counterexample URL with automata over the same terms. Still no external solver.
-- **`lint`.** Report contradictions, overlap, and gaps in the spec, in the spirit of Kiro's requirements analysis.
-- **More than URLs.** Other inputs, once the URL checker has settled.
+`policy` will search for a scenario that breaks a property you state separately from the requirements. Until then it prints `not implemented yet`.

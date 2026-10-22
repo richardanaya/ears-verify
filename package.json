@@ -1,7 +1,7 @@
 {
   "name": "ears-verify",
   "version": "0.1.0",
-  "description": "Verify EARS requirements against URLs. The same TypeScript runs on Node and compiles to a native binary with ScriptC.",
+  "description": "Catch contradictions in EARS requirements before anyone builds them. The same TypeScript runs on Node and compiles to a native binary with ScriptC.",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {

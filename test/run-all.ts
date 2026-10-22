@@ -2,15 +2,15 @@
  * Run the typecheck, ScriptC coverage gate, native build, unit tests,
  * and golden CLI tests. Unit tests and each CLI case run once under Node
  * and once as the native binary; stdout, stderr, and exit status must match
- * each other and the checked-in golden files. README samples marked with
- * `<!-- verify stdout|stderr <exit>` are run against build/ears-verify and
- * must match the fenced bytes.
+ * each other and the checked-in golden files. Samples in README.md and
+ * skills/ears-verify/SKILL.md marked with `<!-- verify stdout|stderr <exit>`
+ * are run under Node and build/ears-verify and must match the fenced bytes.
  *
  * Write or refresh goldens with: node --experimental-strip-types test/run-all.ts --write-golden
  */
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 
 interface RunResult {
   status: number;
@@ -153,15 +153,22 @@ function main(): void {
   comparePair("unit", unitNode, unitBin);
 
   const cases: Case[] = [
-    { name: "check-bad", args: ["check", "examples/url-safety.ears.md", "https://bob@evil.com"] },
-    { name: "check-good", args: ["check", "examples/url-safety.ears.md", "https://example.com/path"] },
-    { name: "check-bad-json", args: ["check", "--json", "examples/url-safety.ears.md", "https://bob@evil.com"] },
-    { name: "emit-smt", args: ["emit-smt", "examples/url-safety.ears.md"] },
-    { name: "malformed-spec", args: ["check", "test/fixtures/malformed.ears.md", "https://example.com/"] },
-    { name: "malformed-url", args: ["check", "examples/url-safety.ears.md", "http://ex ample.com"] },
+    { name: "check-fail", args: ["check", "examples/order.ears.md", "--input", "examples/order-fail.json"] },
+    { name: "check-pass", args: ["check", "examples/order.ears.md", "--input", "examples/order-pass.json"] },
+    { name: "check-fail-json", args: ["check", "--json", "examples/order.ears.md", "--input", "examples/order-fail.json"] },
+    { name: "emit-smt", args: ["emit-smt", "examples/order.ears.md"] },
+    { name: "lint-conflict", args: ["lint", "examples/order-conflict.ears.md"] },
+    { name: "lint-conflict-json", args: ["lint", "--json", "examples/order-conflict.ears.md"] },
+    { name: "lint-gap", args: ["lint", "examples/order.ears.md"] },
+    { name: "lint-clean", args: ["lint", "examples/order-covered.ears.md"] },
+    { name: "lint-misuse", args: ["lint", "examples/order-misuse.ears.md"] },
+    { name: "lint-wording", args: ["lint", "examples/order-wording.ears.md"] },
+    { name: "lint-wide", args: ["lint", "examples/order-wide.ears.md"] },
+    { name: "malformed-spec", args: ["check", "test/fixtures/malformed.ears.md", "--input", "examples/order-pass.json"] },
+    { name: "malformed-scenario", args: ["check", "examples/order.ears.md", "--input", "examples/order-bad.json"] },
     { name: "policy", args: ["policy"] },
-    { name: "lint", args: ["lint", "examples/url-safety.ears.md"] },
     { name: "usage", args: [] },
+    { name: "help", args: ["help"] },
   ];
   for (let i = 0; i < cases.length; i++) {
     const item = cases[i];
@@ -170,7 +177,9 @@ function main(): void {
     comparePair(item.name, nodeResult, binResult);
   }
 
-  checkReadmeSamples();
+  checkDocSamples("readme", "README.md");
+  checkDocSamples("skill", "skills/ears-verify/SKILL.md");
+  forbidRetiredLanguage();
 
   if (failed !== 0) {
     console.error(String(failed) + " failed");
@@ -180,68 +189,109 @@ function main(): void {
   process.exit(0);
 }
 
-function checkReadmeSamples(): void {
-  const readme = readFileSync("README.md", "utf8");
+function checkDocSamples(label: string, path: string): void {
+  const text = readFileSync(path, "utf8");
   const startMark = "<!-- verify ";
   let cursor = 0;
   let found = 0;
-  while (cursor < readme.length) {
-    const at = readme.indexOf(startMark, cursor);
+  while (cursor < text.length) {
+    const at = text.indexOf(startMark, cursor);
     if (at < 0) break;
-    const headerEnd = readme.indexOf("\n", at);
+    const headerEnd = text.indexOf("\n", at);
     if (headerEnd < 0) {
-      fail("readme verify header is truncated");
+      fail(label + " verify header is truncated");
       return;
     }
-    const header = readme.slice(at + startMark.length, headerEnd).trim();
+    const header = text.slice(at + startMark.length, headerEnd).trim();
     const space = header.indexOf(" ");
     if (space < 0) {
-      fail("readme verify header needs a stream and an exit code");
+      fail(label + " verify header needs a stream and an exit code");
       return;
     }
     const stream = header.slice(0, space);
     const exitCode = parseExit(header.slice(space + 1).trim());
     if ((stream !== "stdout" && stream !== "stderr") || exitCode < 0) {
-      fail("readme verify header " + header);
+      fail(label + " verify header " + header);
       return;
     }
-    const argsEnd = readme.indexOf("\n-->", headerEnd);
+    const argsEnd = text.indexOf("\n-->", headerEnd);
     if (argsEnd < 0) {
-      fail("readme verify block is missing -->");
+      fail(label + " verify block is missing -->");
       return;
     }
-    const args = nonEmptyLines(readme.slice(headerEnd + 1, argsEnd));
-    if (args.length === 0) {
-      fail("readme verify block is missing a command");
+    const args = nonEmptyLines(text.slice(headerEnd + 1, argsEnd));
+    if (args.length === 0 || args[0] !== "build/ears-verify") {
+      fail(label + " verify block must start with build/ears-verify");
       return;
     }
-    const fenceAt = readme.indexOf("```", argsEnd);
-    const fenceLineEnd = fenceAt < 0 ? -1 : readme.indexOf("\n", fenceAt);
-    const closeAt = fenceLineEnd < 0 ? -1 : readme.indexOf("\n```", fenceLineEnd);
+    const fenceAt = text.indexOf("```", argsEnd);
+    const fenceLineEnd = fenceAt < 0 ? -1 : text.indexOf("\n", fenceAt);
+    const closeAt = fenceLineEnd < 0 ? -1 : text.indexOf("\n```", fenceLineEnd);
     if (fenceAt < 0 || fenceLineEnd < 0 || closeAt < 0) {
-      fail("readme verify block is missing a fence");
+      fail(label + " verify block is missing a fence");
       return;
     }
-    const body = readme.slice(fenceLineEnd + 1, closeAt + 1);
-    const result = run(args[0], args.slice(1));
-    const actual = stream === "stdout" ? result.stdout : result.stderr;
-    const other = stream === "stdout" ? result.stderr : result.stdout;
-    const label = args.join(" ");
-    if (result.status !== exitCode || actual !== body || other.length !== 0) {
-      fail("readme sample " + label);
-      console.error("expected exit " + String(exitCode) + ", got " + String(result.status));
+    const body = text.slice(fenceLineEnd + 1, closeAt + 1);
+    const native = run(args[0], args.slice(1));
+    const nodeArgs: string[] = ["--experimental-strip-types", "src/main.ts"];
+    for (let i = 1; i < args.length; i++) nodeArgs.push(args[i]);
+    const nodeResult = run(process.execPath, nodeArgs);
+    const command = args.join(" ");
+    if (native.status !== nodeResult.status || native.stdout !== nodeResult.stdout || native.stderr !== nodeResult.stderr) {
+      fail(label + " node/native differ " + command);
+      console.error("--- node stdout ---\n" + nodeResult.stdout);
+      console.error("--- native stdout ---\n" + native.stdout);
+      return;
+    }
+    const actual = stream === "stdout" ? native.stdout : native.stderr;
+    const other = stream === "stdout" ? native.stderr : native.stdout;
+    if (native.status !== exitCode || actual !== body || other.length !== 0) {
+      fail(label + " sample " + command);
+      console.error("expected exit " + String(exitCode) + ", got " + String(native.status));
       console.error("--- cli ---");
       console.error(actual);
-      console.error("--- readme ---");
+      console.error("--- doc ---");
       console.error(body);
       if (other.length > 0) console.error("--- other stream ---\n" + other);
     } else {
-      console.log("PASS readme " + label);
+      console.log("PASS " + label + " " + command);
     }
     found++;
     cursor = closeAt + 4;
   }
-  if (found === 0) fail("readme has no verify blocks");
+  if (found === 0) fail(label + " has no verify blocks");
+}
+
+function forbidRetiredLanguage(): void {
+  const files: string[] = [];
+  collectFiles("src", files);
+  collectFiles("examples", files);
+  collectFiles("test", files);
+  collectFiles("skills", files);
+  collectFiles(".github", files);
+  files.push("README.md");
+  files.push("package.json");
+  const banned = ["u" + "rl", "what" + "wg", "user" + "info", "canonical" + "ize", "rf" + "c"];
+  let hits = 0;
+  for (let i = 0; i < files.length; i++) {
+    const text = readFileSync(files[i], "utf8").toLowerCase();
+    for (let b = 0; b < banned.length; b++) {
+      if (text.indexOf(banned[b]) !== -1) {
+        fail(files[i] + " contains retired language " + banned[b]);
+        hits++;
+      }
+    }
+  }
+  if (hits === 0) console.log("PASS retired language");
+}
+
+function collectFiles(dir: string, out: string[]): void {
+  const names = readdirSync(dir);
+  for (let i = 0; i < names.length; i++) {
+    const path = dir + "/" + names[i];
+    if (statSync(path).isDirectory()) collectFiles(path, out);
+    else out.push(path);
+  }
 }
 
 function parseExit(text: string): number {

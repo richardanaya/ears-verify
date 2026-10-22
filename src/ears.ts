@@ -1,77 +1,35 @@
 /**
- * EARS spec parser.
+ * Parser for an EARS spec with a declared vocabulary.
  *
- * A spec is markdown-ish text. Requirement lines start with an id such as
- * `R1.1`, then an EARS sentence. Headings (`#`), blank lines, `//` comments,
- * and full-line HTML comments are ignored. Indented or following lines
- * continue the sentence until a blank line, a heading, or the next id.
- *
- * Sentence shape, clauses optional and in this order:
- *   While <state>, when <trigger>, if <condition>, where <feature>,
- *   the <system> shall <response>.
- *
- * Conditions and responses use a small predicate language over URL
- * components, not free English. See parsePredicate.
+ * Declarations come first in practice. A requirement can only mention
+ * symbols declared above it. Clauses, when present, go in this order:
+ * while, when, if, where. `then` is required exactly when an if clause
+ * is present. The response is `the <system> shall <boolean>`.
  */
 
-export interface Clause {
-  keyword: string;
-  text: string;
-  pred: Pred;
-}
+import {
+  findEnum,
+  findSymbol,
+  findVariant,
+  type EnumDecl,
+  type Requirement,
+  type Role,
+  type Sort,
+  type Spec,
+  type SymbolDecl,
+  type Term,
+} from "./spec.ts";
+import { displayQuote } from "./text.ts";
 
-export type Pred =
-  | { kind: "empty"; component: string }
-  | { kind: "not_empty"; component: string }
-  | { kind: "eq"; component: string; value: string }
-  | { kind: "neq"; component: string; value: string }
-  | { kind: "one_of"; component: string; values: string[] }
-  | { kind: "port_eq"; value: number }
-  | { kind: "port_omitted" }
-  | { kind: "port_explicit" }
-  | { kind: "prefix"; component: string; value: string };
+export type SpecResult = { ok: true; spec: Spec } | { ok: false; line: number; message: string };
 
-export interface Requirement {
-  id: string;
-  line: number;
-  sentence: string;
-  system: string;
-  clauses: Clause[];
-  responseText: string;
-  response: Pred;
-}
+const RANGE_BOUND = 1000000;
 
-export interface SpecOk {
-  ok: true;
-  requirements: Requirement[];
-}
+type SortTag = { kind: "bool" } | { kind: "int" } | { kind: "enum"; enumName: string };
 
-export interface SpecErr {
-  ok: false;
-  line: number;
-  message: string;
-}
+type Parsed = { ok: true; term: Term; sort: SortTag } | { ok: false; message: string };
 
-export type SpecResult = SpecOk | SpecErr;
-
-interface SentenceOk {
-  ok: true;
-  system: string;
-  clauses: Clause[];
-  responseText: string;
-  response: Pred;
-}
-
-type SentenceResult = SentenceOk | SpecErr;
-
-interface PredOk {
-  ok: true;
-  pred: Pred;
-}
-
-type PredResult = PredOk | SpecErr;
-
-class Cursor {
+class Cur {
   text: string;
   i: number;
 
@@ -79,16 +37,35 @@ class Cursor {
     this.text = text;
     this.i = 0;
   }
+
+  skip(): void {
+    while (this.i < this.text.length) {
+      const code = this.text.charCodeAt(this.i);
+      if (code !== 32 && code !== 9 && code !== 10 && code !== 13) break;
+      this.i++;
+    }
+  }
+
+  eof(): boolean {
+    this.skip();
+    return this.i >= this.text.length;
+  }
 }
 
 export function parseSpec(text: string): SpecResult {
   const source = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   const lines = splitLines(source);
-  const requirements: Requirement[] = [];
+  const spec: Spec = { enums: [], symbols: [], requirements: [] };
   let index = 0;
   while (index < lines.length) {
-    const trimmed = stripCr(lines[index]).trim();
+    const trimmed = lines[index].trim();
     if (isIgnorable(trimmed)) {
+      index++;
+      continue;
+    }
+    if (isDeclaration(trimmed)) {
+      const message = parseDeclaration(trimmed, index + 1, spec);
+      if (message !== null) return { ok: false, line: index + 1, message: message };
       index++;
       continue;
     }
@@ -97,358 +74,43 @@ export function parseSpec(text: string): SpecResult {
       return {
         ok: false,
         line: index + 1,
-        message: "expected a requirement id such as R1.1, a heading, or a comment",
+        message: "expected a requirement id such as R1, a declaration, a heading, or a comment",
       };
     }
     const startLine = index + 1;
-    let sentence = id.rest;
+    let sentence = id.rest.trim();
     index++;
     while (index < lines.length) {
-      const next = stripCr(lines[index]).trim();
-      if (next.length === 0 || isIgnorable(next) || matchId(next) !== null) break;
-      sentence += " " + next;
+      const next = lines[index].trim();
+      if (next.length === 0 || isIgnorable(next) || matchId(next) !== null || isDeclaration(next)) break;
+      if (sentence.length === 0) sentence = next;
+      else sentence += " " + next;
       index++;
     }
-    const parsed = parseSentence(sentence.trim());
-    if (!parsed.ok) return { ok: false, line: startLine, message: parsed.message };
-    requirements.push({
-      id: id.id,
-      line: startLine,
-      sentence: sentence.trim(),
-      system: parsed.system,
-      clauses: parsed.clauses,
-      responseText: parsed.responseText,
-      response: parsed.response,
-    });
-  }
-  if (requirements.length === 0) {
-    return { ok: false, line: 1, message: "no requirements found" };
-  }
-  for (let i = 0; i < requirements.length; i++) {
-    for (let j = 0; j < i; j++) {
-      if (requirements[i].id === requirements[j].id) {
-        return {
-          ok: false,
-          line: requirements[i].line,
-          message: "duplicate requirement id " + requirements[i].id,
-        };
+    if (sentence.length === 0) {
+      return { ok: false, line: startLine, message: "expected a sentence after " + id.id };
+    }
+    for (let r = 0; r < spec.requirements.length; r++) {
+      if (spec.requirements[r].id === id.id) {
+        return { ok: false, line: startLine, message: "duplicate requirement " + id.id };
       }
     }
+    const parsed = parseSentence(sentence, spec);
+    if (!parsed.ok) return { ok: false, line: startLine, message: parsed.message };
+    const requirement: Requirement = {
+      id: id.id,
+      line: startLine,
+      sentence: sentence,
+      system: parsed.system,
+      antecedent: parsed.antecedent,
+      consequent: parsed.consequent,
+      hasWhen: parsed.hasWhen,
+      hasIf: parsed.hasIf,
+      whenTerm: parsed.whenTerm,
+    };
+    spec.requirements.push(requirement);
   }
-  return { ok: true, requirements: requirements };
-}
-
-export function parseSentence(sentence: string): SentenceResult {
-  const text = sentence.trim();
-  if (text.length === 0 || text.charCodeAt(text.length - 1) !== 46) {
-    return { ok: false, line: 0, message: "EARS sentence must end with '.'" };
-  }
-  const cur = new Cursor(text.slice(0, text.length - 1));
-  const clauses: Clause[] = [];
-  let lastOrder = -1;
-  while (true) {
-    skipWs(cur);
-    const keyword = matchKeyword(cur);
-    if (keyword.length === 0) break;
-    const order = keywordOrder(keyword);
-    if (order <= lastOrder) {
-      return {
-        ok: false,
-        line: 0,
-        message: "clauses must appear in order: while, when, if, where",
-      };
-    }
-    lastOrder = order;
-    skipWs(cur);
-    const body = readUntilComma(cur);
-    if (body === null) {
-      return { ok: false, line: 0, message: "expected a comma after the " + keyword + " clause" };
-    }
-    const pred = parsePredicate(body.trim());
-    if (!pred.ok) return pred;
-    clauses.push({ keyword: keyword, text: body.trim(), pred: pred.pred });
-  }
-  skipWs(cur);
-  if (!consumeWord(cur, "the") && !consumeWord(cur, "The")) {
-    return { ok: false, line: 0, message: "expected \"the <system> shall <response>\"" };
-  }
-  skipWs(cur);
-  if (cur.text.startsWith("shall", cur.i)) {
-    return { ok: false, line: 0, message: "expected a system name before shall" };
-  }
-  if (!hasShallWord(cur.text.slice(cur.i))) {
-    return { ok: false, line: 0, message: "expected \"shall\"" };
-  }
-  const system = readSystem(cur);
-  if (system.length === 0) {
-    return { ok: false, line: 0, message: "expected a system name before shall" };
-  }
-  skipWs(cur);
-  if (!consumeWord(cur, "shall")) {
-    return { ok: false, line: 0, message: "expected \"shall\"" };
-  }
-  skipWs(cur);
-  const responseText = cur.text.slice(cur.i).trim();
-  if (responseText.length === 0) {
-    return { ok: false, line: 0, message: "expected a response after shall" };
-  }
-  const response = parseResponse(responseText);
-  if (!response.ok) return response;
-  return {
-    ok: true,
-    system: system,
-    clauses: clauses,
-    responseText: responseText,
-    response: response.pred,
-  };
-}
-
-function parseResponse(text: string): PredResult {
-  if (text === "reject a non-empty userinfo" || text === "reject non-empty userinfo") {
-    return { ok: true, pred: { kind: "empty", component: "userinfo" } };
-  }
-  if (text === "require an omitted port" || text === "require port omitted") {
-    return { ok: true, pred: { kind: "port_omitted" } };
-  }
-  const hostList = matchAcceptOnly(text);
-  if (hostList !== null) {
-    if (hostList.length === 0) {
-      return { ok: false, line: 0, message: "unsupported predicate: " + text };
-    }
-    if (hostList.length === 1) {
-      return { ok: true, pred: { kind: "eq", component: "host", value: hostList[0].toLowerCase() } };
-    }
-    const values: string[] = [];
-    for (let i = 0; i < hostList.length; i++) values.push(hostList[i].toLowerCase());
-    return { ok: true, pred: { kind: "one_of", component: "host", values: values } };
-  }
-  const port = matchRequirePort(text);
-  if (port === -2) return { ok: false, line: 0, message: "port is out of range" };
-  if (port >= 0) return { ok: true, pred: { kind: "port_eq", value: port } };
-  return parsePredicate(text);
-}
-
-function parsePredicate(text: string): PredResult {
-  const names = ["scheme", "userinfo", "host", "path", "query", "fragment"];
-  for (let i = 0; i < names.length; i++) {
-    const name = names[i];
-    if (text === name + " is empty") return { ok: true, pred: { kind: "empty", component: name } };
-    if (text === name + " is not empty") {
-      return { ok: true, pred: { kind: "not_empty", component: name } };
-    }
-  }
-  if (text === "port is omitted") return { ok: true, pred: { kind: "port_omitted" } };
-  if (text === "port is explicit") return { ok: true, pred: { kind: "port_explicit" } };
-  const port = matchPrefixedPort(text, "port is ");
-  if (port === -2) return { ok: false, line: 0, message: "port is out of range" };
-  if (port >= 0) return { ok: true, pred: { kind: "port_eq", value: port } };
-  for (let i = 0; i < names.length; i++) {
-    const name = names[i];
-    const eq = matchQuoted(text, name + " is \"");
-    if (eq !== null) {
-      return { ok: true, pred: { kind: "eq", component: name, value: normalize(name, eq) } };
-    }
-    const neq = matchQuoted(text, name + " is not \"");
-    if (neq !== null) {
-      return { ok: true, pred: { kind: "neq", component: name, value: normalize(name, neq) } };
-    }
-    const prefix = matchQuoted(text, name + " starts with \"");
-    if (prefix !== null) {
-      return { ok: true, pred: { kind: "prefix", component: name, value: prefix } };
-    }
-    const oneOf = matchOneOf(text, name);
-    if (oneOf !== null) {
-      if (oneOf.length === 0) break;
-      const values: string[] = [];
-      for (let v = 0; v < oneOf.length; v++) values.push(normalize(name, oneOf[v]));
-      return { ok: true, pred: { kind: "one_of", component: name, values: values } };
-    }
-  }
-  return { ok: false, line: 0, message: "unsupported predicate: " + text };
-}
-
-function matchAcceptOnly(text: string): string[] | null {
-  if (text.startsWith("accept only host ")) return parseOrList(text.slice("accept only host ".length));
-  if (text.startsWith("accept only hosts ")) return parseOrList(text.slice("accept only hosts ".length));
-  return null;
-}
-
-function matchOneOf(text: string, component: string): string[] | null {
-  const prefix = component + " is one of ";
-  if (!text.startsWith(prefix)) return null;
-  return parseOrList(text.slice(prefix.length));
-}
-
-function matchRequirePort(text: string): number {
-  if (text.startsWith("require an explicit port of ")) {
-    return matchPrefixedPort(text, "require an explicit port of ");
-  }
-  if (text.startsWith("require explicit port ")) {
-    return matchPrefixedPort(text, "require explicit port ");
-  }
-  if (text.startsWith("require port ")) return matchPrefixedPort(text, "require port ");
-  return -1;
-}
-
-function matchPrefixedPort(text: string, prefix: string): number {
-  if (!text.startsWith(prefix)) return -1;
-  return parsePortLiteral(text.slice(prefix.length));
-}
-
-function parsePortLiteral(text: string): number {
-  if (text.length === 0 || text.length > 5) return -2;
-  let value = 0;
-  for (let i = 0; i < text.length; i++) {
-    const code = text.charCodeAt(i);
-    if (code < 48 || code > 57) return -1;
-    value = value * 10 + (code - 48);
-  }
-  if (value > 65535) return -2;
-  return value;
-}
-
-function matchQuoted(text: string, prefix: string): string | null {
-  if (!text.startsWith(prefix)) return null;
-  if (text.charCodeAt(text.length - 1) !== 34) return null;
-  const value = text.slice(prefix.length, text.length - 1);
-  if (!validLiteral(value)) return null;
-  return value;
-}
-
-function parseOrList(text: string): string[] | null {
-  const values: string[] = [];
-  let i = 0;
-  if (text.length === 0) return null;
-  while (i < text.length) {
-    if (text.charCodeAt(i) !== 34) return null;
-    i++;
-    const start = i;
-    while (i < text.length && text.charCodeAt(i) !== 34) {
-      if (text.charCodeAt(i) === 92 || text.charCodeAt(i) === 10) return null;
-      i++;
-    }
-    if (i >= text.length) return null;
-    values.push(text.slice(start, i));
-    i++;
-    if (i === text.length) return values;
-    if (!text.startsWith(" or ", i)) return null;
-    i += 4;
-  }
-  return null;
-}
-
-function validLiteral(value: string): boolean {
-  for (let i = 0; i < value.length; i++) {
-    const code = value.charCodeAt(i);
-    if (code === 34 || code === 92 || code === 10 || code === 13) return false;
-  }
-  return true;
-}
-
-function normalize(component: string, value: string): string {
-  if (component === "scheme" || component === "host") return value.toLowerCase();
-  return value;
-}
-
-function matchKeyword(cur: Cursor): string {
-  const words = ["While", "while", "When", "when", "If", "if", "Where", "where"];
-  const canon = ["while", "while", "when", "when", "if", "if", "where", "where"];
-  for (let i = 0; i < words.length; i++) {
-    const word = words[i];
-    if (!cur.text.startsWith(word, cur.i)) continue;
-    const after = cur.i + word.length;
-    if (after >= cur.text.length) continue;
-    const code = cur.text.charCodeAt(after);
-    if (code !== 32 && code !== 9) continue;
-    cur.i = after;
-    return canon[i];
-  }
-  return "";
-}
-
-function keywordOrder(keyword: string): number {
-  if (keyword === "while") return 0;
-  if (keyword === "when") return 1;
-  if (keyword === "if") return 2;
-  if (keyword === "where") return 3;
-  return 9;
-}
-
-function readUntilComma(cur: Cursor): string | null {
-  const start = cur.i;
-  let quoted = false;
-  let i = cur.i;
-  while (i < cur.text.length) {
-    const code = cur.text.charCodeAt(i);
-    if (code === 34) quoted = !quoted;
-    else if (code === 44 && !quoted) {
-      const body = cur.text.slice(start, i);
-      cur.i = i + 1;
-      return body;
-    }
-    i++;
-  }
-  return null;
-}
-
-function hasShallWord(text: string): boolean {
-  const at = text.indexOf("shall");
-  if (at < 0) return false;
-  if (at > 0) {
-    const before = text.charCodeAt(at - 1);
-    if (before !== 32 && before !== 9) return false;
-  }
-  const after = at + 5;
-  if (after < text.length && isNameChar(text.charCodeAt(after))) return false;
-  return true;
-}
-
-function readSystem(cur: Cursor): string {
-  skipWs(cur);
-  const rest = cur.text.slice(cur.i);
-  const needle = " shall";
-  const at = rest.indexOf(needle);
-  if (at <= 0) return "";
-  const after = at + needle.length;
-  if (after < rest.length) {
-    const code = rest.charCodeAt(after);
-    if (isNameChar(code)) return "";
-  }
-  const system = rest.slice(0, at).trim();
-  if (!validSystem(system)) return "";
-  cur.i = cur.i + at + 1;
-  return system;
-}
-
-function validSystem(value: string): boolean {
-  let i = 0;
-  if (value.length === 0) return false;
-  while (i < value.length) {
-    if (!isAlpha(value.charCodeAt(i))) return false;
-    i++;
-    while (i < value.length && isNameChar(value.charCodeAt(i))) i++;
-    if (i === value.length) return true;
-    if (value.charCodeAt(i) !== 32) return false;
-    i++;
-    if (i === value.length) return false;
-  }
-  return false;
-}
-
-function consumeWord(cur: Cursor, word: string): boolean {
-  if (!cur.text.startsWith(word, cur.i)) return false;
-  const after = cur.i + word.length;
-  if (after < cur.text.length && isNameChar(cur.text.charCodeAt(after))) return false;
-  cur.i = after;
-  return true;
-}
-
-function skipWs(cur: Cursor): void {
-  while (cur.i < cur.text.length) {
-    const code = cur.text.charCodeAt(cur.i);
-    if (code !== 32 && code !== 9) break;
-    cur.i++;
-  }
+  return { ok: true, spec: spec };
 }
 
 interface IdMatch {
@@ -457,57 +119,660 @@ interface IdMatch {
 }
 
 function matchId(line: string): IdMatch | null {
-  if (line.length === 0 || line.charCodeAt(0) !== 82) return null;
+  if (line.length < 2 || line.charCodeAt(0) !== 82) return null;
   let i = 1;
-  if (i >= line.length || !isDigit(line.charCodeAt(i))) return null;
+  if (!isDigit(line.charCodeAt(i))) return null;
   while (i < line.length && isDigit(line.charCodeAt(i))) i++;
   while (i < line.length && line.charCodeAt(i) === 46) {
     i++;
     if (i >= line.length || !isDigit(line.charCodeAt(i))) return null;
     while (i < line.length && isDigit(line.charCodeAt(i))) i++;
   }
-  const idEnd = i;
-  if (i >= line.length) return null;
-  const code = line.charCodeAt(i);
-  if (code !== 32 && code !== 9) return null;
-  while (i < line.length && (line.charCodeAt(i) === 32 || line.charCodeAt(i) === 9)) i++;
-  return { id: line.slice(0, idEnd), rest: line.slice(i) };
+  if (i < line.length && !isSpace(line.charCodeAt(i))) return null;
+  return { id: line.slice(0, i), rest: line.slice(i) };
+}
+
+function isDeclaration(line: string): boolean {
+  const word = leadingWord(line).toLowerCase();
+  return word === "enum" || word === "event" || word === "state" || word === "input" || word === "output" || word === "unwanted";
 }
 
 function isIgnorable(line: string): boolean {
   if (line.length === 0) return true;
-  if (line.charCodeAt(0) === 35) return true;
+  if (line.startsWith("#")) return true;
   if (line.startsWith("//")) return true;
   if (line.startsWith("<!--")) return true;
+  if (line === "-->") return true;
   return false;
+}
+
+function parseDeclaration(line: string, lineNo: number, spec: Spec): string | null {
+  const cur = new Cur(line);
+  const first = readIdent(cur);
+  if (first === null) return "expected a declaration";
+  const keyword = first.toLowerCase();
+  if (keyword === "enum") return parseEnum(cur, lineNo, spec);
+  let unwanted = false;
+  let roleWord = keyword;
+  if (keyword === "unwanted") {
+    unwanted = true;
+    const second = readIdent(cur);
+    if (second === null || second.toLowerCase() !== "event") return "unwanted only applies to an event";
+    roleWord = "event";
+  }
+  if (roleWord !== "event" && roleWord !== "state" && roleWord !== "input" && roleWord !== "output") {
+    return "expected a declaration";
+  }
+  const role: Role = roleWord;
+  const name = readIdent(cur);
+  if (name === null) return "expected a symbol name";
+  const clash = nameClash(spec, name);
+  if (clash.length > 0) return clash;
+  cur.skip();
+  if (cur.i >= cur.text.length || cur.text.charCodeAt(cur.i) !== 58) return "expected ':'";
+  cur.i++;
+  const sort = parseSort(cur, spec, role);
+  if (typeof sort === "string") return sort;
+  if ((role === "event" || role === "state") && sort.kind !== "bool") {
+    return role === "event" ? "events must be Bool" : "states must be Bool";
+  }
+  const described = parseDescription(cur);
+  if (!described.ok) return described.message;
+  if (!cur.eof()) return "unexpected trailing text";
+  const decl: SymbolDecl = {
+    role: role,
+    name: name,
+    sort: sort,
+    description: described.text,
+    unwanted: unwanted,
+    line: lineNo,
+    source: line,
+  };
+  spec.symbols.push(decl);
+  return null;
+}
+
+function parseEnum(cur: Cur, lineNo: number, spec: Spec): string | null {
+  const name = readIdent(cur);
+  if (name === null) return "expected an enum name";
+  const clash = nameClash(spec, name);
+  if (clash.length > 0) return clash;
+  cur.skip();
+  if (cur.i >= cur.text.length || cur.text.charCodeAt(cur.i) !== 123) return "expected '{'";
+  cur.i++;
+  const variants: string[] = [];
+  cur.skip();
+  if (cur.i < cur.text.length && cur.text.charCodeAt(cur.i) === 125) return "expected a variant";
+  while (!cur.eof()) {
+    const variant = readIdent(cur);
+    if (variant === null) return "expected a variant";
+    const variantClash = nameClash(spec, variant);
+    if (variantClash.length > 0) return variantClash;
+    for (let i = 0; i < variants.length; i++) {
+      if (variants[i] === variant) return displayQuote(variant) + " is already an enum variant";
+    }
+    variants.push(variant);
+    cur.skip();
+    if (cur.i < cur.text.length && cur.text.charCodeAt(cur.i) === 44) {
+      cur.i++;
+      cur.skip();
+      if (cur.i < cur.text.length && cur.text.charCodeAt(cur.i) === 125) return "trailing comma";
+      continue;
+    }
+    break;
+  }
+  cur.skip();
+  if (cur.i >= cur.text.length || cur.text.charCodeAt(cur.i) !== 125) return "expected '}'";
+  cur.i++;
+  if (!cur.eof()) return "unexpected trailing text";
+  const decl: EnumDecl = { name: name, variants: variants, line: lineNo };
+  spec.enums.push(decl);
+  return null;
+}
+
+function parseSort(cur: Cur, spec: Spec, role: Role): Sort | string {
+  const word = readIdent(cur);
+  if (word === null) return "expected a type";
+  const lower = word.toLowerCase();
+  if (lower === "bool") return { kind: "bool" };
+  if (lower === "int") {
+    if (role === "event" || role === "state") return role === "event" ? "events must be Bool" : "states must be Bool";
+    const min = readSigned(cur);
+    if (min === null) return "expected an integer range such as 1..10";
+    cur.skip();
+    if (cur.i + 1 >= cur.text.length || cur.text.charCodeAt(cur.i) !== 46 || cur.text.charCodeAt(cur.i + 1) !== 46) {
+      return "expected '..' in the integer range";
+    }
+    cur.i += 2;
+    const max = readSigned(cur);
+    if (max === null) return "expected the end of the integer range";
+    if (min < -RANGE_BOUND || max > RANGE_BOUND) return "integer range must stay inside -1000000..1000000";
+    if (min > max) return "integer range min is greater than max";
+    return { kind: "int", min: min, max: max };
+  }
+  const enumDecl = findEnum(spec, word);
+  if (enumDecl === null) return "unknown enum " + displayQuote(word);
+  if (role === "event" || role === "state") return role === "event" ? "events must be Bool" : "states must be Bool";
+  return { kind: "enum", enumName: enumDecl.name };
+}
+
+function parseDescription(cur: Cur): { ok: true; text: string } | { ok: false; message: string } {
+  cur.skip();
+  if (cur.i >= cur.text.length || cur.text.charCodeAt(cur.i) !== 34) {
+    return { ok: false, message: "expected a description in quotes" };
+  }
+  cur.i++;
+  let out = "";
+  while (cur.i < cur.text.length) {
+    const code = cur.text.charCodeAt(cur.i);
+    if (code === 34) {
+      cur.i++;
+      if (out.length === 0) return { ok: false, message: "expected a description" };
+      return { ok: true, text: out };
+    }
+    if (code === 10 || code === 13) return { ok: false, message: "description cannot contain a newline" };
+    if (code === 92) {
+      cur.i++;
+      if (cur.i >= cur.text.length) return { ok: false, message: "unterminated string" };
+      const esc = cur.text.charCodeAt(cur.i);
+      if (esc === 110 || esc === 114) return { ok: false, message: "description cannot contain a newline" };
+      if (esc === 34 || esc === 92 || esc === 47) out += cur.text.slice(cur.i, cur.i + 1);
+      else if (esc === 116) out += "\t";
+      else return { ok: false, message: "bad escape in description" };
+      cur.i++;
+      continue;
+    }
+    out += cur.text.slice(cur.i, cur.i + 1);
+    cur.i++;
+  }
+  return { ok: false, message: "unterminated string" };
+}
+
+interface SentenceOk {
+  ok: true;
+  system: string;
+  antecedent: Term | null;
+  consequent: Term;
+  hasWhen: boolean;
+  hasIf: boolean;
+  whenTerm: Term | null;
+}
+
+type SentenceResult = SentenceOk | { ok: false; message: string };
+
+function parseSentence(sentence: string, spec: Spec): SentenceResult {
+  if (sentence.charCodeAt(sentence.length - 1) !== 46) return { ok: false, message: "expected a period" };
+  const body = sentence.slice(0, sentence.length - 1).trim();
+  if (body.length === 0) return { ok: false, message: "expected a sentence" };
+  const parts = splitCommas(body);
+  if (parts === null) return { ok: false, message: "unbalanced parentheses" };
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i].length === 0) return { ok: false, message: "empty clause" };
+  }
+  const guards: Term[] = [];
+  let hasWhen = false;
+  let hasIf = false;
+  let whenTerm: Term | null = null;
+  let lastKeyword = -1;
+  const keywords = ["while", "when", "if", "where"];
+  for (let i = 0; i < parts.length - 1; i++) {
+    const cur = new Cur(parts[i]);
+    const word = readIdent(cur);
+    if (word === null) return { ok: false, message: "expected while, when, if, or where" };
+    const keyword = word.toLowerCase();
+    let keyIndex = -1;
+    for (let k = 0; k < keywords.length; k++) {
+      if (keywords[k] === keyword) keyIndex = k;
+    }
+    if (keyIndex < 0) return { ok: false, message: "expected while, when, if, or where" };
+    if (keyIndex === lastKeyword) return { ok: false, message: "repeated " + keyword + " clause" };
+    if (keyIndex < lastKeyword) return { ok: false, message: "expected while, when, if, where in that order" };
+    lastKeyword = keyIndex;
+    const condition = parsePredicate(cur.text.slice(cur.i), spec, "condition");
+    if (!condition.ok) return condition;
+    if (condition.sort.kind !== "bool") return { ok: false, message: "expected a boolean" };
+    guards.push(condition.term);
+    if (keyword === "when") {
+      hasWhen = true;
+      whenTerm = condition.term;
+    }
+    if (keyword === "if") hasIf = true;
+  }
+  const response = parseResponse(parts[parts.length - 1], spec, hasIf);
+  if (!response.ok) return response;
+  return {
+    ok: true,
+    system: response.system,
+    antecedent: andAll(guards),
+    consequent: response.consequent,
+    hasWhen: hasWhen,
+    hasIf: hasIf,
+    whenTerm: whenTerm,
+  };
+}
+
+interface ResponseOk {
+  ok: true;
+  system: string;
+  consequent: Term;
+}
+
+function parseResponse(text: string, spec: Spec, hasIf: boolean): ResponseOk | { ok: false; message: string } {
+  const cur = new Cur(text);
+  const first = readIdent(cur);
+  if (first === null) return { ok: false, message: "expected the system name" };
+  let rest = text;
+  let hasThen = false;
+  if (first.toLowerCase() === "then") {
+    hasThen = true;
+    rest = cur.text.slice(cur.i);
+  } else {
+    cur.i = 0;
+  }
+  if (hasIf && !hasThen) return { ok: false, message: "expected \"then\"" };
+  if (!hasIf && hasThen) return { ok: false, message: "unexpected \"then\" without an if clause" };
+  const body = new Cur(rest);
+  const theWord = readIdent(body);
+  if (theWord === null || theWord.toLowerCase() !== "the") return { ok: false, message: "expected \"the\"" };
+  let system = "";
+  while (true) {
+    const save = body.i;
+    const word = readSystemWord(body);
+    if (word === null) {
+      body.i = save;
+      return { ok: false, message: "expected \"shall\"" };
+    }
+    const lower = word.toLowerCase();
+    if (lower === "shall") break;
+    if (lower === "should" || lower === "must" || lower === "will") {
+      return { ok: false, message: "expected \"shall\"" };
+    }
+    if (system.length === 0) system = word;
+    else system += " " + word;
+  }
+  if (system.length === 0) return { ok: false, message: "expected a system name before shall" };
+  const predText = body.text.slice(body.i);
+  if (predText.trim().length === 0) return { ok: false, message: "expected a response" };
+  const pred = parsePredicate(predText, spec, "response");
+  if (!pred.ok) return pred;
+  if (pred.sort.kind !== "bool") return { ok: false, message: "expected a boolean" };
+  return { ok: true, system: system, consequent: pred.term };
+}
+
+function parsePredicate(text: string, spec: Spec, slot: string): Parsed {
+  const cur = new Cur(text);
+  if (cur.eof()) return { ok: false, message: slot === "response" ? "expected a response" : "expected a condition" };
+  const parsed = parseOr(cur, spec);
+  if (!parsed.ok) return parsed;
+  if (!cur.eof()) {
+    const word = peekIdent(cur);
+    if (word.length > 0) return { ok: false, message: "unexpected " + displayQuote(word) };
+    return { ok: false, message: "unexpected trailing text" };
+  }
+  return parsed;
+}
+
+function parseOr(cur: Cur, spec: Spec): Parsed {
+  let left = parseAnd(cur, spec);
+  if (!left.ok) return left;
+  while (consumeWord(cur, "or")) {
+    const right = parseAnd(cur, spec);
+    if (!right.ok) return right;
+    if (left.sort.kind !== "bool" || right.sort.kind !== "bool") return { ok: false, message: "or expects booleans" };
+    left = { ok: true, term: { kind: "or", left: left.term, right: right.term }, sort: { kind: "bool" } };
+  }
+  return left;
+}
+
+function parseAnd(cur: Cur, spec: Spec): Parsed {
+  let left = parseNot(cur, spec);
+  if (!left.ok) return left;
+  while (consumeWord(cur, "and")) {
+    const right = parseNot(cur, spec);
+    if (!right.ok) return right;
+    if (left.sort.kind !== "bool" || right.sort.kind !== "bool") return { ok: false, message: "and expects booleans" };
+    left = { ok: true, term: { kind: "and", left: left.term, right: right.term }, sort: { kind: "bool" } };
+  }
+  return left;
+}
+
+function parseNot(cur: Cur, spec: Spec): Parsed {
+  if (consumeWord(cur, "not")) {
+    const inner = parseNot(cur, spec);
+    if (!inner.ok) return inner;
+    if (inner.sort.kind !== "bool") return { ok: false, message: "not expects a boolean" };
+    return { ok: true, term: { kind: "not", term: inner.term }, sort: { kind: "bool" } };
+  }
+  return parseCmp(cur, spec);
+}
+
+function parseCmp(cur: Cur, spec: Spec): Parsed {
+  const left = parseSum(cur, spec);
+  if (!left.ok) return left;
+  const op = peekOp(cur);
+  if (op.length === 0) return left;
+  cur.skip();
+  cur.i += op.length;
+  const right = parseSum(cur, spec);
+  if (!right.ok) return right;
+  if (op === "=" || op === "!=") {
+    if (!sameSort(left.sort, right.sort)) {
+      return { ok: false, message: "cannot compare " + sortName(left.sort) + " with " + sortName(right.sort) };
+    }
+    const kind = op === "=" ? "eq" : "neq";
+    return { ok: true, term: { kind: kind, left: left.term, right: right.term }, sort: { kind: "bool" } };
+  }
+  if (left.sort.kind !== "int" || right.sort.kind !== "int") return { ok: false, message: "comparison expects integers" };
+  let kind: "lt" | "le" | "gt" | "ge" = "lt";
+  if (op === "<") kind = "lt";
+  else if (op === "<=") kind = "le";
+  else if (op === ">") kind = "gt";
+  else kind = "ge";
+  return { ok: true, term: { kind: kind, left: left.term, right: right.term }, sort: { kind: "bool" } };
+}
+
+function parseSum(cur: Cur, spec: Spec): Parsed {
+  let left = parseUnary(cur, spec);
+  if (!left.ok) return left;
+  while (true) {
+    const op = peekAdd(cur);
+    if (op.length === 0) return left;
+    cur.skip();
+    cur.i += 1;
+    const right = parseUnary(cur, spec);
+    if (!right.ok) return right;
+    if (left.sort.kind !== "int" || right.sort.kind !== "int") return { ok: false, message: op + " expects integers" };
+    if (op === "+") left = { ok: true, term: { kind: "add", left: left.term, right: right.term }, sort: { kind: "int" } };
+    else left = { ok: true, term: { kind: "sub", left: left.term, right: right.term }, sort: { kind: "int" } };
+  }
+}
+
+function parseUnary(cur: Cur, spec: Spec): Parsed {
+  const save = cur.i;
+  cur.skip();
+  if (cur.i < cur.text.length && cur.text.charCodeAt(cur.i) === 45) {
+    const after = cur.i + 1;
+    const code = after < cur.text.length ? cur.text.charCodeAt(after) : 0;
+    if (code !== 61) {
+      cur.i++;
+      const inner = parseUnary(cur, spec);
+      if (!inner.ok) return inner;
+      if (inner.sort.kind !== "int") return { ok: false, message: "unary minus expects an integer" };
+      if (inner.term.kind === "int") {
+        return { ok: true, term: { kind: "int", value: -inner.term.value }, sort: { kind: "int" } };
+      }
+      return {
+        ok: true,
+        term: { kind: "sub", left: { kind: "int", value: 0 }, right: inner.term },
+        sort: { kind: "int" },
+      };
+    }
+  }
+  cur.i = save;
+  return parseAtom(cur, spec);
+}
+
+function parseAtom(cur: Cur, spec: Spec): Parsed {
+  cur.skip();
+  if (cur.i >= cur.text.length) return { ok: false, message: "expected an expression" };
+  const code = cur.text.charCodeAt(cur.i);
+  if (code === 40) {
+    cur.i++;
+    const inner = parseOr(cur, spec);
+    if (!inner.ok) return inner;
+    cur.skip();
+    if (cur.i >= cur.text.length || cur.text.charCodeAt(cur.i) !== 41) return { ok: false, message: "expected ')'" };
+    cur.i++;
+    return inner;
+  }
+  if (isDigit(code)) {
+    const value = readPositive(cur);
+    if (value === null) return { ok: false, message: "integer is too long" };
+    return { ok: true, term: { kind: "int", value: value }, sort: { kind: "int" } };
+  }
+  const word = readRawIdent(cur);
+  if (word === null) return { ok: false, message: "expected an expression" };
+  const lower = word.toLowerCase();
+  if (lower === "true") return { ok: true, term: { kind: "bool", value: true }, sort: { kind: "bool" } };
+  if (lower === "false") return { ok: true, term: { kind: "bool", value: false }, sort: { kind: "bool" } };
+  if (isReserved(word)) return { ok: false, message: "unexpected " + displayQuote(word) };
+  const symbol = findSymbol(spec, word);
+  if (symbol >= 0) {
+    const decl = spec.symbols[symbol];
+    let sort: SortTag = { kind: "bool" };
+    if (decl.sort.kind === "int") sort = { kind: "int" };
+    else if (decl.sort.kind === "enum") sort = { kind: "enum", enumName: decl.sort.enumName };
+    return { ok: true, term: { kind: "sym", name: decl.name, index: symbol }, sort: sort };
+  }
+  const variant = findVariant(spec, word);
+  if (variant !== null) {
+    return {
+      ok: true,
+      term: { kind: "enum", enumName: variant.enumName, variant: word, index: variant.index },
+      sort: { kind: "enum", enumName: variant.enumName },
+    };
+  }
+  return { ok: false, message: "unknown symbol " + displayQuote(word) };
+}
+
+function andAll(terms: Term[]): Term | null {
+  if (terms.length === 0) return null;
+  let acc = terms[0];
+  for (let i = 1; i < terms.length; i++) acc = { kind: "and", left: acc, right: terms[i] };
+  return acc;
+}
+
+function splitCommas(text: string): string[] | null {
+  const parts: string[] = [];
+  let start = 0;
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code === 40) depth++;
+    else if (code === 41) {
+      depth--;
+      if (depth < 0) return null;
+    } else if (code === 44 && depth === 0) {
+      parts.push(text.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  if (depth !== 0) return null;
+  parts.push(text.slice(start).trim());
+  return parts;
+}
+
+function sameSort(left: SortTag, right: SortTag): boolean {
+  if (left.kind !== right.kind) return false;
+  if (left.kind === "enum" && right.kind === "enum") return left.enumName === right.enumName;
+  return true;
+}
+
+function sortName(sort: SortTag): string {
+  if (sort.kind === "bool") return "Bool";
+  if (sort.kind === "int") return "Int";
+  return sort.enumName;
+}
+
+function nameClash(spec: Spec, name: string): string {
+  if (isReserved(name)) return displayQuote(name) + " is a reserved word";
+  if (findSymbol(spec, name) >= 0) return displayQuote(name) + " is already a symbol";
+  if (findEnum(spec, name) !== null) return displayQuote(name) + " is already an enum";
+  if (findVariant(spec, name) !== null) return displayQuote(name) + " is already an enum variant";
+  return "";
+}
+
+function isReserved(name: string): boolean {
+  const word = name.toLowerCase();
+  return (
+    word === "not" ||
+    word === "and" ||
+    word === "or" ||
+    word === "true" ||
+    word === "false" ||
+    word === "while" ||
+    word === "when" ||
+    word === "if" ||
+    word === "where" ||
+    word === "then" ||
+    word === "the" ||
+    word === "shall" ||
+    word === "should" ||
+    word === "must" ||
+    word === "will" ||
+    word === "event" ||
+    word === "state" ||
+    word === "input" ||
+    word === "output" ||
+    word === "unwanted" ||
+    word === "enum" ||
+    word === "bool" ||
+    word === "int"
+  );
+}
+
+function consumeWord(cur: Cur, expected: string): boolean {
+  const save = cur.i;
+  const word = readIdent(cur);
+  if (word !== null && word.toLowerCase() === expected) return true;
+  cur.i = save;
+  return false;
+}
+
+function peekIdent(cur: Cur): string {
+  const save = cur.i;
+  const word = readIdent(cur);
+  cur.i = save;
+  if (word === null) return "";
+  return word;
+}
+
+function peekOp(cur: Cur): string {
+  const save = cur.i;
+  cur.skip();
+  const two = cur.text.slice(cur.i, cur.i + 2);
+  cur.i = save;
+  if (two === "!=" || two === "<=" || two === ">=") return two;
+  if (two.length === 0) return "";
+  const one = two.slice(0, 1);
+  if (one === "=" || one === "<" || one === ">") return one;
+  return "";
+}
+
+function peekAdd(cur: Cur): string {
+  const save = cur.i;
+  cur.skip();
+  if (cur.i >= cur.text.length) {
+    cur.i = save;
+    return "";
+  }
+  const ch = cur.text.slice(cur.i, cur.i + 1);
+  cur.i = save;
+  if (ch === "+" || ch === "-") return ch;
+  return "";
+}
+
+function readIdent(cur: Cur): string | null {
+  cur.skip();
+  return readRawIdent(cur);
+}
+
+function readRawIdent(cur: Cur): string | null {
+  if (cur.i >= cur.text.length || !isIdentStart(cur.text.charCodeAt(cur.i))) return null;
+  const start = cur.i;
+  cur.i++;
+  while (cur.i < cur.text.length && isIdentPart(cur.text.charCodeAt(cur.i))) cur.i++;
+  return cur.text.slice(start, cur.i);
+}
+
+function readSystemWord(cur: Cur): string | null {
+  cur.skip();
+  if (cur.i >= cur.text.length || !isIdentStart(cur.text.charCodeAt(cur.i))) return null;
+  const start = cur.i;
+  cur.i++;
+  while (cur.i < cur.text.length) {
+    const code = cur.text.charCodeAt(cur.i);
+    if (isIdentPart(code) || code === 45) {
+      cur.i++;
+      continue;
+    }
+    break;
+  }
+  return cur.text.slice(start, cur.i);
+}
+
+function readSigned(cur: Cur): number | null {
+  const save = cur.i;
+  cur.skip();
+  let negative = false;
+  if (cur.i < cur.text.length && cur.text.charCodeAt(cur.i) === 45) {
+    negative = true;
+    cur.i++;
+  }
+  if (cur.i >= cur.text.length || !isDigit(cur.text.charCodeAt(cur.i))) {
+    cur.i = save;
+    return null;
+  }
+  const value = readPositive(cur);
+  if (value === null) return null;
+  return negative ? -value : value;
+}
+
+function readPositive(cur: Cur): number | null {
+  if (cur.i >= cur.text.length || !isDigit(cur.text.charCodeAt(cur.i))) return null;
+  if (cur.text.charCodeAt(cur.i) === 48) {
+    const next = cur.i + 1;
+    if (next < cur.text.length && isDigit(cur.text.charCodeAt(next))) return null;
+    cur.i++;
+    return 0;
+  }
+  let value = 0;
+  let digits = 0;
+  while (cur.i < cur.text.length && isDigit(cur.text.charCodeAt(cur.i))) {
+    value = value * 10 + (cur.text.charCodeAt(cur.i) - 48);
+    cur.i++;
+    digits++;
+    if (digits > 9) return null;
+  }
+  return value;
+}
+
+function leadingWord(line: string): string {
+  let i = 0;
+  while (i < line.length && isSpace(line.charCodeAt(i))) i++;
+  const start = i;
+  if (i >= line.length || !isIdentStart(line.charCodeAt(i))) return "";
+  i++;
+  while (i < line.length && isIdentPart(line.charCodeAt(i))) i++;
+  return line.slice(start, i);
 }
 
 function splitLines(text: string): string[] {
   const lines: string[] = [];
   let start = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === 10) {
-      lines.push(text.slice(start, i));
+  for (let i = 0; i <= text.length; i++) {
+    if (i === text.length || text.charCodeAt(i) === 10) {
+      let line = text.slice(start, i);
+      if (line.length > 0 && line.charCodeAt(line.length - 1) === 13) line = line.slice(0, line.length - 1);
+      lines.push(line);
       start = i + 1;
     }
   }
-  if (start < text.length || text.length === 0) lines.push(text.slice(start));
   return lines;
-}
-
-function stripCr(line: string): string {
-  if (line.length > 0 && line.charCodeAt(line.length - 1) === 13) return line.slice(0, line.length - 1);
-  return line;
-}
-
-function isAlpha(code: number): boolean {
-  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
 }
 
 function isDigit(code: number): boolean {
   return code >= 48 && code <= 57;
 }
 
-function isNameChar(code: number): boolean {
-  return isAlpha(code) || isDigit(code) || code === 45 || code === 95;
+function isSpace(code: number): boolean {
+  return code === 32 || code === 9 || code === 10 || code === 13;
+}
+
+function isIdentStart(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95;
+}
+
+function isIdentPart(code: number): boolean {
+  return isIdentStart(code) || isDigit(code);
 }

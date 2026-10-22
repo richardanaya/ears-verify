@@ -1,260 +1,325 @@
 /**
- * Unit tests for the EARS parser, RFC 3986 URL parser, and SMT evaluator.
- * This file is itself a ScriptC entry so the same checks run under Node
- * and in the native binary. Keep the output free of paths, timings, and
- * anything else that would differ between the two.
+ * Parser, scenario check, SMT printer, and lint behavior.
+ * The native build of this file must print the same bytes as Node.
  */
 
 import { readFileSync } from "node:fs";
-import { parseSentence, parseSpec } from "../src/ears.ts";
-import { checkUrl } from "../src/check.ts";
-import { assertionsFrom, judge, predToTerm, printSmt, printTerm } from "../src/smt.ts";
-import { formatInt } from "../src/text.ts";
-import { parseUrl } from "../src/url.ts";
-import type { UrlParts } from "../src/url.ts";
+import { bindScenario, evaluate } from "../src/check.ts";
+import { parseSpec } from "../src/ears.ts";
+import { parseScenarioJson } from "../src/jsonvalue.ts";
+import { lintSpec } from "../src/lint.ts";
+import type { Spec } from "../src/spec.ts";
+import { printSmt } from "../src/smt.ts";
+import { spaceSize } from "../src/solver.ts";
+import { formatTerm } from "../src/term.ts";
 
 let passed = 0;
 let failed = 0;
 
-function expectEq(name: string, actual: string, expected: string): void {
-  if (actual === expected) {
-    console.log("PASS " + name);
+function check(name: string, cond: boolean): void {
+  if (cond) {
     passed++;
     return;
   }
-  console.log("FAIL " + name);
-  console.log("  actual: " + actual);
-  console.log("  expected: " + expected);
   failed++;
+  console.error("FAIL " + name);
 }
 
-function dump(url: UrlParts): string {
-  return (
-    url.scheme +
-    "|" +
-    url.userinfo +
-    "|" +
-    url.host +
-    "|" +
-    formatInt(url.port) +
-    "|" +
-    url.path +
-    "|" +
-    url.query +
-    "|" +
-    url.fragment
-  );
-}
-
-function expectUrl(input: string, expected: string): void {
-  const parsed = parseUrl(input);
+function mustSpec(text: string): Spec {
+  const parsed = parseSpec(text);
   if (!parsed.ok) {
-    expectEq("url " + input, "ERROR " + parsed.message, expected);
-    return;
+    console.error("FAIL parse line " + String(parsed.line) + ": " + parsed.message);
+    process.exit(1);
   }
-  expectEq("url " + input, dump(parsed.url), expected);
+  return parsed.spec;
 }
 
-function expectUrlError(input: string, message: string): void {
-  const parsed = parseUrl(input);
-  if (parsed.ok) {
-    expectEq("url error " + input, "parsed " + dump(parsed.url), message);
-    return;
-  }
-  expectEq("url error " + input, parsed.message, message);
+function parseMessage(text: string): string {
+  const parsed = parseSpec(text);
+  if (parsed.ok) return "";
+  return String(parsed.line) + ": " + parsed.message;
 }
 
-function run(): void {
-  expectUrl("https://example.com/path", "https||example.com|-1|/path||");
-  expectUrl("https://bob@evil.com", "https|bob|evil.com|-1|||");
-  expectUrl("https://bob:secret@example.com:8443/a/b?x=1#f", "https|bob:secret|example.com|8443|/a/b|x=1|f");
-  expectUrl("HTTPS://Example.COM/Path", "https||example.com|-1|/Path||");
-  expectUrl("https://127.0.0.1:8080/x", "https||127.0.0.1|8080|/x||");
-  expectUrl("https://[::1]/", "https||::1|-1|/||");
-  expectUrl("https://[2001:DB8::1]/a", "https||2001:db8::1|-1|/a||");
-  expectUrl("https://bob@[::1]:443/x", "https|bob|::1|443|/x||");
-  expectUrl("https://[v1.fe80]/", "https||v1.fe80|-1|/||");
-  expectUrl("https://example.com:0/", "https||example.com|0|/||");
-  expectUrl("https://example.com:65535/", "https||example.com|65535|/||");
-  expectUrl("https://example.com/a%20b", "https||example.com|-1|/a%20b||");
-  expectUrl("https://example.com?#f", "https||example.com|-1|||f");
-  expectUrl("urn:example:animal", "urn|||-1|example:animal||");
-  expectUrl("http:/absolute", "http|||-1|/absolute||");
-  expectUrl("https://example.com", "https||example.com|-1|||");
-  expectUrl("https://@example.com", "https||example.com|-1|||");
+function idsOf(spec: Spec): string[] {
+  const outcome = lintSpec(spec);
+  if (outcome.kind === "error") return [];
+  if (outcome.report.conflicts.length === 0) return [];
+  return outcome.report.conflicts[0].ids;
+}
 
-  expectUrlError("", "empty input");
-  expectUrlError("not a url", "missing scheme");
-  expectUrlError("1http://example.com", "invalid scheme");
-  expectUrlError("http://ex ample.com", "invalid character in host");
-  expectUrlError("http://example.com:99999", "port out of range");
-  expectUrlError("http://example.com:abc", "invalid port");
-  expectUrlError("http://example.com:", "empty port");
-  expectUrlError("https://example.com/%", "invalid character in path");
-  expectUrlError("https://example.com/%2G", "invalid character in path");
-  expectUrlError("https://example.com/a\\b", "invalid character in path");
-  expectUrlError("http://[:::1]/", "invalid IPv6 address");
-  expectUrlError("http://[gggg::1]/", "invalid IPv6 address");
+function scenario(spec: Spec, text: string): { violations: number; because: string } {
+  const json = parseScenarioJson(text);
+  if (!json.ok) return { violations: -1, because: json.message };
+  const bound = bindScenario(spec, json.object);
+  if (!bound.ok) return { violations: -1, because: bound.message };
+  const violations = evaluate(spec, bound.env);
+  if (violations.length === 0) return { violations: 0, because: "" };
+  return { violations: violations.length, because: violations[0].because };
+}
 
-  const specText = readFileSync("examples/url-safety.ears.md", "utf8");
-  const spec = parseSpec(specText);
-  if (!spec.ok) {
-    expectEq("example spec", spec.message, "ok");
-  } else {
-    expectEq("example count", String(spec.requirements.length), "3");
-    expectEq("example id0", spec.requirements[0].id, "R1.1");
-    expectEq("example line0", String(spec.requirements[0].line), "5");
-    expectEq("example id1", spec.requirements[1].id, "R1.2");
-    expectEq("example line1", String(spec.requirements[1].line), "7");
-    expectEq("example id2", spec.requirements[2].id, "R1.3");
-    expectEq("example line2", String(spec.requirements[2].line), "9");
-    expectEq("example clauses0", String(spec.requirements[0].clauses.length), "0");
-    expectEq("example kw2-0", spec.requirements[2].clauses[0].keyword, "when");
-    expectEq("example kw2-1", spec.requirements[2].clauses[1].keyword, "if");
-    expectEq("example system", spec.requirements[0].system, "url-parser");
+const orderText = readFileSync("examples/order.ears.md", "utf8");
+const order = mustSpec(orderText);
+check("order has R1", order.requirements.length === 1 && order.requirements[0].id === "R1");
+check("order R1 line", order.requirements[0].line === 7);
+check("order symbols", order.symbols.length === 3);
 
-    const bad = parseUrl("https://bob@evil.com");
-    const good = parseUrl("https://example.com/path");
-    if (!bad.ok || !good.ok) {
-      expectEq("example urls", "parse failed", "ok");
-    } else {
-      const badReport = checkUrl(spec.requirements, bad.url);
-      const goodReport = checkUrl(spec.requirements, good.url);
-      expectEq("bad count", String(badReport.violations.length), "3");
-      expectEq("bad id0", badReport.violations[0].id + ":" + String(badReport.violations[0].line), "R1.1:5");
-      expectEq("bad reason0", badReport.violations[0].reason, "userinfo is \"bob\"; required empty userinfo");
-      expectEq("bad id1", badReport.violations[1].id + ":" + String(badReport.violations[1].line), "R1.2:7");
-      expectEq("bad reason1", badReport.violations[1].reason, "host is \"evil.com\"; required host \"example.com\"");
-      expectEq("bad id2", badReport.violations[2].id + ":" + String(badReport.violations[2].line), "R1.3:9");
-      expectEq("bad reason2", badReport.violations[2].reason, "port is omitted; required explicit port 443");
-      expectEq("good count", String(goodReport.violations.length), "0");
-      const again = checkUrl(spec.requirements, bad.url);
-      expectEq(
-        "deterministic",
-        badReport.violations[0].reason + "|" + badReport.violations[2].reason,
-        again.violations[0].reason + "|" + again.violations[2].reason,
-      );
+const failScenario = scenario(
+  order,
+  '{ "order_submitted": true, "inventory_available": true, "order_fulfilled": false }',
+);
+check("fail count", failScenario.violations === 1);
+check(
+  "fail because",
+  failScenario.because === "order_submitted is true, inventory_available is true, and order_fulfilled is false.",
+);
 
-      const smt = printSmt("examples/url-safety.ears.md", assertionsFrom(spec.requirements));
-      expectEq("smt stable", smt, printSmt("examples/url-safety.ears.md", assertionsFrom(spec.requirements)));
-      expectEq(
-        "smt R1.1",
-        assertLine(smt, "R1.1_L5"),
-        "(assert (! (=> true (= userinfo \"\")) :named R1.1_L5))",
-      );
-      expectEq(
-        "smt R1.2",
-        assertLine(smt, "R1.2_L7"),
-        "(assert (! (=> true (= host \"example.com\")) :named R1.2_L7))",
-      );
-      expectEq(
-        "smt R1.3",
-        assertLine(smt, "R1.3_L9"),
-        "(assert (! (=> (and (= scheme \"https\") (not (= host \"example.com\"))) (= port 443)) :named R1.3_L9))",
-      );
-      expectEq(
-        "smt comment",
-        commentHas(smt, "line 5: The url-parser shall reject a non-empty userinfo.") ? "yes" : "no",
-        "yes",
-      );
-    }
-  }
+const passScenario = scenario(
+  order,
+  '{ "order_submitted": true, "inventory_available": true, "order_fulfilled": true }',
+);
+check("pass count", passScenario.violations === 0);
 
-  const wrapped = parseSpec("R2.1 The url-parser shall\n  reject a non-empty userinfo.\n");
-  if (!wrapped.ok) expectEq("wrapped", wrapped.message, "ok");
-  else {
-    expectEq("wrapped line", String(wrapped.requirements[0].line), "1");
-    expectEq(
-      "wrapped sentence",
-      wrapped.requirements[0].sentence,
-      "The url-parser shall reject a non-empty userinfo.",
-    );
-    expectEq("wrapped kind", wrapped.requirements[0].response.kind, "empty");
-  }
+const quietScenario = scenario(
+  order,
+  '{ "order_submitted": false, "inventory_available": true, "order_fulfilled": false }',
+);
+check("antecedent false passes", quietScenario.violations === 0);
 
-  const duplicate = parseSpec(
-    'R1.1 The url-parser shall reject a non-empty userinfo.\n\nR1.1 The url-parser shall accept only host "example.com".\n',
+const missing = scenario(order, '{ "order_submitted": true, "order_fulfilled": false }');
+check("missing symbol", missing.because === "missing inventory_available");
+
+const extra = scenario(
+  order,
+  '{ "order_submitted": true, "inventory_available": true, "order_fulfilled": true, "extra": false }',
+);
+check("extra symbol", extra.because === "unexpected extra");
+
+const wrongType = scenario(
+  order,
+  '{ "order_submitted": true, "inventory_available": true, "order_fulfilled": 1 }',
+);
+check("wrong type", wrongType.because === "order_fulfilled must be true or false");
+
+const smt = printSmt("examples/order.ears.md", order);
+check("smt logic", smt.indexOf("(set-logic ALL)") !== -1);
+check("smt named", smt.indexOf(":named R1_L7") !== -1);
+check("smt sentence", smt.indexOf("line 7: When order_submitted and inventory_available, the Order System shall order_fulfilled.") !== -1);
+check("smt implication", smt.indexOf("(=> (and order_submitted inventory_available) order_fulfilled)") !== -1);
+
+const conflict = mustSpec(readFileSync("examples/order-conflict.ears.md", "utf8"));
+const conflictLint = lintSpec(conflict);
+check("conflict ran", conflictLint.kind === "report");
+if (conflictLint.kind === "report") {
+  check("one conflict", conflictLint.report.conflicts.length === 1);
+  check("no gap beside conflict", conflictLint.report.gaps.length === 0);
+  const item = conflictLint.report.conflicts[0];
+  check("conflict ids", item.ids.length === 2 && item.ids[0] === "R2" && item.ids[1] === "R3");
+  check("not every situation", item.everySituation === false);
+  check("situation submitted", item.situation.length === 1 && item.situation[0].name === "order_submitted" && item.situation[0].value === "true");
+  check("example fulfilled", item.example.length === 2 && item.example[1].value === "true");
+  check("keeps R2", item.keeps.length === 1 && item.keeps[0] === "R2" && item.breaks === "R3");
+  check("asks who wins", item.fix.indexOf("ask which requirement should win") !== -1);
+  check("offers both keeps", item.fix.indexOf("To keep R2, remove R3.") !== -1 && item.fix.indexOf("To keep R3, remove R2.") !== -1);
+  const again = lintSpec(conflict);
+  check("deterministic", again.kind === "report" && again.report.conflicts[0].exampleJson === item.exampleJson);
+}
+
+const gapLint = lintSpec(order);
+check("gap ran", gapLint.kind === "report");
+if (gapLint.kind === "report") {
+  check("order has a gap", gapLint.report.gaps.length === 1 && gapLint.report.conflicts.length === 0);
+  const gap = gapLint.report.gaps[0];
+  check("gap output", gap.output === "order_fulfilled");
+  check(
+    "gap situation",
+    gap.situation.length === 2 &&
+      gap.situation[0].name === "order_submitted" &&
+      gap.situation[0].value === "true" &&
+      gap.situation[1].name === "inventory_available" &&
+      gap.situation[1].value === "false",
   );
-  expectEq("duplicate", duplicate.ok ? "ok" : duplicate.message, "duplicate requirement id R1.1");
-
-  const order = parseSpec(
-    'R1.1 If scheme is "https", when host is "evil.com", the url-parser shall reject a non-empty userinfo.\n',
-  );
-  expectEq(
-    "clause order",
-    order.ok ? "ok" : order.message,
-    "clauses must appear in order: while, when, if, where",
-  );
-
-  const should = parseSentence("The url-parser should reject a non-empty userinfo.");
-  expectEq("should", should.ok ? "ok" : should.message, "expected \"shall\"");
-
-  const where = parseSentence('Where path starts with "/", the url-parser shall accept only host "example.com".');
-  if (!where.ok) expectEq("where", where.message, "ok");
-  else {
-    expectEq("where keyword", where.clauses[0].keyword, "where");
-    expectEq("where kind", where.clauses[0].pred.kind, "prefix");
-  }
-
-  const chain = parseSpec(
-    'R4.1 While userinfo is empty, when scheme is "https", if host is "example.com", where path starts with "/", the url-parser shall accept only host "example.com".\n',
-  );
-  if (!chain.ok) expectEq("chain", chain.message, "ok");
-  else {
-    expectEq("chain keywords", clauseKeys(chain.requirements[0].clauses), "while,when,if,where");
-    const good = parseUrl("https://example.com/path");
-    if (!good.ok) expectEq("chain url", "error", "ok");
-    else expectEq("chain holds", checkUrl(chain.requirements, good.url).ok ? "yes" : "no", "yes");
-  }
-
-  const hosts = parseSentence(
-    'The url-parser shall accept only host "Example.COM" or "www.example.com".',
-  );
-  if (!hosts.ok) expectEq("hosts", hosts.message, "ok");
-  else expectEq("hosts term", printTerm(predToTerm(hosts.response)), "(or (= host \"example.com\") (= host \"www.example.com\"))");
-
-  const omitted = parseSentence("The url-parser shall require an omitted port.");
-  if (!omitted.ok) expectEq("omitted parse", omitted.message, "ok");
-  else {
-    expectEq("omitted term", printTerm(predToTerm(omitted.response)), "(= port (- 1))");
-    const withPort = parseUrl("https://example.com:443/");
-    if (!withPort.ok) expectEq("omitted url", "error", "ok");
-    else {
-      const verdict = judge(
-        { kind: "implies", left: { kind: "bool", value: true }, right: predToTerm(omitted.response) },
-        withPort.url,
-      );
-      expectEq("omitted reason", verdict.holds ? "holds" : verdict.reason, "port is 443; required omitted port");
-    }
-  }
-
-  const none = parseSpec("# only a heading\n");
-  expectEq("empty spec", none.ok ? "ok" : none.message, "no requirements found");
-
-  console.log("unit: " + String(passed) + " passed, " + String(failed) + " failed");
-  if (failed !== 0) process.exit(1);
-  process.exit(0);
 }
 
-function assertLine(smt: string, name: string): string {
-  const lines = smt.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].indexOf(":named " + name) !== -1) return lines[i];
-  }
-  return "";
+const covered = lintSpec(mustSpec(readFileSync("examples/order-covered.ears.md", "utf8")));
+check(
+  "covered is clean",
+  covered.kind === "report" &&
+    covered.report.conflicts.length === 0 &&
+    covered.report.gaps.length === 0 &&
+    covered.report.misuse.length === 0 &&
+    covered.report.wording.length === 0,
+);
+
+const misuse = lintSpec(mustSpec(readFileSync("examples/order-misuse.ears.md", "utf8")));
+check(
+  "misuse when",
+  misuse.kind === "report" &&
+    misuse.report.misuse.length === 1 &&
+    misuse.report.misuse[0].id === "R4" &&
+    misuse.report.misuse[0].symbols.length === 1 &&
+    misuse.report.misuse[0].symbols[0] === "payment_declined" &&
+    misuse.report.conflicts.length === 0,
+);
+
+const payment = lintSpec(mustSpec(readFileSync("examples/payment-if.ears.md", "utf8")));
+check(
+  "if then is clean",
+  payment.kind === "report" && payment.report.misuse.length === 0 && payment.report.conflicts.length === 0 && payment.report.gaps.length === 0,
+);
+
+const wording = lintSpec(mustSpec(readFileSync("examples/order-wording.ears.md", "utf8")));
+check("wording ran", wording.kind === "report");
+if (wording.kind === "report") {
+  check("two wording hits", wording.report.wording.length === 2);
+  check("vague quickly", wording.report.wording[0].word === "quickly" && wording.report.wording[0].kind === "vague");
+  check("solution database", wording.report.wording[1].word === "database" && wording.report.wording[1].kind === "solution");
 }
 
-function commentHas(smt: string, needle: string): boolean {
-  return smt.indexOf(needle) !== -1;
+const wide = mustSpec(readFileSync("examples/order-wide.ears.md", "utf8"));
+check("wide space", spaceSize(wide) < 0);
+const wideLint = lintSpec(wide);
+check("wide lint errors", wideLint.kind === "error" && wideLint.message.indexOf("250000") !== -1);
+
+const exact = mustSpec('output quantity: Int 1..250000 "A count."\n\nR1 The Counter shall quantity = 1.\n');
+check("exact limit", spaceSize(exact) === 250000);
+check("order space", spaceSize(order) === 8);
+
+const selfText = 'output order_fulfilled: Bool "Done."\n\nR3 The Order System shall order_fulfilled and not order_fulfilled.\n';
+const self = lintSpec(mustSpec(selfText));
+check("self ran", self.kind === "report");
+if (self.kind === "report") {
+  check("self id", self.report.conflicts.length === 1 && self.report.conflicts[0].ids.length === 1 && self.report.conflicts[0].ids[0] === "R3");
+  check("self every", self.report.conflicts[0].everySituation === true);
+  check("self asks", self.report.conflicts[0].fix.indexOf("Ask what should happen") !== -1);
+  check("self breaks", self.report.conflicts[0].keepsSentence === "This scenario breaks R3.");
 }
 
-function clauseKeys(clauses: { keyword: string }[]): string {
-  let out = "";
-  for (let i = 0; i < clauses.length; i++) {
-    if (i > 0) out += ",";
-    out += clauses[i].keyword;
-  }
-  return out;
+const countText =
+  'output quantity: Int 1..3 "How many ship."\n\nR1 The Warehouse shall quantity = 1.\nR2 The Warehouse shall quantity = 2.\n';
+const count = lintSpec(mustSpec(countText));
+check("count ran", count.kind === "report");
+if (count.kind === "report") {
+  check("count ids", count.report.conflicts.length === 1 && count.report.conflicts[0].ids[0] === "R1" && count.report.conflicts[0].ids[1] === "R2");
+  check("count every", count.report.conflicts[0].everySituation === true);
+  check("count example", count.report.conflicts[0].example.length === 1 && count.report.conflicts[0].example[0].value === "1");
 }
 
-run();
+const enumText =
+  'enum Decision { fulfill, reject }\noutput decision: Decision "The choice."\n\nR1 The Order System shall decision = fulfill.\nR2 The Order System shall decision = reject.\n';
+const enumSpec = mustSpec(enumText);
+const enumLint = lintSpec(enumSpec);
+check("enum ran", enumLint.kind === "report");
+if (enumLint.kind === "report") {
+  check("enum ids", enumLint.report.conflicts[0].ids[0] === "R1" && enumLint.report.conflicts[0].ids[1] === "R2");
+  check("enum example", enumLint.report.conflicts[0].example[0].value === "fulfill");
+}
+const enumSmt = printSmt("enum.md", enumSpec);
+check("enum datatype", enumSmt.indexOf("(declare-datatypes ((Decision 0)) (((fulfill) (reject))))") !== -1);
+check("enum assert", enumSmt.indexOf("(= decision fulfill)") !== -1);
+
+const neg = mustSpec('input offset: Int -2..2 "A shift."\n\nR1 The Clock shall offset = -1.\n');
+const negSmt = printSmt("neg.md", neg);
+check("negative smt", negSmt.indexOf("(- 2)") !== -1 && negSmt.indexOf("(- 1)") !== -1);
+
+const combined = mustSpec(
+  'state inventory_available: Bool "Stock."\n' +
+    'event order_submitted: Bool "Submitted."\n' +
+    'input quantity: Int 1..5 "Count."\n' +
+    "enum Region { us, eu }\n" +
+    'input region: Region "Where."\n' +
+    'output shipped: Int 1..5 "Sent."\n\n' +
+    "R5 While inventory_available, when order_submitted, if quantity >= 1, where region = us, then the Warehouse shall shipped = quantity.\n",
+);
+const combinedSmt = printSmt("combined.md", combined);
+check("combined implication", combinedSmt.indexOf("(=> (and (and (and inventory_available order_submitted) (>= quantity 1)) (= region us)) (= shipped quantity))") !== -1);
+check("combined term", formatTerm(combined.requirements[0].consequent) === "shipped = quantity");
+
+const compare = mustSpec('input quantity: Int 1..3 "Count."\n\nR1 The Warehouse shall not quantity = 1.\n');
+check("not compare format", formatTerm(compare.requirements[0].consequent) === "not (quantity = 1)");
+const whenOne = scenario(compare, '{ "quantity": 1 }');
+const whenTwo = scenario(compare, '{ "quantity": 2 }');
+check("not compare fails at 1", whenOne.violations === 1);
+check("not compare passes at 2", whenTwo.violations === 0);
+
+const arithmetic = mustSpec('input quantity: Int 0..3 "Count."\noutput shipped: Int 0..4 "Sent."\n\nR1 The Warehouse shall shipped = quantity + 1.\n');
+check("add format", formatTerm(arithmetic.requirements[0].consequent) === "shipped = quantity + 1");
+check("add passes", scenario(arithmetic, '{ "quantity": 1, "shipped": 2 }').violations === 0);
+check("add fails", scenario(arithmetic, '{ "quantity": 1, "shipped": 1 }').violations === 1);
+
+const constantFalse = mustSpec('output done: Bool "Done."\n\nR1 The Box shall false.\n');
+check("false because", scenario(constantFalse, '{ "done": true }').because === "the response is false.");
+
+const triple = mustSpec(
+  'output flag: Bool "A flag."\n\nR1 The Box shall flag.\nR2 The Box shall not flag.\nR3 The Box shall flag and not flag.\n',
+);
+const tripleLint = lintSpec(triple);
+check("triple ran", tripleLint.kind === "report");
+if (tripleLint.kind === "report") {
+  check("triple count", tripleLint.report.conflicts.length === 2);
+  check("triple first", tripleLint.report.conflicts[0].ids.length === 1 && tripleLint.report.conflicts[0].ids[0] === "R3");
+  check(
+    "triple second",
+    tripleLint.report.conflicts[1].ids.length === 2 &&
+      tripleLint.report.conflicts[1].ids[0] === "R1" &&
+      tripleLint.report.conflicts[1].ids[1] === "R2",
+  );
+}
+
+const both = mustSpec(
+  'unwanted event payment_declined: Bool "Declined."\noutput order_rejected: Bool "Rejected."\n\nR4 When payment_declined, if payment_declined, then the Order System shall order_rejected.\n',
+);
+const bothLint = lintSpec(both);
+check("when plus if is not misuse", bothLint.kind === "report" && bothLint.report.misuse.length === 0);
+
+check("should", parseMessage('event flag: Bool "Flag."\n\nR1 When flag, the Order System should flag.\n') === '3: expected "shall"');
+check("then missing", parseMessage('event flag: Bool "Flag."\n\nR1 If flag, the Order System shall flag.\n') === '3: expected "then"');
+check(
+  "then extra",
+  parseMessage('event flag: Bool "Flag."\n\nR1 Then the Order System shall flag.\n') === '3: unexpected "then" without an if clause',
+);
+check(
+  "clause order",
+  parseMessage('event flag: Bool "Flag."\nstate ready: Bool "Ready."\n\nR1 Where flag, when ready, the Order System shall flag.\n') ===
+    "4: expected while, when, if, where in that order",
+);
+check("duplicate id", parseMessage('output flag: Bool "Flag."\n\nR1 The Box shall flag.\nR1 The Box shall flag.\n') === "4: duplicate requirement R1");
+check(
+  "duplicate symbol",
+  parseMessage('event flag: Bool "Flag."\nevent flag: Bool "Again."\n') === '2: "flag" is already a symbol',
+);
+check("unknown symbol", parseMessage('output flag: Bool "Flag."\n\nR1 The Box shall missing.\n') === '3: unknown symbol "missing"');
+check("period", parseMessage('output flag: Bool "Flag."\n\nR1 The Box shall flag\n') === "3: expected a period");
+check("event int", parseMessage('event count: Int 1..2 "Count."\n') === "1: events must be Bool");
+check("range order", parseMessage('output count: Int 5..4 "Count."\n') === "1: integer range min is greater than max");
+check("dotted id", mustSpec('output flag: Bool "Flag."\n\nR1.2 The Box shall flag.\n').requirements[0].id === "R1.2");
+
+const badJson = parseScenarioJson("{");
+check("bad json", badJson.ok === false && badJson.message === "expected '}'");
+const trail = parseScenarioJson('{ "flag": true, }');
+check("trailing comma", trail.ok === false && trail.message === "trailing comma");
+const dup = parseScenarioJson('{ "flag": true, "flag": false }');
+check("duplicate key", dup.ok === false && dup.message === 'duplicate key "flag"');
+const empty = parseScenarioJson("{ }");
+check("empty object", empty.ok === true && empty.object.keys.length === 0);
+const lead = parseScenarioJson('{ "count": 01 }');
+check("leading zero", lead.ok === false);
+
+const outOfRange = mustSpec('output quantity: Int 1..3 "Count."\n\nR1 The Box shall quantity = 1.\n');
+check("outside range", scenario(outOfRange, '{ "quantity": 0 }').because === "quantity is 0, outside 1..3");
+
+const enumScenario = mustSpec('enum Decision { fulfill, reject }\noutput decision: Decision "Choice."\n\nR1 The Box shall decision = fulfill.\n');
+check("bad variant", scenario(enumScenario, '{ "decision": "nope" }').because === 'decision is "nope", expected fulfill or reject');
+check("enum pass", scenario(enumScenario, '{ "decision": "fulfill" }').violations === 0);
+
+const named = mustSpec('output flag: Bool "Flag."\n\nR1 The API Gateway shall flag.\n');
+const namedLint = lintSpec(named);
+check("solution in the system name", namedLint.kind === "report" && namedLint.report.wording.length === 1 && namedLint.report.wording[0].word === "api");
+
+check("conflict helper", idsOf(conflict).length === 2);
+
+if (failed !== 0) {
+  console.error(String(failed) + " failed");
+  process.exit(1);
+}
+console.log("passed " + String(passed));
+process.exit(0);

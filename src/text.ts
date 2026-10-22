@@ -24,6 +24,26 @@ export function formatInt(value: number): string {
   return String(Math.trunc(value));
 }
 
+/** "a", "a and b", or "a, b, and c". */
+export function englishList(parts: string[]): string {
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return parts[0] + " and " + parts[1];
+  let out = "";
+  for (let i = 0; i < parts.length; i++) {
+    if (i === parts.length - 1) out += ", and ";
+    else if (i > 0) out += ", ";
+    out += parts[i];
+  }
+  return out;
+}
+
+export function formatSmtInt(value: number): string {
+  const n = Math.trunc(value);
+  if (n < 0) return "(- " + formatInt(-n) + ")";
+  return formatInt(n);
+}
+
 function hexByte(code: number): string {
   const hex = "0123456789abcdef";
   const hi = Math.trunc(code / 16);

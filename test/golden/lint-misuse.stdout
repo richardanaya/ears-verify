@@ -1,0 +1,9 @@
+spec: examples/order-misuse.ears.md
+conflicts: 0
+gaps: 0
+misuse: 1
+wording: 0
+
+misuse R4 line 6
+payment_declined is an unwanted event. Write if ... then, not when.
+When payment_declined, the Order System shall order_rejected.

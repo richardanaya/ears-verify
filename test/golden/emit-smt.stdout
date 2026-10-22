@@ -1,21 +1,10 @@
-; ears-verify SMT-LIB 2
-; spec: examples/url-safety.ears.md
-; port is the integer written in the URI, or (- 1) when the port is omitted.
-; Scheme defaults are not filled in. No solver is invoked by ears-verify.
+; spec: examples/order.ears.md
 (set-logic ALL)
-(declare-fun scheme () String)
-(declare-fun userinfo () String)
-(declare-fun host () String)
-(declare-fun port () Int)
-(declare-fun path () String)
-(declare-fun query () String)
-(declare-fun fragment () String)
-
-; R1.1_L5 line 5: The url-parser shall reject a non-empty userinfo.
-(assert (! (=> true (= userinfo "")) :named R1.1_L5))
-
-; R1.2_L7 line 7: The url-parser shall accept only host "example.com".
-(assert (! (=> true (= host "example.com")) :named R1.2_L7))
-
-; R1.3_L9 line 9: When scheme is "https", if host is not "example.com", the url-parser shall require an explicit port of 443.
-(assert (! (=> (and (= scheme "https") (not (= host "example.com"))) (= port 443)) :named R1.3_L9))
+; event order_submitted: Bool "The customer submits an order."
+(declare-fun order_submitted () Bool)
+; state inventory_available: Bool "Enough stock is on hand to fill the order."
+(declare-fun inventory_available () Bool)
+; output order_fulfilled: Bool "The order is fulfilled."
+(declare-fun order_fulfilled () Bool)
+; R1_L7 line 7: When order_submitted and inventory_available, the Order System shall order_fulfilled.
+(assert (! (=> (and order_submitted inventory_available) order_fulfilled) :named R1_L7))

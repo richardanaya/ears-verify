@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "spec": "examples/order.ears.md",
+  "scenario": "examples/order-fail.json",
+  "violations": [
+    {
+      "id": "R1",
+      "line": 7,
+      "sentence": "When order_submitted and inventory_available, the Order System shall order_fulfilled.",
+      "because": "order_submitted is true, inventory_available is true, and order_fulfilled is false."
+    }
+  ]
+}

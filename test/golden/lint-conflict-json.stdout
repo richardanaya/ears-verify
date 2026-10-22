@@ -1,0 +1,62 @@
+{
+  "ok": false,
+  "spec": "examples/order-conflict.ears.md",
+  "conflicts": [
+    {
+      "ids": [
+        "R2",
+        "R3"
+      ],
+      "minimal": true,
+      "everySituation": false,
+      "summary": "R2 and R3 cannot both hold.",
+      "clash": "They clash when order_submitted is true.",
+      "requirements": [
+        {
+          "id": "R2",
+          "line": 7,
+          "sentence": "When order_submitted, the Order System shall order_fulfilled."
+        },
+        {
+          "id": "R3",
+          "line": 8,
+          "sentence": "When order_submitted, the Order System shall not order_fulfilled."
+        }
+      ],
+      "situation": [
+        {
+          "name": "order_submitted",
+          "value": "true"
+        }
+      ],
+      "requires": [
+        {
+          "id": "R2",
+          "text": "order_fulfilled"
+        },
+        {
+          "id": "R3",
+          "text": "not order_fulfilled"
+        }
+      ],
+      "example": [
+        {
+          "name": "order_submitted",
+          "value": "true"
+        },
+        {
+          "name": "order_fulfilled",
+          "value": "true"
+        }
+      ],
+      "keeps": [
+        "R2"
+      ],
+      "breaks": "R3",
+      "fix": "Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep R3, remove R2."
+    }
+  ],
+  "gaps": [],
+  "misuse": [],
+  "wording": []
+}
