@@ -145,7 +145,7 @@ The line has to be something a scenario can make true or false. Lint rejects the
 2. Add or reuse declarations. If they describe something you already named, use that name and its phrase. Bind a new phrase to the words they keep using.
 3. Write one EARS line per requirement, using the phrases. Normal triggers use `when`. Unwanted conditions use `if` ... `then`.
 4. Run `build/ears-verify lint <spec>`. Run `build/ears-verify scenarios <spec>` when you want an accepted and a rejected example of each trigger.
-5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Stop until they answer. Do not choose. If a requirement adds nothing, ask whether they meant something the others do not already require. Do not delete it.
+5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Stop until they answer. Do not choose. If a requirement adds nothing, ask whether they meant something the others do not already require. Do not delete it. If a condition can never be true, show the suggested fix and ask them to rewrite the condition. Do not invent a response. If a state, an input, an enum variant, or an output is unused, ask whether to use it or remove it. For a gap, read the suggested fix and ask what the system shall do in that situation. Do not choose the response.
 6. When they describe a concrete story, write a flat JSON scenario with every declared name and run `build/ears-verify check <spec> --input <scenario>`. When they hope something is always true, write that hope as a property file of `P` requirements and run `build/ears-verify policy <spec> --property <file>`. A counterexample is a scenario the requirements allow and the property forbids. If you have no property yet, `policy <spec>` prints one allowed scenario and one forbidden scenario. The search tries false before true, so the first hit is not a recommendation.
 7. Report every check violation by requirement ID, line, and sentence, then the values. A passing check can still leave a gap. If lint reported one, say which output is uncovered and in what situation.
 
@@ -1180,6 +1180,8 @@ examples/order.ears.md
 
 - You do not pick the winning requirement.
 - You do not delete a redundant requirement until the PM agrees.
+- You do not invent a response for a condition that can never be true.
+- You do not choose a value for an output nothing sets.
 - You do not drop a conflict and move on to a design, an API, or a schema for the build.
 - You do not treat the example scenario as the behavior they agreed to.
 - You do not introduce a second name for an idea that already has one.

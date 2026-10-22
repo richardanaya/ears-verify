@@ -242,7 +242,7 @@ examples/order.ears.md
 | Command | Question it answers | Status |
 | --- | --- | --- |
 | `check [--json] <spec> --input <scenario>` | Does this scenario fit the requirements? | Implemented |
-| `lint [--json] <spec>` | Do any requirements clash, leave a hole, repeat each other, or use a word a test cannot pin down? | Implemented |
+| `lint [--json] <spec>` | Do any requirements clash, leave a hole, never trigger, leave schema unused, repeat each other, or use a word a test cannot pin down? | Implemented |
 | `scenarios [--json] <spec>` | What accepted and rejected examples show each requirement's trigger? | Implemented |
 | `emit-smt [--json] <spec>` | What is the SMT-LIB for these requirements? | Implemented |
 | `policy [--json] <spec> [--property <file>]` | Which scenarios do the requirements allow and forbid? Does any allowed scenario break a property? | Implemented |
