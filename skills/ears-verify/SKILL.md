@@ -177,7 +177,7 @@ examples/order-fail.json
 }
 ```
 
-`lint` returns `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, and `redundant`. A conflict carries `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements`, `situation`, `requires`, `example`, `keeps`, `breaks`, and `fix`. Situation and example entries are `name` and `value`. Requirements are `id`, `line`, and `sentence`. Requires entries are `id` and `text`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. Do not delete it until the PM agrees.
+`lint` returns `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `vacuous`, and `unused`. A conflict carries `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements`, `situation`, `requires`, `example`, `keeps`, `breaks`, and `fix`. Situation and example entries are `name` and `value`. Requirements are `id`, `line`, and `sentence`. Requires entries are `id` and `text`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. A vacuous requirement has those same fields. An unused entry is `name`, `kind`, `text`, and `fix`. `kind` is `state`, `input`, `output`, or `variant`. Do not delete a redundant requirement until the PM agrees. Do not invent a response for a condition that can never be true.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -247,7 +247,9 @@ examples/order-conflict.ears.md
   "gaps": [],
   "misuse": [],
   "wording": [],
-  "redundant": []
+  "redundant": [],
+  "vacuous": [],
+  "unused": []
 }
 ```
 
@@ -388,9 +390,11 @@ gaps: 1
 misuse: 0
 wording: 0
 redundant: 0
+vacuous: 0
+unused: 0
 
 gap order_fulfilled
-Nothing says whether the order was fulfilled when an order was submitted and inventory was not available.
+Nothing says whether the order was fulfilled when an order was submitted and inventory was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
 ```
 
 Ask what should happen in that situation. `examples/order-covered.ears.md` answers every situation, and lint is clean:
@@ -407,6 +411,8 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+vacuous: 0
+unused: 0
 ```
 
 ## Combined clauses
@@ -455,6 +461,8 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+vacuous: 0
+unused: 0
 
 conflict {R2, R3}
 R2 and R3 cannot both hold.
@@ -497,6 +505,8 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+vacuous: 0
+unused: 0
 ```
 
 `examples/order-misuse.ears.md` uses `when` for that unwanted event. Show the finding and rewrite it with the PM as `If payment fails, then the Order System shall reject the order.`
@@ -513,6 +523,8 @@ gaps: 0
 misuse: 1
 wording: 0
 redundant: 1
+vacuous: 0
+unused: 0
 
 misuse R4 line 6
 "payment fails" is an unwanted event. Write if ... then, not when.
@@ -526,7 +538,7 @@ Suggested fix: remove R4, or ask whether it was meant to say something the other
 
 ## Vague words and solution words
 
-`examples/order-wording.ears.md` says the system "responds quickly" and stores the order "in the database". Ask what a scenario can check, and what the system must guarantee.
+`examples/order-wording.ears.md` says the system "responds quickly" and stores the order "in the database". Ask what a scenario can check, and what the system must guarantee. The state `saved` is unused, because no requirement mentions it.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -540,6 +552,8 @@ gaps: 0
 misuse: 0
 wording: 2
 redundant: 0
+vacuous: 0
+unused: 1
 
 wording line 4
 "quickly" is too vague to test. Replace it with something a scenario can check.
@@ -548,6 +562,10 @@ output order_fulfilled: Bool "The system responds quickly." phrase "fulfill the 
 wording line 5
 "database" names a solution. Say what the system must do, not how to build it.
 state saved: Bool "Store the order in the database." phrase "the order is saved"
+
+unused saved
+saved ("the order is saved") is a state and no requirement mentions it.
+Suggested fix: use saved in a requirement, or remove it from the schema.
 ```
 
 ## An event nobody handles
@@ -566,6 +584,8 @@ gaps: 1
 misuse: 0
 wording: 0
 redundant: 0
+vacuous: 0
+unused: 0
 
 gap order_cancelled
 No requirement handles "an order is cancelled". Suggested fix: add a requirement that says what the system shall do, or remove the event.
@@ -587,6 +607,8 @@ gaps: 1
 misuse: 0
 wording: 0
 redundant: 0
+vacuous: 0
+unused: 0
 
 gap payment_declined
 No requirement states a response when "payment fails". Suggested fix: add an if ... then requirement, and ask what the system shall do. Do not choose the response.
@@ -608,6 +630,8 @@ gaps: 0
 misuse: 0
 wording: 3
 redundant: 0
+vacuous: 0
+unused: 0
 
 wording line 4
 "fast" is too vague to test. Replace it with something a scenario can check.
@@ -638,6 +662,8 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+vacuous: 0
+unused: 0
 
 conflict {R4, R5}
 R4 and R5 cannot both hold.
@@ -664,7 +690,7 @@ Suggested fix: ask which requirement should win. To keep R4, remove R5. To keep 
 
 ## Enum clash
 
-`examples/order-status.ears.md` requires the status to be shipped and cancelled. They clash in every situation. Ask which requirement should win.
+`examples/order-status.ears.md` requires the status to be shipped and cancelled. They clash in every situation. Ask which requirement should win. `placed` is declared and no requirement mentions it, so it is unused.
 
 <!-- verify stdout 1
 build/ears-verify
@@ -678,6 +704,8 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+vacuous: 0
+unused: 1
 
 conflict {R6, R7}
 R6 and R7 cannot both hold.
@@ -699,6 +727,10 @@ Example scenario:
 This scenario keeps R6 and breaks R7.
 
 Suggested fix: ask which requirement should win. To keep R6, remove R7. To keep R7, remove R6.
+
+unused Status.placed
+Status.placed is never mentioned.
+Suggested fix: use placed in a requirement, or remove it from Status.
 ```
 
 ## Policy
@@ -844,6 +876,8 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+vacuous: 0
+unused: 0
 
 conflict {R1, R2, R3}
 R1, R2, and R3 cannot all hold.
@@ -888,11 +922,134 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 1
+vacuous: 0
+unused: 0
 
 redundant R2 line 8
 R2 adds nothing. Whenever the other requirements hold, R2 holds too.
 When an order is submitted and inventory is available, the Order System shall fulfill the order.
 Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+```
+
+## A condition that can never be true
+
+Show the requirement and the suggested fix. A condition that contradicts itself, or that asks for a value outside the declared range, never triggers. Ask the PM to rewrite the condition. Do not invent a response. If the rest of the spec can be satisfied, lint also marks that requirement redundant.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-vacuous.ears.md
+-->
+```text
+spec: examples/order-vacuous.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 2
+vacuous: 2
+unused: 0
+
+redundant R1 line 7
+R1 adds nothing. Whenever the other requirements hold, R1 holds too.
+When the cart is open and not the cart is open, the Checkout shall accept the order.
+Suggested fix: remove R1, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+redundant R2 line 8
+R2 adds nothing. Whenever the other requirements hold, R2 holds too.
+When the quantity is at least 9, the Checkout shall accept the order.
+Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
+
+vacuous R1 line 7
+R1 can never trigger. Its condition is impossible for every allowed value.
+When the cart is open and not the cart is open, the Checkout shall accept the order.
+Suggested fix: rewrite the condition in R1 so a real situation can make it true, or remove the requirement. Do not invent a response.
+
+vacuous R2 line 8
+R2 can never trigger. Its condition is impossible for every allowed value.
+When the quantity is at least 9, the Checkout shall accept the order.
+Suggested fix: rewrite the condition in R2 so a real situation can make it true, or remove the requirement. Do not invent a response.
+```
+
+## Schema the requirements never use
+
+A state or input that no requirement mentions, an enum variant that no requirement mentions, and an output that is only read are unused. An output that nobody mentions at all is a gap. An event that nobody handles is a gap. Do not choose a value for an output nothing sets.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-unused.ears.md
+-->
+```text
+spec: examples/order-unused.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+vacuous: 0
+unused: 4
+
+unused loyalty
+loyalty ("the customer is loyal") is a state and no requirement mentions it.
+Suggested fix: use loyalty in a requirement, or remove it from the schema.
+
+unused region
+region ("the region") is an input and no requirement mentions it.
+Suggested fix: use region in a requirement, or remove it from the schema.
+
+unused receipt_sent
+Nothing sets receipt_sent ("send a receipt"). Requirements mention it, but no response says what it shall be.
+Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value.
+
+unused Lane.refund
+Lane.refund is never mentioned.
+Suggested fix: use refund in a requirement, or remove it from Lane.
+```
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+--json
+examples/order-unused.ears.md
+-->
+```text
+{
+  "ok": false,
+  "spec": "examples/order-unused.ears.md",
+  "conflicts": [],
+  "gaps": [],
+  "misuse": [],
+  "wording": [],
+  "redundant": [],
+  "vacuous": [],
+  "unused": [
+    {
+      "name": "loyalty",
+      "kind": "state",
+      "text": "loyalty (\"the customer is loyal\") is a state and no requirement mentions it.",
+      "fix": "Suggested fix: use loyalty in a requirement, or remove it from the schema."
+    },
+    {
+      "name": "region",
+      "kind": "input",
+      "text": "region (\"the region\") is an input and no requirement mentions it.",
+      "fix": "Suggested fix: use region in a requirement, or remove it from the schema."
+    },
+    {
+      "name": "receipt_sent",
+      "kind": "output",
+      "text": "Nothing sets receipt_sent (\"send a receipt\"). Requirements mention it, but no response says what it shall be.",
+      "fix": "Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value."
+    },
+    {
+      "name": "Lane.refund",
+      "kind": "variant",
+      "text": "Lane.refund is never mentioned.",
+      "fix": "Suggested fix: use refund in a requirement, or remove it from Lane."
+    }
+  ]
+}
 ```
 
 ## Scenarios

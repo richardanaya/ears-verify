@@ -164,7 +164,9 @@ function commandLint(args: string[]): void {
     outcome.report.gaps.length +
     outcome.report.misuse.length +
     outcome.report.wording.length +
-    outcome.report.redundant.length;
+    outcome.report.redundant.length +
+    outcome.report.vacuous.length +
+    outcome.report.unused.length;
   if (flags.json) console.log(formatLintJson(specPath, outcome.report));
   else console.log(formatLintText(specPath, outcome.report));
   if (findings === 0) process.exit(EXIT_OK);

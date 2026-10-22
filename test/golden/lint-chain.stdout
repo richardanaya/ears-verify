@@ -4,6 +4,8 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+vacuous: 0
+unused: 0
 
 conflict {R1, R2, R3}
 R1, R2, and R3 cannot all hold.

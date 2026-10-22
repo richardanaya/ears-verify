@@ -1,11 +1,13 @@
 /**
  * Lint a spec for contradictions, uncovered outputs, events nobody handles,
- * error conditions with no response, EARS pattern mistakes, and words a test
- * cannot pin down. Contradiction reports name the smallest set, the situation,
- * an example, and a fix that does not pick a winner.
+ * error conditions with no response, EARS pattern mistakes, words a test
+ * cannot pin down, conditions that can never be true, and schema the
+ * requirements never use. Contradiction reports name the smallest set, the
+ * situation, an example, and a fix that does not pick a winner.
  */
 
-import { describeAssignment, displayCode, isDriver, reportBool, requirementMentions, type Requirement, type Spec, type Term } from "./spec.ts";
+import { describeAssignment, displayCode, isDriver, reportBool, requirementMentions, termMentions, type Requirement, type Spec, type SymbolDecl, type Term } from "./spec.ts";
+import { satisfiable } from "./decide.ts";
 import { bestGap, conflictingSets, modelFor, redundantFlags, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
 import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 import { displayQuote, englishList, formatInt, pastVoice } from "./text.ts";
@@ -89,12 +91,29 @@ export interface Redundant {
   fix: string;
 }
 
+export interface Vacuous {
+  id: string;
+  line: number;
+  sentence: string;
+  text: string;
+  fix: string;
+}
+
+export interface Unused {
+  name: string;
+  kind: string;
+  text: string;
+  fix: string;
+}
+
 export interface LintReport {
   conflicts: Conflict[];
   gaps: Gap[];
   misuse: Misuse[];
   wording: Wording[];
   redundant: Redundant[];
+  vacuous: Vacuous[];
+  unused: Unused[];
 }
 
 export type LintOutcome = { kind: "report"; report: LintReport } | { kind: "error"; message: string };
@@ -129,8 +148,148 @@ export function lintSpec(spec: Spec): LintOutcome {
       misuse: findMisuse(spec),
       wording: findWording(spec),
       redundant: findRedundant(spec),
+      vacuous: findVacuous(spec),
+      unused: findUnused(spec),
     },
   };
+}
+
+function findVacuous(spec: Spec): Vacuous[] {
+  const found: Vacuous[] = [];
+  for (let i = 0; i < spec.requirements.length; i++) {
+    const req = spec.requirements[i];
+    if (req.antecedent === null) continue;
+    if (conditionPossible(spec, req.antecedent)) continue;
+    found.push({
+      id: req.id,
+      line: req.line,
+      sentence: req.sentence,
+      text: req.id + " can never trigger. Its condition is impossible for every allowed value.",
+      fix:
+        "Suggested fix: rewrite the condition in " +
+        req.id +
+        " so a real situation can make it true, or remove the requirement. Do not invent a response.",
+    });
+  }
+  return found;
+}
+
+function conditionPossible(spec: Spec, term: Term): boolean {
+  const probe: Requirement = {
+    id: "probe",
+    line: 0,
+    sentence: "",
+    system: "",
+    antecedent: null,
+    consequent: term,
+    hasWhen: false,
+    hasIf: false,
+    whenTerm: null,
+  };
+  const holds: Requirement[] = [];
+  holds.push(probe);
+  return satisfiable(spec, holds);
+}
+
+function findUnused(spec: Spec): Unused[] {
+  const found: Unused[] = [];
+  for (let i = 0; i < spec.symbols.length; i++) {
+    const sym = spec.symbols[i];
+    if (sym.role === "event") continue;
+    const mentioned = symbolMentioned(spec, i);
+    if (sym.role === "output") {
+      if (!mentioned) continue;
+      if (!consequentMentions(spec, i)) {
+        const label = symbolLabel(sym);
+        found.push({
+          name: sym.name,
+          kind: "output",
+          text: "Nothing sets " + label + ". Requirements mention it, but no response says what it shall be.",
+          fix:
+            "Suggested fix: add a shall requirement that sets " +
+            sym.name +
+            ", or declare it as an input if the environment provides it. Do not choose the value.",
+        });
+      }
+      continue;
+    }
+    if (mentioned) continue;
+    const label = symbolLabel(sym);
+    found.push({
+      name: sym.name,
+      kind: sym.role,
+      text: label + " is " + article(sym.role) + " " + sym.role + " and no requirement mentions it.",
+      fix: "Suggested fix: use " + sym.name + " in a requirement, or remove it from the schema.",
+    });
+  }
+  for (let e = 0; e < spec.enums.length; e++) {
+    const decl = spec.enums[e];
+    for (let v = 0; v < decl.variants.length; v++) {
+      const variant = decl.variants[v];
+      if (variantMentioned(spec, decl.name, variant)) continue;
+      const name = decl.name + "." + variant;
+      found.push({
+        name: name,
+        kind: "variant",
+        text: name + " is never mentioned.",
+        fix: "Suggested fix: use " + variant + " in a requirement, or remove it from " + decl.name + ".",
+      });
+    }
+  }
+  return found;
+}
+
+function article(role: string): string {
+  if (role === "input") return "an";
+  return "a";
+}
+
+function symbolLabel(sym: SymbolDecl): string {
+  if (sym.phrase.length > 0) return sym.name + " (" + displayQuote(sym.phrase) + ")";
+  return sym.name;
+}
+
+function symbolMentioned(spec: Spec, index: number): boolean {
+  for (let r = 0; r < spec.requirements.length; r++) {
+    if (requirementMentions(spec.requirements[r], index)) return true;
+  }
+  return false;
+}
+
+function consequentMentions(spec: Spec, index: number): boolean {
+  for (let r = 0; r < spec.requirements.length; r++) {
+    if (termMentions(spec.requirements[r].consequent, index)) return true;
+  }
+  return false;
+}
+
+function variantMentioned(spec: Spec, enumName: string, variant: string): boolean {
+  for (let r = 0; r < spec.requirements.length; r++) {
+    const req = spec.requirements[r];
+    if (req.antecedent !== null && termHasVariant(req.antecedent, enumName, variant)) return true;
+    if (termHasVariant(req.consequent, enumName, variant)) return true;
+  }
+  return false;
+}
+
+function termHasVariant(term: Term, enumName: string, variant: string): boolean {
+  if (term.kind === "enum") return term.enumName === enumName && term.variant === variant;
+  if (term.kind === "not") return termHasVariant(term.term, enumName, variant);
+  if (
+    term.kind === "and" ||
+    term.kind === "or" ||
+    term.kind === "eq" ||
+    term.kind === "neq" ||
+    term.kind === "lt" ||
+    term.kind === "le" ||
+    term.kind === "gt" ||
+    term.kind === "ge" ||
+    term.kind === "add" ||
+    term.kind === "sub"
+  ) {
+    return termHasVariant(term.left, enumName, variant) || termHasVariant(term.right, enumName, variant);
+  }
+  return false;
 }
 
 function findRedundant(spec: Spec): Redundant[] {
@@ -304,6 +463,7 @@ function explainGap(spec: Spec, outputIndex: number, situation: Binding): Gap {
   let text = voiced ? "Nothing says whether " + reportBool(sym, true) : "Nothing covers " + (sym.phrase.length > 0 ? sym.phrase : name);
   if (pairs.length === 0) text += ".";
   else text += " when " + pairClause(spec, pairs) + ".";
+  text += " Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.";
   return { output: name, situation: pairs, text: text };
 }
 
@@ -473,6 +633,8 @@ export function formatLintText(specPath: string, report: LintReport): string {
   lines.push("misuse: " + formatInt(report.misuse.length));
   lines.push("wording: " + formatInt(report.wording.length));
   lines.push("redundant: " + formatInt(report.redundant.length));
+  lines.push("vacuous: " + formatInt(report.vacuous.length));
+  lines.push("unused: " + formatInt(report.unused.length));
   for (let i = 0; i < report.conflicts.length; i++) {
     const conflict = report.conflicts[i];
     lines.push("");
@@ -527,6 +689,21 @@ export function formatLintText(specPath: string, report: LintReport): string {
     lines.push(item.sentence);
     lines.push(item.fix);
   }
+  for (let i = 0; i < report.vacuous.length; i++) {
+    const item = report.vacuous[i];
+    lines.push("");
+    lines.push("vacuous " + item.id + " line " + formatInt(item.line));
+    lines.push(item.text);
+    lines.push(item.sentence);
+    lines.push(item.fix);
+  }
+  for (let i = 0; i < report.unused.length; i++) {
+    const item = report.unused[i];
+    lines.push("");
+    lines.push("unused " + item.name);
+    lines.push(item.text);
+    lines.push(item.fix);
+  }
   return lines.join("\n");
 }
 
@@ -576,15 +753,35 @@ export function formatLintJson(specPath: string, report: LintReport): string {
     const item = report.redundant[i];
     redundant.push({ id: item.id, line: item.line, sentence: item.sentence, text: item.text, fix: item.fix });
   }
+  const vacuous = [];
+  for (let i = 0; i < report.vacuous.length; i++) {
+    const item = report.vacuous[i];
+    vacuous.push({ id: item.id, line: item.line, sentence: item.sentence, text: item.text, fix: item.fix });
+  }
+  const unused = [];
+  for (let i = 0; i < report.unused.length; i++) {
+    const item = report.unused[i];
+    unused.push({ name: item.name, kind: item.kind, text: item.text, fix: item.fix });
+  }
+  const ok =
+    conflicts.length === 0 &&
+    gaps.length === 0 &&
+    misuse.length === 0 &&
+    wording.length === 0 &&
+    redundant.length === 0 &&
+    vacuous.length === 0 &&
+    unused.length === 0;
   return JSON.stringify(
     {
-      ok: conflicts.length === 0 && gaps.length === 0 && misuse.length === 0 && wording.length === 0 && redundant.length === 0,
+      ok: ok,
       spec: specPath,
       conflicts: conflicts,
       gaps: gaps,
       misuse: misuse,
       wording: wording,
       redundant: redundant,
+      vacuous: vacuous,
+      unused: unused,
     },
     null,
     2,

@@ -73,15 +73,6 @@ class Lin {
   }
 }
 
-interface Snap {
-  val: number[];
-  lo: number[];
-  hi: number[];
-  ineqLen: number;
-  neLen: number;
-  assigned: number;
-}
-
 /**
  * Lexicographically least full assignment satisfying every holds requirement,
  * with at least one fails requirement false when that list is non-empty.
@@ -147,6 +138,21 @@ class Engine {
   ne: Diseq[];
   assigned: number;
   ticks: number;
+  trailK: number[];
+  trailI: number[];
+  trailP: number[];
+  trailN: number;
+  snapStack: number[];
+  snapN: number;
+  w1: number[];
+  w2: number[];
+  watches: number[][];
+  units: number[];
+  emptyClause: boolean;
+  propQ: number[];
+  propH: number;
+  propN: number;
+  scratch: Binding;
 
   constructor(spec: Spec) {
     this.spec = spec;
@@ -169,6 +175,21 @@ class Engine {
     this.ne = [];
     this.assigned = 0;
     this.ticks = 0;
+    this.trailK = [];
+    this.trailI = [];
+    this.trailP = [];
+    this.trailN = 0;
+    this.snapStack = [];
+    this.snapN = 0;
+    this.w1 = [];
+    this.w2 = [];
+    this.watches = [];
+    this.units = [];
+    this.emptyClause = false;
+    this.propQ = [];
+    this.propH = 0;
+    this.propN = 0;
+    this.scratch = new Binding(this.nsym);
     const truth = new AtomInfo();
     truth.kind = 3;
     this.atoms.push(truth);
@@ -248,24 +269,106 @@ class Engine {
       if (g < 0) return false;
       this.clauses.push([this.neg(g)]);
     }
+    this.buildWatches();
     return true;
   }
 
+  buildWatches(): void {
+    let maxLit = 1;
+    this.emptyClause = false;
+    for (let c = 0; c < this.clauses.length; c++) {
+      const clause = this.clauses[c];
+      if (clause.length === 0) this.emptyClause = true;
+      for (let i = 0; i < clause.length; i++) {
+        const lit = clause[i];
+        if (lit > maxLit) maxLit = lit;
+        const flipped = lit % 2 === 0 ? lit + 1 : lit - 1;
+        if (flipped > maxLit) maxLit = flipped;
+      }
+    }
+    this.w1 = [];
+    this.w2 = [];
+    this.watches = [];
+    this.units = [];
+    for (let lit = 0; lit <= maxLit; lit++) this.watches.push([]);
+    for (let c = 0; c < this.clauses.length; c++) {
+      const clause = this.clauses[c];
+      if (clause.length === 0) {
+        this.w1.push(-1);
+        this.w2.push(-1);
+        continue;
+      }
+      const first = clause[0];
+      let second = -1;
+      for (let i = 1; i < clause.length; i++) {
+        if (clause[i] !== first) {
+          second = clause[i];
+          break;
+        }
+      }
+      this.w1.push(first);
+      this.w2.push(second);
+      this.watches[first].push(c);
+      if (second >= 0) this.watches[second].push(c);
+      else this.units.push(first);
+    }
+  }
+
   reset(): void {
-    this.val = [];
-    this.lo = [];
-    this.hi = [];
-    this.ineq = [];
-    this.ne = [];
-    this.assigned = 0;
-    for (let i = 0; i < this.atoms.length; i++) this.val.push(-1);
+    this.trailN = 0;
+    this.snapN = 0;
+    this.propH = 0;
+    this.propN = 0;
+    while (this.ineq.length > 0) this.ineq.pop();
+    while (this.ne.length > 0) this.ne.pop();
+    while (this.val.length < this.atoms.length) this.val.push(-1);
+    for (let i = 0; i < this.atoms.length; i++) this.val[i] = -1;
+    while (this.lo.length < this.nsym) {
+      this.lo.push(0);
+      this.hi.push(0);
+    }
     for (let i = 0; i < this.nsym; i++) {
-      this.lo.push(this.baseLo[i]);
-      this.hi.push(this.baseHi[i]);
+      this.lo[i] = this.baseLo[i];
+      this.hi[i] = this.baseHi[i];
     }
     this.val[TRUE_ATOM] = 1;
     this.assigned = 1;
     this.ticks = 1;
+  }
+
+  setVal(atom: number, truth: number): void {
+    if (this.val[atom] === truth) return;
+    this.remember(0, atom, this.val[atom]);
+    this.val[atom] = truth;
+    this.ticks++;
+  }
+
+  setLo(si: number, value: number): void {
+    if (this.lo[si] === value) return;
+    this.remember(1, si, this.lo[si]);
+    this.lo[si] = value;
+    this.ticks++;
+  }
+
+  setHi(si: number, value: number): void {
+    if (this.hi[si] === value) return;
+    this.remember(2, si, this.hi[si]);
+    this.hi[si] = value;
+    this.ticks++;
+  }
+
+  remember(kind: number, index: number, prev: number): void {
+    const n = this.trailN;
+    if (n === this.trailK.length) {
+      this.trailK.push(kind);
+      this.trailI.push(index);
+      this.trailP.push(prev);
+    } else {
+      this.trailK[n] = kind;
+      this.trailI[n] = index;
+      this.trailP[n] = prev;
+    }
+    this.trailN = n + 1;
   }
 
   applyPins(pins: Binding, driversOnly: boolean): boolean {
@@ -275,8 +378,8 @@ class Engine {
       if (!pins.known[i] && driversOnly) continue;
       const code = pins.code[i];
       if (code < this.lo[i] || code > this.hi[i]) return false;
-      this.lo[i] = code;
-      this.hi[i] = code;
+      this.setLo(i, code);
+      this.setHi(i, code);
       if (this.isBool[i]) {
         const lit = code === 1 ? this.pos(this.boolAtom[i]) : this.neg(this.pos(this.boolAtom[i]));
         if (!this.assignLit(lit)) return false;
@@ -287,7 +390,6 @@ class Engine {
 
   search(pos: number, wantMin: boolean): boolean {
     if (!this.propagate()) return false;
-    if (this.blocked()) return false;
     if (pos >= this.nsym) return this.fulfilled();
     if (this.lo[pos] === this.hi[pos]) return this.search(pos + 1, wantMin);
     const lo = this.lo[pos];
@@ -382,8 +484,8 @@ class Engine {
 
   badSplit(pos: number, si: number, lo: number, hi: number, domHi: number): boolean {
     const snap = this.snap();
-    if (lo > this.lo[si]) this.lo[si] = lo;
-    if (hi < this.hi[si]) this.hi[si] = hi;
+    if (lo > this.lo[si]) this.setLo(si, lo);
+    if (hi < this.hi[si]) this.setHi(si, hi);
     const live = this.propagate();
     this.restore(snap);
     if (!live) {
@@ -400,14 +502,14 @@ class Engine {
     const snap = this.snap();
     if (!this.force(si, value) || !this.propagate()) {
       this.restore(snap);
-      this.lo[si] = value;
-      this.hi[si] = value;
+      this.setLo(si, value);
+      this.setHi(si, value);
       this.fillMins(pos + 1);
       return true;
     }
     if (this.searchBad(pos + 1)) {
-      this.lo[si] = value;
-      this.hi[si] = value;
+      this.setLo(si, value);
+      this.setHi(si, value);
       return true;
     }
     this.restore(snap);
@@ -415,16 +517,16 @@ class Engine {
   }
 
   choiceFill(pos: number, si: number, value: number): void {
-    this.lo[si] = value;
-    this.hi[si] = value;
+    this.setLo(si, value);
+    this.setHi(si, value);
     this.fillMins(pos + 1);
   }
 
   fillMins(pos: number): void {
     for (let i = pos; i < this.drivers.length; i++) {
       const si = this.drivers[i];
-      this.lo[si] = this.baseLo[si];
-      this.hi[si] = this.baseLo[si];
+      this.setLo(si, this.baseLo[si]);
+      this.setHi(si, this.baseLo[si]);
     }
   }
 
@@ -437,8 +539,8 @@ class Engine {
 
   anyIn(pos: number, lo: number, hi: number): boolean {
     const snap = this.snap();
-    if (lo > this.lo[pos]) this.lo[pos] = lo;
-    if (hi < this.hi[pos]) this.hi[pos] = hi;
+    if (lo > this.lo[pos]) this.setLo(pos, lo);
+    if (hi < this.hi[pos]) this.setHi(pos, hi);
     const ok = this.propagate() && !this.blocked() && this.search(pos, false);
     this.restore(snap);
     return ok;
@@ -455,8 +557,8 @@ class Engine {
 
   withSpan(pos: number, lo: number, hi: number, wantMin: boolean): boolean {
     const snap = this.snap();
-    if (lo > this.lo[pos]) this.lo[pos] = lo;
-    if (hi < this.hi[pos]) this.hi[pos] = hi;
+    if (lo > this.lo[pos]) this.setLo(pos, lo);
+    if (hi < this.hi[pos]) this.setHi(pos, hi);
     if (!this.propagate() || this.blocked() || !this.search(pos, wantMin)) {
       this.restore(snap);
       return false;
@@ -466,9 +568,8 @@ class Engine {
 
   force(si: number, value: number): boolean {
     if (value < this.lo[si] || value > this.hi[si]) return false;
-    if (this.lo[si] !== value || this.hi[si] !== value) this.ticks++;
-    this.lo[si] = value;
-    this.hi[si] = value;
+    this.setLo(si, value);
+    this.setHi(si, value);
     if (this.isBool[si]) {
       const lit = value === 1 ? this.pos(this.boolAtom[si]) : this.neg(this.pos(this.boolAtom[si]));
       return this.assignLit(lit);
@@ -477,62 +578,99 @@ class Engine {
   }
 
   propagate(): boolean {
+    if (this.emptyClause) return false;
+    for (let i = 0; i < this.units.length; i++) {
+      if (!this.assignLit(this.units[i])) return false;
+    }
     for (let spin = 0; spin < 10000; spin++) {
       const mark = this.ticks;
-      if (!this.unit()) return false;
-      if (!this.tighten()) return false;
+      const queued = this.propN;
+      if (!this.drain()) return false;
+      if (this.ineq.length > 0 || this.ne.length > 0) {
+        if (!this.tighten()) return false;
+      }
       if (!this.imply()) return false;
-      if (this.ticks === mark) return true;
+      if (this.ticks === mark && this.propN === queued) return true;
     }
     return false;
   }
 
-  unit(): boolean {
-    let moved = true;
-    while (moved) {
-      moved = false;
-      for (let c = 0; c < this.clauses.length; c++) {
-        const clause = this.clauses[c];
-        let open = -1;
-        let sat = false;
-        let many = false;
-        for (let i = 0; i < clause.length; i++) {
-          const lit = clause[i];
-          const atom = this.atomOf(lit);
-          const want = lit % 2 === 0 ? 1 : 0;
-          if (this.val[atom] === want) sat = true;
-          else if (this.val[atom] < 0) {
-            if (open >= 0) many = true;
-            open = lit;
-          }
-        }
-        if (sat) continue;
-        if (open < 0) return false;
-        if (!many) {
-          if (!this.assignLit(open)) return false;
-          moved = true;
-        }
-      }
+  drain(): boolean {
+    while (this.propH < this.propN) {
+      const lit = this.propQ[this.propH];
+      this.propH++;
+      if (!this.wake(this.neg(lit))) return false;
     }
     return true;
+  }
+
+  wake(falseLit: number): boolean {
+    if (falseLit < 0 || falseLit >= this.watches.length) return true;
+    const list = this.watches[falseLit];
+    let i = 0;
+    while (i < list.length) {
+      const ci = list[i];
+      const other = this.w1[ci] === falseLit ? this.w2[ci] : this.w1[ci];
+      if (other >= 0 && this.litSat(other)) {
+        i++;
+        continue;
+      }
+      const repl = this.otherOpen(ci, falseLit, other);
+      if (repl >= 0) {
+        const last = list.length - 1;
+        list[i] = list[last];
+        list.pop();
+        if (this.w1[ci] === falseLit) this.w1[ci] = repl;
+        else this.w2[ci] = repl;
+        this.watches[repl].push(ci);
+        continue;
+      }
+      if (other < 0 || this.litFalse(other)) return false;
+      if (!this.assignLit(other)) return false;
+      i++;
+    }
+    return true;
+  }
+
+  otherOpen(ci: number, falseLit: number, other: number): number {
+    const clause = this.clauses[ci];
+    for (let k = 0; k < clause.length; k++) {
+      const lit = clause[k];
+      if (lit === falseLit || lit === other) continue;
+      if (!this.litFalse(lit)) return lit;
+    }
+    return -1;
+  }
+
+  litSat(lit: number): boolean {
+    const want = lit % 2 === 0 ? 1 : 0;
+    return this.val[this.atomOf(lit)] === want;
+  }
+
+  litFalse(lit: number): boolean {
+    const atom = this.atomOf(lit);
+    if (this.val[atom] < 0) return false;
+    const want = lit % 2 === 0 ? 1 : 0;
+    return this.val[atom] !== want;
   }
 
   assignLit(lit: number): boolean {
     const atom = this.atomOf(lit);
     const truth = lit % 2 === 0 ? 1 : 0;
     if (this.val[atom] >= 0) return this.val[atom] === truth;
-    this.val[atom] = truth;
+    this.setVal(atom, truth);
     this.assigned++;
-    this.ticks++;
     const info = this.atoms[atom];
     if (info.kind === 0) {
       const bit = truth === 1 ? 1 : 0;
       if (bit < this.lo[info.sym] || bit > this.hi[info.sym]) return false;
-      this.lo[info.sym] = bit;
-      this.hi[info.sym] = bit;
-      return true;
-    }
-    if (info.kind === 1) return this.postTheory(info, truth === 1);
+      this.setLo(info.sym, bit);
+      this.setHi(info.sym, bit);
+    } else if (info.kind === 1 && !this.postTheory(info, truth === 1)) return false;
+    const n = this.propN;
+    if (n === this.propQ.length) this.propQ.push(lit);
+    else this.propQ[n] = lit;
+    this.propN = n + 1;
     return true;
   }
 
@@ -614,16 +752,10 @@ class Engine {
       const room = row.rhs - othersMin;
       if (a > 0) {
         const cap = Math.floor(room / a);
-        if (cap < this.hi[si]) {
-          this.hi[si] = cap;
-          this.ticks++;
-        }
+        if (cap < this.hi[si]) this.setHi(si, cap);
       } else {
         const floor = Math.ceil(room / a);
-        if (floor > this.lo[si]) {
-          this.lo[si] = floor;
-          this.ticks++;
-        }
+        if (floor > this.lo[si]) this.setLo(si, floor);
       }
       if (this.lo[si] > this.hi[si]) return false;
     }
@@ -651,13 +783,8 @@ class Engine {
     const ban = value / a;
     if (ban < this.lo[si] || ban > this.hi[si]) return true;
     if (this.lo[si] === this.hi[si]) return false;
-    if (this.lo[si] === ban) {
-      this.lo[si] = ban + 1;
-      this.ticks++;
-    } else if (this.hi[si] === ban) {
-      this.hi[si] = ban - 1;
-      this.ticks++;
-    }
+    if (this.lo[si] === ban) this.setLo(si, ban + 1);
+    else if (this.hi[si] === ban) this.setHi(si, ban - 1);
     return this.lo[si] <= this.hi[si];
   }
 
@@ -749,7 +876,7 @@ class Engine {
   }
 
   toBinding(fill: boolean): Binding {
-    const env = new Binding(this.nsym);
+    const env = this.scratch;
     for (let i = 0; i < this.nsym; i++) {
       if (this.lo[i] === this.hi[i]) {
         env.known[i] = true;
@@ -757,6 +884,8 @@ class Engine {
       } else if (fill) {
         env.known[i] = true;
         env.code[i] = this.lo[i];
+      } else {
+        env.known[i] = false;
       }
     }
     return env;
@@ -1092,33 +1221,51 @@ class Engine {
     return Math.floor(lit / 2);
   }
 
-  snap(): Snap {
-    const shot: Snap = {
-      val: [],
-      lo: [],
-      hi: [],
-      ineqLen: this.ineq.length,
-      neLen: this.ne.length,
-      assigned: this.assigned,
-    };
-    for (let i = 0; i < this.val.length; i++) shot.val.push(this.val[i]);
-    for (let i = 0; i < this.nsym; i++) {
-      shot.lo.push(this.lo[i]);
-      shot.hi.push(this.hi[i]);
+  snap(): number {
+    const n = this.snapN;
+    const base = n * 7;
+    if (base === this.snapStack.length) {
+      this.snapStack.push(this.trailN);
+      this.snapStack.push(this.ineq.length);
+      this.snapStack.push(this.ne.length);
+      this.snapStack.push(this.assigned);
+      this.snapStack.push(this.ticks);
+      this.snapStack.push(this.propH);
+      this.snapStack.push(this.propN);
+    } else {
+      this.snapStack[base] = this.trailN;
+      this.snapStack[base + 1] = this.ineq.length;
+      this.snapStack[base + 2] = this.ne.length;
+      this.snapStack[base + 3] = this.assigned;
+      this.snapStack[base + 4] = this.ticks;
+      this.snapStack[base + 5] = this.propH;
+      this.snapStack[base + 6] = this.propN;
     }
-    return shot;
+    this.snapN = n + 1;
+    return n;
   }
 
-  restore(shot: Snap): void {
-    for (let i = 0; i < shot.val.length; i++) this.val[i] = shot.val[i];
-    while (this.val.length > shot.val.length) this.val.pop();
-    for (let i = 0; i < this.nsym; i++) {
-      this.lo[i] = shot.lo[i];
-      this.hi[i] = shot.hi[i];
+  restore(level: number): void {
+    const base = level * 7;
+    const trail = this.snapStack[base];
+    const ineqLen = this.snapStack[base + 1];
+    const neLen = this.snapStack[base + 2];
+    while (this.trailN > trail) {
+      this.trailN--;
+      const kind = this.trailK[this.trailN];
+      const index = this.trailI[this.trailN];
+      const prev = this.trailP[this.trailN];
+      if (kind === 0) this.val[index] = prev;
+      else if (kind === 1) this.lo[index] = prev;
+      else this.hi[index] = prev;
     }
-    while (this.ineq.length > shot.ineqLen) this.ineq.pop();
-    while (this.ne.length > shot.neLen) this.ne.pop();
-    this.assigned = shot.assigned;
+    while (this.ineq.length > ineqLen) this.ineq.pop();
+    while (this.ne.length > neLen) this.ne.pop();
+    this.assigned = this.snapStack[base + 3];
+    this.ticks = this.snapStack[base + 4];
+    this.propH = this.snapStack[base + 5];
+    this.propN = this.snapStack[base + 6];
+    this.snapN = level;
   }
 }
 

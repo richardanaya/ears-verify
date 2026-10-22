@@ -169,7 +169,7 @@ if (gapLint.kind === "report") {
   check(
     "gap text",
     gap.text ===
-      "Nothing says whether the order was fulfilled when an order was submitted and inventory was not available.",
+      "Nothing says whether the order was fulfilled when an order was submitted and inventory was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.",
   );
   check(
     "gap situation",
@@ -843,6 +843,47 @@ if (wideManyLint.kind === "report") {
     }
   }
   check("wide thirteen keeps both pairs", pairO && pairP && onlyCores && gapO && gapP && wideManyLint.report.redundant.length === 0);
+}
+
+const vacuousLint = lintSpec(mustSpec(readFileSync("examples/order-vacuous.ears.md", "utf8")));
+check("vacuous ran", vacuousLint.kind === "report");
+if (vacuousLint.kind === "report") {
+  check("vacuous count", vacuousLint.report.vacuous.length === 2 && vacuousLint.report.conflicts.length === 0 && vacuousLint.report.gaps.length === 0);
+  check("vacuous ids", vacuousLint.report.vacuous[0].id === "R1" && vacuousLint.report.vacuous[1].id === "R2");
+  check(
+    "vacuous text",
+    vacuousLint.report.vacuous[0].text === "R1 can never trigger. Its condition is impossible for every allowed value." &&
+      vacuousLint.report.vacuous[1].text.indexOf("R2 can never trigger.") === 0,
+  );
+  check("vacuous fix", vacuousLint.report.vacuous[0].fix.indexOf("Suggested fix: rewrite the condition in R1") === 0);
+  check("vacuous also redundant", vacuousLint.report.redundant.length === 2);
+}
+
+const possible = lintSpec(
+  mustSpec(
+    'state cart_open: Bool "The cart is open." phrase "the cart is open"\noutput order_accepted: Bool "The order is accepted." phrase "accept the order"\n\nR1 When the cart is open, the Checkout shall accept the order.\nR2 When not the cart is open, the Checkout shall not accept the order.\n',
+  ),
+);
+check(
+  "possible condition is not vacuous",
+  possible.kind === "report" && possible.report.vacuous.length === 0 && possible.report.unused.length === 0 && possible.report.gaps.length === 0,
+);
+
+const unusedLint = lintSpec(mustSpec(readFileSync("examples/order-unused.ears.md", "utf8")));
+check("unused ran", unusedLint.kind === "report");
+if (unusedLint.kind === "report") {
+  check("unused no conflict or gap", unusedLint.report.conflicts.length === 0 && unusedLint.report.gaps.length === 0 && unusedLint.report.vacuous.length === 0);
+  check("unused count", unusedLint.report.unused.length === 4);
+  check("unused state", unusedLint.report.unused[0].name === "loyalty" && unusedLint.report.unused[0].kind === "state");
+  check("unused input", unusedLint.report.unused[1].name === "region" && unusedLint.report.unused[1].kind === "input");
+  check(
+    "unused output never set",
+    unusedLint.report.unused[2].name === "receipt_sent" &&
+      unusedLint.report.unused[2].kind === "output" &&
+      unusedLint.report.unused[2].text.indexOf("Nothing sets ") === 0,
+  );
+  check("unused variant", unusedLint.report.unused[3].name === "Lane.refund" && unusedLint.report.unused[3].kind === "variant");
+  check("unused fix", unusedLint.report.unused[3].fix.indexOf("Suggested fix: use refund") === 0);
 }
 
 const soundnessSpecs = runSoundness();

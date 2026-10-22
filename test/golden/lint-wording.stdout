@@ -4,6 +4,8 @@ gaps: 0
 misuse: 0
 wording: 2
 redundant: 0
+vacuous: 0
+unused: 1
 
 wording line 4
 "quickly" is too vague to test. Replace it with something a scenario can check.
@@ -12,3 +14,7 @@ output order_fulfilled: Bool "The system responds quickly." phrase "fulfill the 
 wording line 5
 "database" names a solution. Say what the system must do, not how to build it.
 state saved: Bool "Store the order in the database." phrase "the order is saved"
+
+unused saved
+saved ("the order is saved") is a state and no requirement mentions it.
+Suggested fix: use saved in a requirement, or remove it from the schema.

@@ -59,5 +59,7 @@
   "gaps": [],
   "misuse": [],
   "wording": [],
-  "redundant": []
+  "redundant": [],
+  "vacuous": [],
+  "unused": []
 }

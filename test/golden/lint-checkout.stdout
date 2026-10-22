@@ -4,6 +4,8 @@ gaps: 2
 misuse: 0
 wording: 0
 redundant: 0
+vacuous: 0
+unused: 0
 
 conflict {R8, R12, R14}
 R8, R12, and R14 cannot all hold.
@@ -120,7 +122,7 @@ This scenario keeps R15 and breaks R16.
 Suggested fix: ask which requirement should win. To keep R15, remove R16. To keep R16, remove R15.
 
 gap receipt_sent
-Nothing says whether a receipt was sent when the cart was open, an item was added, checkout was started, payment was submitted, payment was declined, the address was not confirmed, the customer was subscribing, the customer was cancelling, the customer was signed in, a card was saved, and stock was available.
+Nothing says whether a receipt was sent when the cart was open, an item was added, checkout was started, payment was submitted, payment was declined, the address was not confirmed, the customer was subscribing, the customer was cancelling, the customer was signed in, a card was saved, and stock was available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
 
 gap billed_seats
-Nothing covers the billed seats when the cart was open, an item was added, checkout was started, payment was submitted, payment was declined, the address was confirmed, the customer was subscribing, the customer was cancelling, the customer was signed in, a card was saved, and stock was not available.
+Nothing covers the billed seats when the cart was open, an item was added, checkout was started, payment was submitted, payment was declined, the address was confirmed, the customer was subscribing, the customer was cancelling, the customer was signed in, a card was saved, and stock was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.

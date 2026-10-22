@@ -4,6 +4,8 @@ gaps: 0
 misuse: 0
 wording: 0
 redundant: 0
+vacuous: 0
+unused: 1
 
 conflict {R6, R7}
 R6 and R7 cannot both hold.
@@ -25,3 +27,7 @@ Example scenario:
 This scenario keeps R6 and breaks R7.
 
 Suggested fix: ask which requirement should win. To keep R6, remove R7. To keep R7, remove R6.
+
+unused Status.placed
+Status.placed is never mentioned.
+Suggested fix: use placed in a requirement, or remove it from Status.
