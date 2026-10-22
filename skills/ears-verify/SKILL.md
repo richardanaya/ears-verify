@@ -1,6 +1,6 @@
 ---
 name: ears-verify
-description: Use when a product manager is stating or revising requirements. Turn their words into EARS with this grammar, run ears-verify lint, explain any conflict, and ask which requirement should win before anyone builds the system.
+description: Use when a product manager is stating or revising requirements, including a page or a link. Turn their words into EARS with this grammar, turn a page description into one canonical URL and requirements over the url.* names, run ears-verify lint, explain any conflict, and ask which requirement should win before anyone builds the system. If the English fits more than one URL, ask or list the candidates.
 ---
 
 # ears-verify
@@ -48,7 +48,7 @@ Blank lines, `#` headings, `//` comments, and a full-line `<!-- ...` are ignored
 
 ## Operations
 
-A condition or a response is a boolean expression. This is the whole language:
+A condition or a response is a boolean expression. This is the whole language for booleans, integers, and enums. Comparisons against the built-in URL strings are in the URL section.
 
 | Phrase | What it means |
 | --- | --- |
@@ -94,8 +94,8 @@ The line has to be something a scenario can make true or false. Lint rejects the
 
 ## Workflow
 
-1. Listen. Write down the PM's words before you translate them.
-2. Add or reuse declarations. If they describe something you already named, use that name.
+1. Listen. Write down the PM's words before you translate them. When they describe a page, a link, or where a request goes, follow the URL section first. If that English fits more than one URL, ask or list the candidates. Do not pick one.
+2. Add or reuse declarations. If they describe something you already named, use that name. The `url.*` names are already built in.
 3. Write one EARS line per requirement. Normal triggers use `when`. Unwanted conditions use `if` ... `then`.
 4. Run `build/ears-verify lint <spec>`.
 5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Stop until they answer. Do not choose.
@@ -343,9 +343,429 @@ not implemented yet
 
 Do not describe a scenario `policy` found. It did not look.
 
+## URLs
+
+When the PM describes a page, a link, or where a request goes, do not invent a URL shape. Translate the English into one canonical URL, then into EARS over the fixed `url.*` vocabulary. The same English meaning always produces the same URL structure.
+
+Flow: English sentence, then canonical URL, then the requirements, then ears-verify.
+
+### Fixed vocabulary
+
+These seven names are built in. You do not declare them. The first requirement that mentions one adds it, in the order scheme, userinfo, host, port, path, query, fragment. A scenario that checks the spec must include every name the requirements used.
+
+| Name | Sort | What it holds |
+| --- | --- | --- |
+| `url.scheme` | String | Scheme, with no colon. |
+| `url.userinfo` | String | Userinfo. A canonical URL has none, so this is empty. |
+| `url.host` | String | Host, without brackets. |
+| `url.port` | Int `-1..65535` | Port number, or `-1` when the URL omits it. |
+| `url.path` | String | Path, empty or starting with `/` when the URL has an authority. |
+| `url.query` | String | Query, without the `?`. |
+| `url.fragment` | String | Fragment, without the `#`. |
+
+| Phrase | What it means |
+| --- | --- |
+| `url.scheme = "https"` | The strings are equal. |
+| `url.scheme != "http"` | The strings differ. |
+| `url.host starts with "shop."` | The host begins with that string. |
+| `url.host ends with ".example.com"` | The host ends with that string. |
+| `url.query contains "status="` | The query includes that string. |
+| `url.userinfo is empty` | The userinfo is `""`. |
+| `url.port is empty` | The port was omitted (`-1`). |
+| `not url.fragment is empty` | A fragment is present. |
+
+`is empty` is only for a URL string or for `url.port`. `starts with`, `ends with`, and `contains` are only for strings.
+
+Lint does not try values for these strings, so a clean lint does not prove two URL lines can be true together. It does catch two ubiquitous URL strings that name different constants. For a concrete URL, run `check` with every `url.*` name the spec mentioned. `url.port` is an integer: `-1` when it is omitted, otherwise the port number.
+
+### English phrases
+
+Use this table. Do not paraphrase a row into a different shape.
+
+| English | URL part |
+| --- | --- |
+| secure, encrypted, or https | scheme `https` |
+| not secure, or plain http | scheme `http` |
+| on example.com exactly | host equals `example.com` |
+| on the example.com site or its subdomains | host equals `example.com`, or host ends with `.example.com` |
+| the orders page for a customer | path `/customers/{customerId}/orders` |
+| the customer page | path `/customers/{customerId}` |
+| the items page | path `/items` |
+| filtered by status | query `status={status}` |
+| filtered by page and status | query `page={page}&status={status}` |
+| no user name in the URL | userinfo is empty |
+| the default port, or no port written | port is empty |
+| no hash, or no fragment | fragment is empty |
+
+Placeholders are `{camelCase}`. Collection names in a path are the plurals in the table below. Query keys are written in alphabetical order.
+
+### Canonical form
+
+`build/ears-verify canonicalize <url>` prints the canonical URL, then the rules the input broke. Exit `0` means the input was already canonical (`violations: 0`). Any other canonicalization exits `1`. A URL the parser rejects exits `2`. `--json` is the same report with `ok`, `input`, `canonical`, and `violations`.
+
+These are the rules, in the order the command prints them. The first group is RFC 3986 section 6 normalization. The second group is ours.
+
+| Rule the command prints | What changes |
+| --- | --- |
+| `lowercase the scheme` | `HTTPS` becomes `https`. |
+| `lowercase the host` | `Example.COM` becomes `example.com`. An IPv6 literal is lowercased inside the brackets. |
+| `omit the default port` | `:443` is dropped for `https`, and `:80` is dropped for `http`. Any other port stays, with no leading zeros. |
+| `uppercase percent-encoding hex` | `%2f` becomes `%2F`. |
+| `decode unreserved characters` | `%7E` becomes `~`. Letters, digits, `-`, `.`, `_`, and `~` are decoded. `%2F` stays encoded, so it is not a path separator. |
+| `remove dot segments` | `/a/./b/../c` becomes `/c`. |
+| `no trailing slash except the root` | `/orders/` becomes `/orders`. The root path `/` stays `/`. |
+| `no empty query` | A trailing `?` is dropped. |
+| `no empty fragment` | A trailing `#` is dropped. |
+| `lowercase hyphenated path segments` | `New-Orders` becomes `new-orders`. Letters inside `{...}` are left to the placeholder rule. |
+| `plural collection nouns` | A whole path segment that is one of the nouns below becomes the lowercase plural. A segment that contains `-` or `{` is not pluralized. |
+| `use {camelCase} placeholders` | `{CustomerId}` and `{customer_id}` and `{customer-id}` become `{customerId}`. A placeholder that is already `{camelCase}` is left alone. |
+| `sort query keys` | `b=2&a=1` becomes `a=1&b=2`. |
+| `no userinfo` | `bob@` is removed. |
+
+| Singular segment | Canonical segment |
+| --- | --- |
+| `customer` | `customers` |
+| `order` | `orders` |
+| `user` | `users` |
+| `account` | `accounts` |
+| `product` | `products` |
+| `invoice` | `invoices` |
+| `payment` | `payments` |
+| `item` | `items` |
+| `shipment` | `shipments` |
+| `address` | `addresses` |
+| `category` | `categories` |
+| `company` | `companies` |
+
+`{` and `}` are how a placeholder is written. They are not part of RFC 3986, and the parser accepts them only in the path, the query, and the fragment.
+
+An empty path (`https://example.com`) and the root path (`https://example.com/`) are both already canonical, and they are not the same URL. If the PM did not say which, ask.
+
+Running the canonical form through the command again changes nothing:
+
+<!-- verify stdout 0
+build/ears-verify
+canonicalize
+https://example.com/customers/{customerId}/orders?status={status}
+-->
+```text
+https://example.com/customers/{customerId}/orders?status={status}
+violations: 0
+```
+
+Percent-encoding, with the path requirement that matches the canonical spelling:
+
+<!-- verify stdout 1
+build/ears-verify
+canonicalize
+https://example.com/a%2fb/%7e
+-->
+```text
+https://example.com/a%2Fb/~
+violations: 2
+- uppercase percent-encoding hex
+- decode unreserved characters
+```
+
+`examples/url-tilde.ears.md` is that path:
+
+<!-- verify stdout 0
+build/ears-verify
+check
+examples/url-tilde.ears.md
+--input
+examples/url-tilde-pass.json
+-->
+```text
+spec: examples/url-tilde.ears.md
+scenario: examples/url-tilde-pass.json
+violations: 0
+```
+
+### One orders page
+
+English: "The orders page for a customer must be served securely on the example.com site or its subdomains, and filtered by status. No user name, no port, and no fragment."
+
+That is one URL. Someone may write it loosely. Canonicalize that spelling, and use the canonical URL in the requirements:
+
+<!-- verify stdout 1
+build/ears-verify
+canonicalize
+HTTPS://Example.COM:443/customer/{CustomerId}/order/?status={status}
+-->
+```text
+https://example.com/customers/{customerId}/orders?status={status}
+violations: 6
+- lowercase the scheme
+- lowercase the host
+- omit the default port
+- no trailing slash except the root
+- plural collection nouns
+- use {camelCase} placeholders
+```
+
+`--json` is the same result for you. `ok` is false because the input was not canonical:
+
+<!-- verify stdout 1
+build/ears-verify
+canonicalize
+--json
+HTTPS://Example.COM:443/customer/{CustomerId}/order/?status={status}
+-->
+```text
+{
+  "ok": false,
+  "input": "HTTPS://Example.COM:443/customer/{CustomerId}/order/?status={status}",
+  "canonical": "https://example.com/customers/{customerId}/orders?status={status}",
+  "violations": [
+    "lowercase the scheme",
+    "lowercase the host",
+    "omit the default port",
+    "no trailing slash except the root",
+    "plural collection nouns",
+    "use {camelCase} placeholders"
+  ]
+}
+```
+
+`examples/url-orders.ears.md` is the requirement set for that URL. The host line is the "site or its subdomains" row, so a subdomain is allowed. `shop.example.com` passes:
+
+<!-- verify stdout 0
+build/ears-verify
+check
+examples/url-orders.ears.md
+--input
+examples/url-orders-pass.json
+-->
+```text
+spec: examples/url-orders.ears.md
+scenario: examples/url-orders-pass.json
+violations: 0
+```
+
+`http` fails R1. Report the id, the line, and the sentence:
+
+<!-- verify stdout 1
+build/ears-verify
+check
+examples/url-orders.ears.md
+--input
+examples/url-orders-fail.json
+-->
+```text
+spec: examples/url-orders.ears.md
+scenario: examples/url-orders-fail.json
+violations: 1
+
+R1 line 5
+The Shop shall url.scheme = "https".
+url.scheme is "http".
+```
+
+`emit-smt` quotes the dotted names and uses `str.suffixof` for "ends with". `url.port is empty` is the omitted port, `-1`:
+
+<!-- verify stdout 0
+build/ears-verify
+emit-smt
+examples/url-orders.ears.md
+-->
+```text
+; spec: examples/url-orders.ears.md
+(set-logic ALL)
+; input url.scheme: String "The URL scheme."
+(declare-fun |url.scheme| () String)
+; input url.userinfo: String "The userinfo. A canonical URL has none."
+(declare-fun |url.userinfo| () String)
+; input url.host: String "The URL host."
+(declare-fun |url.host| () String)
+; input url.port: Int -1..65535 "The TCP port, or -1 when the URL omits it."
+(declare-fun |url.port| () Int)
+(assert (and (>= |url.port| (- 1)) (<= |url.port| 65535)))
+; input url.path: String "The URL path."
+(declare-fun |url.path| () String)
+; input url.query: String "The URL query, without the question mark."
+(declare-fun |url.query| () String)
+; input url.fragment: String "The URL fragment, without the hash."
+(declare-fun |url.fragment| () String)
+; R1_L5 line 5: The Shop shall url.scheme = "https".
+(assert (! (= |url.scheme| "https") :named R1_L5))
+; R2_L6 line 6: The Shop shall url.userinfo is empty.
+(assert (! (= |url.userinfo| "") :named R2_L6))
+; R3_L7 line 7: The Shop shall url.host = "example.com" or url.host ends with ".example.com".
+(assert (! (or (= |url.host| "example.com") (str.suffixof ".example.com" |url.host|)) :named R3_L7))
+; R4_L8 line 8: The Shop shall url.port is empty.
+(assert (! (= |url.port| (- 1)) :named R4_L8))
+; R5_L9 line 9: The Shop shall url.path = "/customers/{customerId}/orders".
+(assert (! (= |url.path| "/customers/{customerId}/orders") :named R5_L9))
+; R6_L10 line 10: The Shop shall url.query = "status={status}".
+(assert (! (= |url.query| "status={status}") :named R6_L10))
+; R7_L11 line 11: The Shop shall url.fragment is empty.
+(assert (! (= |url.fragment| "") :named R7_L11))
+```
+
+### A pasted URL with a user name
+
+English: "Take off the user name, use the default https port, and clean the path."
+
+<!-- verify stdout 1
+build/ears-verify
+canonicalize
+HTTPS://bob@Example.COM:443/a/./b/%7Ehome/
+-->
+```text
+https://example.com/a/b/~home
+violations: 7
+- lowercase the scheme
+- lowercase the host
+- omit the default port
+- decode unreserved characters
+- remove dot segments
+- no trailing slash except the root
+- no userinfo
+```
+
+The matching requirement on the orders page is R2, userinfo is empty. A scenario that still carries `bob` fails it:
+
+<!-- verify stdout 1
+build/ears-verify
+check
+examples/url-orders.ears.md
+--input
+examples/url-orders-userinfo.json
+-->
+```text
+spec: examples/url-orders.ears.md
+scenario: examples/url-orders-userinfo.json
+violations: 1
+
+R2 line 6
+The Shop shall url.userinfo is empty.
+url.userinfo is "bob".
+```
+
+### Items, with the query keys sorted
+
+English: "The items page on example.com, served securely, filtered by page and status, with no fragment and no userinfo."
+
+<!-- verify stdout 1
+build/ears-verify
+canonicalize
+HTTPS://Example.COM/item/?status={status}&page={page}#
+-->
+```text
+https://example.com/items?page={page}&status={status}
+violations: 6
+- lowercase the scheme
+- lowercase the host
+- no trailing slash except the root
+- no empty fragment
+- plural collection nouns
+- sort query keys
+```
+
+`examples/url-items.ears.md` is that URL. The canonical scenario passes:
+
+<!-- verify stdout 0
+build/ears-verify
+check
+examples/url-items.ears.md
+--input
+examples/url-items-pass.json
+-->
+```text
+spec: examples/url-items.ears.md
+scenario: examples/url-items-pass.json
+violations: 0
+```
+
+### Two schemes that cannot both be true
+
+English: "The page is served securely, and the page is served over plain http."
+
+Those are two ubiquitous requirements, and they cannot both hold. Lint says so. Ask which scheme should win. Do not pick `https` because it came first.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/url-scheme-clash.ears.md
+-->
+```text
+spec: examples/url-scheme-clash.ears.md
+conflicts: 1
+gaps: 0
+misuse: 0
+wording: 0
+
+conflict {R1, R2}
+R1 and R2 cannot both hold.
+
+R1 line 3
+The Shop shall url.scheme = "https".
+
+R2 line 4
+The Shop shall url.scheme = "http".
+
+They clash in every situation.
+R1 requires url.scheme = "https".
+R2 requires url.scheme = "http".
+
+Suggested fix: ask which requirement should win. To keep R1, remove R2. To keep R2, remove R1.
+```
+
+### When the English fits more than one URL
+
+Stop. Ask which one they mean, or list the candidates. Do not guess, and do not write the path requirement until they answer.
+
+English: "The customer orders page on example.com."
+
+That sentence fits both of these, and each one is already canonical:
+
+<!-- verify stdout 0
+build/ears-verify
+canonicalize
+https://example.com/customers/{customerId}/orders
+-->
+```text
+https://example.com/customers/{customerId}/orders
+violations: 0
+```
+
+<!-- verify stdout 0
+build/ears-verify
+canonicalize
+https://example.com/orders?customer={customerId}
+-->
+```text
+https://example.com/orders?customer={customerId}
+violations: 0
+```
+
+The same rule covers the site root. `https://example.com` and `https://example.com/` are both already canonical. Ask which one they meant.
+
+<!-- verify stdout 0
+build/ears-verify
+canonicalize
+https://example.com
+-->
+```text
+https://example.com
+violations: 0
+```
+
+<!-- verify stdout 0
+build/ears-verify
+canonicalize
+https://example.com/
+-->
+```text
+https://example.com/
+violations: 0
+```
+
 ## What you do not do
 
 - You do not pick the winning requirement.
+- You do not guess one URL when the English fits more than one. You ask, or you list the candidates.
 - You do not drop a conflict and move on to a design, an API, or a schema for the build.
 - You do not treat the example scenario as the behavior they agreed to.
 - You do not introduce a second name for an idea that already has one.

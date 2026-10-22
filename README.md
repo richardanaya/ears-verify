@@ -155,6 +155,7 @@ examples/order.ears.md
 | `check [--json] <spec> --input <scenario>` | Does this scenario fit the requirements? | Implemented |
 | `lint [--json] <spec>` | Do any requirements clash, leave a hole, or use a word a test cannot pin down? | Implemented |
 | `emit-smt <spec>` | What is the SMT-LIB for these requirements? | Implemented |
+| `canonicalize [--json] <url>` | Is this URL already in the canonical form? | Implemented |
 | `policy` | Which scenario breaks a property you hoped was true? | Planned |
 
 <!-- verify stdout 3
@@ -165,7 +166,7 @@ policy
 not implemented yet
 ```
 
-Exit status is `0` when the command is clean, `1` when a scenario violates a requirement or lint finds something, `2` when the spec, the scenario, or the arguments are wrong, and `3` when the command is not implemented yet. `--json` is for the agent. The text report is for the product manager.
+Exit status is `0` when the command is clean, `1` when a scenario violates a requirement, lint finds something, or a URL is not yet canonical, `2` when the spec, the scenario, the URL, or the arguments are wrong, and `3` when the command is not implemented yet. `--json` is for the agent. The text report is for the product manager.
 
 ## What EARS is
 
@@ -208,7 +209,7 @@ examples/order-wide.ears.md
 error: search space has more than 250000 assignments. Narrow the integer ranges and try again.
 ```
 
-There are no strings in the logic. Descriptions stay in the spec, next to the names, and they are where vague words (`quickly`, `appropriate`, `user-friendly`) and solution words (`database`, `api`, `microservice`) are caught.
+The finite search covers booleans, integers, and enums. Descriptions stay in the spec, next to the names, and they are where vague words (`quickly`, `appropriate`, `user-friendly`) and solution words (`database`, `api`, `microservice`) are caught. A page or a link also uses seven built-in `url.*` names. Those strings are not enumerated; `check` evaluates them against the scenario you wrote, and `canonicalize` puts the URL into one shape first. The skill has the mapping from English to that shape.
 
 ## Where this comes from
 
@@ -219,7 +220,7 @@ The shape of the analysis follows Kiro's requirements analysis: separate behavio
 
 ## For the agent in the conversation
 
-The skill at [`skills/ears-verify/SKILL.md`](skills/ears-verify/SKILL.md) tells an agent how to sit with a product manager. It lists the grammar the parser accepts, shows real `check`, `emit-smt`, `lint`, and `policy` output, and says to ask which requirement should win.
+The skill at [`skills/ears-verify/SKILL.md`](skills/ears-verify/SKILL.md) tells an agent how to sit with a product manager. It lists the grammar the parser accepts, shows real `check`, `emit-smt`, `lint`, `canonicalize`, and `policy` output, and says to ask which requirement should win. When the PM describes a page, the same section turns that English into one canonical URL and into requirements over `url.scheme`, `url.userinfo`, `url.host`, `url.port`, `url.path`, `url.query`, and `url.fragment`. If the English fits more than one URL, the agent asks or lists the candidates.
 
 ## Questions
 
