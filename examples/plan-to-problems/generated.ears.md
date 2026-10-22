@@ -1,26 +1,27 @@
-# Hand-written placeholder. Phase 2 replaces this file with model output.
-# Faithful translation of plan.md. Not produced by a model.
+# Fall desk
 
-event copy_requested: Bool "A member asks to borrow a copy." phrase "a copy is requested"
-state copy_on_loan: Bool "That copy is already out with someone." phrase "the copy is on loan"
-state fine_due: Bool "The member still owes a fine." phrase "a fine is due"
-state loan_overdue: Bool "The loan is past its due date." phrase "the loan is overdue"
-event copy_returned: Bool "A member brings a copy back." phrase "a copy is returned"
-input loan_days: Int 1..21 "How many days the member wants to keep the copy." phrase "the loan length"
-output loan_allowed: Bool "The member may take the copy home." phrase "allow the loan" outcome "the loan was allowed" / "the loan was not allowed"
-output renewal_allowed: Bool "The member may extend the loan." phrase "allow the renewal" outcome "the renewal was allowed" / "the renewal was not allowed"
-output reminder_sent: Bool "A due reminder goes to the member." phrase "send a reminder" outcome "a reminder was sent" / "a reminder was not sent"
-output loan_cleared: Bool "The loan is closed." phrase "clear the loan" outcome "the loan was cleared" / "the loan was not cleared"
+event borrow_requested: Bool "A member asks to take a copy home." phrase "a member asks to take a copy home"
+event renew_requested: Bool "A member asks to renew a copy they already have." phrase "a member asks to renew a copy"
+event copy_returned: Bool "A member brings a copy back." phrase "a member brings a copy back"
+state copy_in_building: Bool "That copy is still in the building." phrase "the copy is in the building"
+state copy_on_loan: Bool "That copy is already out on loan." phrase "the copy is out on loan"
+state fine_owed: Bool "A member still owes a fine." phrase "a fine is owed"
+state loan_overdue: Bool "The loan has passed its due date." phrase "the loan is overdue"
+input loan_days: Int 1..21 "How many days the desk will set. Loans are only 1 to 21 days, and those are the only lengths the desk will set." phrase "the loan length"
+output loan_allowed: Bool "Whether the loan was allowed." phrase "allow the loan" outcome "the loan was allowed" / "the loan was not allowed"
+output renewal_allowed: Bool "Whether the renewal was allowed." phrase "allow the renewal" outcome "the renewal was allowed" / "the renewal was not allowed"
+output reminder_sent: Bool "Whether a reminder went out." phrase "send a reminder" outcome "a reminder was sent" / "a reminder was not sent"
+output loan_closed: Bool "Whether the loan was closed." phrase "close the loan" outcome "the loan was closed" / "the loan was not closed"
 
-R1 When a copy is requested and the copy is on loan, the Library shall not allow the loan.
-R2 When a copy is requested and the copy is on loan, the Library shall allow the loan.
-R3 When a copy is requested and the copy is not on loan, the Library shall allow the loan.
-R4 When a copy is not requested, the Library shall not allow the loan.
-R5 When a fine is due, the Library shall not allow the renewal.
-R6 When a fine is due, the Library shall allow the renewal.
-R7 When a fine is not due, the Library shall allow the renewal.
-R8 When the loan is overdue, the Library shall send a reminder.
-R9 When the loan length is at least 40, the Library shall allow the loan.
-R10 When a copy is returned, the Library shall clear the loan.
-R11 When a copy is returned and the loan is overdue, the Library shall clear the loan.
-R12 When a copy is not returned, the Library shall not clear the loan.
+R1 While the copy is in the building, when a member asks to take a copy home, the Fall Desk shall allow the loan.
+R2 While the copy is out on loan, when a member asks to take a copy home, the Fall Desk shall not allow the loan.
+R3 While the copy is out on loan, when a member asks to take a copy home, the Fall Desk shall allow the loan.
+R4 When not a member asks to take a copy home, the Fall Desk shall not allow the loan.
+R5 While a fine is owed, when a member asks to renew a copy, the Fall Desk shall not allow the renewal.
+R6 While a fine is owed, when a member asks to renew a copy, the Fall Desk shall allow the renewal.
+R7 While a fine is not owed, when a member asks to renew a copy, the Fall Desk shall allow the renewal.
+R8 While the loan is overdue, the Fall Desk shall send a reminder.
+R9 When a member asks to take a copy home and the loan length is at least 40, the Fall Desk shall allow the loan.
+R10 When a member brings a copy back, the Fall Desk shall close the loan.
+R11 When a member brings a copy back and the loan is overdue, the Fall Desk shall close the loan.
+R12 When not a member brings a copy back, the Fall Desk shall not close the loan.

@@ -40,7 +40,7 @@ async function main() {
   const skill = readText(args[0]);
   const plan = readText(args[1]);
   const outPath = args[2];
-  let user = plan;
+  let user = taskText(plan);
   if (args.length === 5) {
     const failure = readText(args[3]);
     const previous = readText(args[4]);
@@ -49,6 +49,16 @@ async function main() {
   const spec = await complete(skill, user);
   writeFileSync(outPath, spec, "utf8");
   console.error("wrote " + outPath);
+}
+
+function taskText(plan) {
+  return (
+    "You have no tools and cannot run the CLI. Do not describe what you will do. " +
+    "Translate the plan below into ONE complete ears-verify spec file (schema declarations plus EARS requirements) exactly as the skill describes. " +
+    "Translate every rule in the plan faithfully, even rules that contradict each other or look wrong; do not fix, drop, merge or resolve anything, because the verifier must find the problems. " +
+    "Reply with only the spec file inside a single fenced code block.\n\nPlan:\n" +
+    plan
+  );
 }
 
 function usage() {
@@ -71,7 +81,7 @@ function readText(path) {
 
 function repairText(plan, failure, previous) {
   return (
-    plan +
+    taskText(plan) +
     "\n\nThe previous spec failed to parse. Return only a corrected spec.\n\nParser error:\n" +
     failure +
     "\n\nPrevious spec:\n" +
@@ -94,7 +104,8 @@ async function complete(skill, user) {
     },
     body: JSON.stringify({
       model: modelName(),
-      stream: false,
+      // A single buffered reply was dropped before it finished. Read the stream instead.
+      stream: true,
       messages: [
         { role: "system", content: skill },
         { role: "user", content: user },
@@ -102,20 +113,13 @@ async function complete(skill, user) {
     }),
     signal: AbortSignal.timeout(600000),
   });
-  const raw = await response.text();
   if (!response.ok) {
+    const raw = await response.text();
     console.error("error: model request failed with status " + String(response.status));
     console.error(scrub(raw));
     process.exit(1);
   }
-  let payload;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    console.error("error: the model service returned text that is not JSON");
-    process.exit(1);
-  }
-  const text = messageText(payload);
+  const text = await readStream(response);
   if (text.length === 0) {
     console.error("error: the model returned no spec text");
     process.exit(1);
@@ -123,25 +127,28 @@ async function complete(skill, user) {
   return extractSpec(text);
 }
 
-function messageText(payload) {
-  if (payload === null || typeof payload !== "object") return "";
-  const choices = payload.choices;
-  if (!Array.isArray(choices) || choices.length === 0) return "";
-  const message = choices[0].message;
-  if (message === null || typeof message !== "object") return "";
-  return contentText(message.content);
-}
-
-function contentText(content) {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  let out = "";
-  for (let i = 0; i < content.length; i++) {
-    const part = content[i];
-    if (typeof part === "string") out += part;
-    else if (part !== null && typeof part === "object" && typeof part.text === "string") out += part.text;
+async function readStream(response) {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  for await (const chunk of response.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    let index = buffer.indexOf("\n");
+    while (index >= 0) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      index = buffer.indexOf("\n");
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") continue;
+      try {
+        const event = JSON.parse(data);
+        const delta = event.choices && event.choices[0] && event.choices[0].delta;
+        if (delta && typeof delta.content === "string") text += delta.content;
+      } catch {}
+    }
   }
-  return out;
+  return text;
 }
 
 function extractSpec(text) {

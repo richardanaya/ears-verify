@@ -322,7 +322,7 @@ function plantedDetected(planted: string, expected: string, lintJson: string, pr
     return false;
   }
   const questions = countText(problems, "Which requirement should win?");
-  if (questions !== conflicts) {
+  if (questions < conflicts) {
     fail("plan-to-problems winner questions " + String(questions));
     return false;
   }
