@@ -1,5 +1,5 @@
 {
-  "name": "ears-verify",
+  "name": "spec-verify",
   "version": "0.1.0",
   "description": "Catch contradictions in EARS requirements before anyone builds them. The same TypeScript runs on Node and compiles to a native binary with ScriptC.",
   "type": "module",
@@ -8,10 +8,10 @@
     "node": ">=24"
   },
   "bin": {
-    "ears-verify": "./src/main.ts"
+    "spec-verify": "./src/main.ts"
   },
   "scripts": {
-    "build": "scriptc build src/main.ts -o build/ears-verify",
+    "build": "scriptc build src/main.ts -o build/spec-verify",
     "coverage": "scriptc coverage src/main.ts --fail-on=blockers",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-strip-types test/run-all.ts"

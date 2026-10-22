@@ -8,8 +8,8 @@ A product plan goes in as plain English. A list of its logical problems comes ou
 
 1. `plan.md` is the product plan, written the way a product manager talks. It has no EARS syntax. The problems planted in it are listed for a person in `expected-problems.md`. `planted.txt` is the same list in a small machine-readable form: two direct contradictions (`R2`/`R3` and `R5`/`R6`), one gap (`reminder_sent`), one condition that can never be true (`R9`), and one redundant requirement (`R11`).
 2. `generate.mjs` reads the agent skill and the plan and asks a model for an EARS spec. The user message tells the model it has no tools, must translate every rule faithfully, and must reply with only the spec in one fenced block. The request is streamed. It writes only the spec text to the output file. This step is live and needs a key. The offline test does not run it.
-3. `ears-verify lint --json` checks the spec and prints `lint.json`.
-4. `ears-verify report` turns that lint result into `problems.md`. Each logical problem is plain English, with requirement ids, line numbers, and the EARS sentences quoted. For a contradiction it asks which requirement should win and does not choose one. No model is involved.
+3. `spec-verify lint --json` checks the spec and prints `lint.json`.
+4. `spec-verify report` turns that lint result into `problems.md`. Each logical problem is plain English, with requirement ids, line numbers, and the EARS sentences quoted. For a contradiction it asks which requirement should win and does not choose one. No model is involved.
 
 Lint names redundancy on the requirements that are not part of any conflict. `R11` repeats `R10`, and neither requirement is in a conflict, so lint reports `R11` itself. The report still explains that `R11` only repeats `R10` in a stricter situation. It does not delete `R11`. A requirement whose condition can never be true stays vacuous only. `R9` is not also called redundant.
 
@@ -24,7 +24,7 @@ The recorded spec also has findings that were not planted. `R1` and `R2` contrad
 From the repo root:
 
 ```bash
-XAI_API_KEY=... node examples/plan-to-problems/generate.mjs skills/ears-verify/SKILL.md examples/plan-to-problems/plan.md out.ears.md
+XAI_API_KEY=... node examples/plan-to-problems/generate.mjs skills/spec-verify/SKILL.md examples/plan-to-problems/plan.md out.ears.md
 ```
 
 The script is self-contained. Copied next to `skill.md`, `plan.md`, and the output path, the same command is:
@@ -43,8 +43,8 @@ Then print the problems. Either Node or the native binary works. They must print
 
 ```bash
 npm run build
-./build/ears-verify lint --json examples/plan-to-problems/generated.ears.md
-./build/ears-verify report examples/plan-to-problems/generated.ears.md
+./build/spec-verify lint --json examples/plan-to-problems/generated.ears.md
+./build/spec-verify report examples/plan-to-problems/generated.ears.md
 ```
 
 `node --experimental-strip-types src/main.ts report examples/plan-to-problems/generated.ears.md` prints the same report.
