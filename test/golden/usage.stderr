@@ -3,5 +3,5 @@ usage:
   ears-verify check [--json] <spec> --input <scenario>
   ears-verify emit-smt <spec>
   ears-verify lint [--json] <spec>
-  ears-verify policy
+  ears-verify policy [--json] <spec> [--property <file>]
   ears-verify help

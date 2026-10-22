@@ -1,0 +1,3 @@
+spec: examples/order-status.ears.md
+property: examples/status-placed.ears.md
+No scenario satisfies every requirement, so none violates the property.

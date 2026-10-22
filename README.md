@@ -155,17 +155,38 @@ examples/order.ears.md
 | `check [--json] <spec> --input <scenario>` | Does this scenario fit the requirements? | Implemented |
 | `lint [--json] <spec>` | Do any requirements clash, leave a hole, or use a word a test cannot pin down? | Implemented |
 | `emit-smt <spec>` | What is the SMT-LIB for these requirements? | Implemented |
-| `policy` | Which scenario breaks a property you hoped was true? | Planned |
+| `policy [--json] <spec> [--property <file>]` | Which scenarios do the requirements allow and forbid? Does any allowed scenario break a property? | Implemented |
 
-<!-- verify stdout 3
+With no property, `policy` prints one scenario the requirements allow and one they forbid. Both are the first assignment the search finds, false before true. A requirement whose condition is false counts as satisfied, so the allowed scenario is not a recommendation.
+
+<!-- verify stdout 0
 build/ears-verify
 policy
+examples/order.ears.md
 -->
 ```text
-not implemented yet
+spec: examples/order.ears.md
+accepted:
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": false
+}
+This scenario satisfies every requirement.
+rejected:
+{
+  "order_submitted": true,
+  "inventory_available": true,
+  "order_fulfilled": false
+}
+This scenario violates a requirement.
+
+R1 line 7
+WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
+an order is submitted, inventory is available, and not fulfill the order.
 ```
 
-Exit status is `0` when the command is clean, `1` when a scenario violates a requirement or lint finds something, `2` when the spec, the scenario, or the arguments are wrong, and `3` when the command is not implemented yet. `--json` is for the agent. The text report is for the product manager.
+Exit status is `0` when the command is clean, `1` when a scenario violates a requirement, lint finds something, or a property has a counterexample, and `2` when the spec, the scenario, the property, or the arguments are wrong. `--json` is for the agent. The text report is for the product manager.
 
 ## What EARS is
 
@@ -391,6 +412,61 @@ The skill at [`skills/ears-verify/SKILL.md`](skills/ears-verify/SKILL.md) tells 
 
 **Will it pick a winner?** It will show who clashes, the situation, and an example that breaks one requirement in the set. The fix says to ask which requirement should win.
 
-## Roadmap
+## Policy
 
-`policy` will search for a scenario that breaks a property you state separately from the requirements. Until then it prints `not implemented yet`.
+A property is a separate file of requirement lines. It uses the spec's names and phrases, and it does not declare symbols. `P1` is the usual id.
+
+`examples/order-always.ears.md` hopes the order is fulfilled in every scenario. The requirements do not say that. The counterexample is a scenario they allow where the order is not fulfilled:
+
+<!-- verify stdout 1
+build/ears-verify
+policy
+examples/order.ears.md
+--property
+examples/order-always.ears.md
+-->
+```text
+spec: examples/order.ears.md
+property: examples/order-always.ears.md
+counterexample:
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": false
+}
+This scenario satisfies every requirement and violates the property.
+
+P1 line 3
+The Order System shall fulfill the order.
+not fulfill the order.
+```
+
+`examples/order-same.ears.md` repeats R1. Nothing the requirements allow can break it:
+
+<!-- verify stdout 0
+build/ears-verify
+policy
+examples/order.ears.md
+--property
+examples/order-same.ears.md
+-->
+```text
+spec: examples/order.ears.md
+property: examples/order-same.ears.md
+No scenario satisfies every requirement and violates the property.
+```
+
+When the requirements themselves cannot all hold, there is no scenario to test the property against. `examples/order-status.ears.md` is that spec: the status would have to be shipped and cancelled.
+
+<!-- verify stdout 0
+build/ears-verify
+policy
+examples/order-status.ears.md
+--property
+examples/status-placed.ears.md
+-->
+```text
+spec: examples/order-status.ears.md
+property: examples/status-placed.ears.md
+No scenario satisfies every requirement, so none violates the property.
+```

@@ -5,16 +5,18 @@
 
 import { readFileSync } from "node:fs";
 import { bindScenario, evaluate, formatCheckJson, formatCheckText, formatErrorJson } from "./check.ts";
-import { parseSpec } from "./ears.ts";
+import { parseProperty, parseSpec } from "./ears.ts";
 import { parseScenarioJson } from "./jsonvalue.ts";
 import { formatLintJson, formatLintText, lintSpec } from "./lint.ts";
+import { analyzePolicy, formatPolicyJson, formatPolicyText } from "./policy.ts";
 import { printSmt } from "./smt.ts";
+import { spaceSize } from "./solver.ts";
 import { displayQuote } from "./text.ts";
+import type { Requirement } from "./spec.ts";
 
 const EXIT_OK = 0;
 const EXIT_VIOLATIONS = 1;
 const EXIT_USAGE = 2;
-const EXIT_UNIMPLEMENTED = 3;
 
 function main(): void {
   const args: string[] = [];
@@ -30,8 +32,8 @@ function main(): void {
     process.exit(EXIT_OK);
   }
   if (command === "policy") {
-    console.log("not implemented yet");
-    process.exit(EXIT_UNIMPLEMENTED);
+    commandPolicy(args.slice(1));
+    return;
   }
   if (command === "check") {
     commandCheck(args.slice(1));
@@ -53,16 +55,21 @@ function main(): void {
 interface Flags {
   json: boolean;
   input: string;
+  property: string;
   positionals: string[];
   error: string;
 }
 
-function parseFlags(args: string[]): Flags {
-  const flags: Flags = { json: false, input: "", positionals: [], error: "" };
+function parseFlags(args: string[], allowInput: boolean, allowProperty: boolean): Flags {
+  const flags: Flags = { json: false, input: "", property: "", positionals: [], error: "" };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--json") flags.json = true;
     else if (arg === "--input") {
+      if (!allowInput) {
+        flags.error = "unknown option --input";
+        return flags;
+      }
       if (flags.input.length > 0) {
         flags.error = "repeated option --input";
         return flags;
@@ -73,6 +80,21 @@ function parseFlags(args: string[]): Flags {
       }
       i++;
       flags.input = args[i];
+    } else if (arg === "--property") {
+      if (!allowProperty) {
+        flags.error = "unknown option --property";
+        return flags;
+      }
+      if (flags.property.length > 0) {
+        flags.error = "repeated option --property";
+        return flags;
+      }
+      if (i + 1 >= args.length) {
+        flags.error = "missing value for --property";
+        return flags;
+      }
+      i++;
+      flags.property = args[i];
     } else if (arg.startsWith("--")) {
       flags.error = "unknown option " + arg;
       return flags;
@@ -82,7 +104,7 @@ function parseFlags(args: string[]): Flags {
 }
 
 function commandCheck(args: string[]): void {
-  const flags = parseFlags(args);
+  const flags = parseFlags(args, true, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
   if (flags.positionals.length !== 1 || flags.input.length === 0) {
     fail(flags.json, "usage: ears-verify check [--json] <spec> --input <scenario>");
@@ -107,7 +129,7 @@ function commandCheck(args: string[]): void {
 }
 
 function commandEmit(args: string[]): void {
-  const flags = parseFlags(args);
+  const flags = parseFlags(args, false, false);
   if (flags.error.length > 0) fail(false, flags.error);
   if (flags.json || flags.input.length > 0 || flags.positionals.length !== 1) fail(false, "usage: ears-verify emit-smt <spec>");
   const specPath = flags.positionals[0];
@@ -120,7 +142,7 @@ function commandEmit(args: string[]): void {
 }
 
 function commandLint(args: string[]): void {
-  const flags = parseFlags(args);
+  const flags = parseFlags(args, false, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
   if (flags.input.length > 0 || flags.positionals.length !== 1) fail(flags.json, "usage: ears-verify lint [--json] <spec>");
   const specPath = flags.positionals[0];
@@ -134,6 +156,33 @@ function commandLint(args: string[]): void {
   if (flags.json) console.log(formatLintJson(specPath, outcome.report));
   else console.log(formatLintText(specPath, outcome.report));
   if (findings === 0) process.exit(EXIT_OK);
+  process.exit(EXIT_VIOLATIONS);
+}
+
+function commandPolicy(args: string[]): void {
+  const flags = parseFlags(args, false, true);
+  if (flags.error.length > 0) fail(flags.json, flags.error);
+  if (flags.positionals.length !== 1) fail(flags.json, "usage: ears-verify policy [--json] <spec> [--property <file>]");
+  const specPath = flags.positionals[0];
+  const specText = readText(specPath);
+  if (specText === null) fail(flags.json, "cannot read " + specPath);
+  const parsed = parseSpec(specText);
+  if (!parsed.ok) fail(flags.json, specPath + ":" + String(parsed.line) + ": " + parsed.message);
+  if (spaceSize(parsed.spec) < 0) {
+    fail(flags.json, "search space has more than 250000 assignments. Narrow the integer ranges and try again.");
+  }
+  let propertyReqs: Requirement[] = [];
+  if (flags.property.length > 0) {
+    const propertyText = readText(flags.property);
+    if (propertyText === null) fail(flags.json, "cannot read " + flags.property);
+    const property = parseProperty(propertyText, parsed.spec);
+    if (!property.ok) fail(flags.json, flags.property + ":" + String(property.line) + ": " + property.message);
+    propertyReqs = property.requirements;
+  }
+  const report = analyzePolicy(parsed.spec, flags.property, propertyReqs);
+  if (flags.json) console.log(formatPolicyJson(specPath, parsed.spec, report));
+  else console.log(formatPolicyText(specPath, parsed.spec, report));
+  if (report.holds) process.exit(EXIT_OK);
   process.exit(EXIT_VIOLATIONS);
 }
 
@@ -157,7 +206,7 @@ function usage(toStderr: boolean): void {
     "  ears-verify check [--json] <spec> --input <scenario>\n" +
     "  ears-verify emit-smt <spec>\n" +
     "  ears-verify lint [--json] <spec>\n" +
-    "  ears-verify policy\n" +
+    "  ears-verify policy [--json] <spec> [--property <file>]\n" +
     "  ears-verify help";
   if (toStderr) console.error(text);
   else console.log(text);

@@ -9,7 +9,7 @@ You are in a conversation with a product manager. They are telling you what a sy
 
 Lint is implemented, and it is the check that matters. When it reports a conflict, explain it in plain words: which requirements clash, under what situation, the example scenario, and the suggested fix. Ask which requirement should win. Do not choose one, and do not paper over the clash with a new sentence they did not ask for.
 
-`policy` is planned. Today it only prints `not implemented yet`.
+`policy` searches the same finite domain as lint. With no property it prints one scenario the requirements allow and one they forbid. With a property file it looks for a scenario the requirements allow and the property forbids. Do not treat either scenario as the behavior the PM agreed to, and do not pick a winning requirement.
 
 The samples below are the built CLI. `node --experimental-strip-types src/main.ts` prints the same bytes when `build/ears-verify` is not there yet. The same spec always produces the same SMT-LIB.
 
@@ -124,7 +124,7 @@ The line has to be something a scenario can make true or false. Lint rejects the
 3. Write one EARS line per requirement, using the phrases. Normal triggers use `when`. Unwanted conditions use `if` ... `then`.
 4. Run `build/ears-verify lint <spec>`.
 5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Stop until they answer. Do not choose.
-6. When they describe a concrete story, write a flat JSON scenario with every declared name and run `build/ears-verify check <spec> --input <scenario>`. `policy` is the planned search for a scenario that breaks a separate property. It is not available yet; say that, and do not invent its result.
+6. When they describe a concrete story, write a flat JSON scenario with every declared name and run `build/ears-verify check <spec> --input <scenario>`. When they hope something is always true, write that hope as a property file of `P` requirements and run `build/ears-verify policy <spec> --property <file>`. A counterexample is a scenario the requirements allow and the property forbids. If you have no property yet, `policy <spec>` prints one allowed scenario and one forbidden scenario. The search tries false before true, so the first hit is not a recommendation.
 7. Report every check violation by requirement ID, line, and sentence, then the values. A passing check can still leave a gap. If lint reported one, say which output is uncovered and in what situation.
 
 `--json` is the same report in a stable shape, for you. Show the PM the text.
@@ -500,19 +500,132 @@ This scenario keeps R6 and breaks R7.
 Suggested fix: ask which requirement should win. To keep R6, remove R7. To keep R7, remove R6.
 ```
 
-## policy is planned
+## Policy
 
-`policy` will search for a scenario that breaks a property stated apart from the requirements. The command exists so the workflow has a place to call it. This is the whole behavior today:
+A property file is requirement lines only. It cannot declare symbols. It uses the phrases from the spec. Ids are `P` or `R`, then digits, such as `P1`.
 
-<!-- verify stdout 3
-build/ears-verify
-policy
--->
-```text
-not implemented yet
+```ears
+P1 The Order System shall fulfill the order.
 ```
 
-Do not describe a scenario `policy` found. It did not look.
+No property. One scenario the order requirements allow, and one they forbid:
+
+<!-- verify stdout 0
+build/ears-verify
+policy
+examples/order.ears.md
+-->
+```text
+spec: examples/order.ears.md
+accepted:
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": false
+}
+This scenario satisfies every requirement.
+rejected:
+{
+  "order_submitted": true,
+  "inventory_available": true,
+  "order_fulfilled": false
+}
+This scenario violates a requirement.
+
+R1 line 7
+WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
+an order is submitted, inventory is available, and not fulfill the order.
+```
+
+The allowed scenario leaves the trigger false, so R1 does not apply. Say that. It is not the behavior they asked for.
+
+`examples/order-covered.ears.md` forbids fulfilling an order that was not submitted:
+
+<!-- verify stdout 0
+build/ears-verify
+policy
+examples/order-covered.ears.md
+-->
+```text
+spec: examples/order-covered.ears.md
+accepted:
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": false
+}
+This scenario satisfies every requirement.
+rejected:
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": true
+}
+This scenario violates a requirement.
+
+R3 line 9
+When not an order is submitted, the Order System shall not fulfill the order.
+not an order is submitted and fulfill the order.
+```
+
+`examples/order-always.ears.md` says the order is always fulfilled. The requirements allow a scenario where it is not:
+
+<!-- verify stdout 1
+build/ears-verify
+policy
+examples/order.ears.md
+--property
+examples/order-always.ears.md
+-->
+```text
+spec: examples/order.ears.md
+property: examples/order-always.ears.md
+counterexample:
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": false
+}
+This scenario satisfies every requirement and violates the property.
+
+P1 line 3
+The Order System shall fulfill the order.
+not fulfill the order.
+```
+
+Tell the PM the requirements allow that scenario, so the property is not backed by them. Ask whether the property should become a requirement. Do not add it yourself.
+
+`examples/order-same.ears.md` repeats R1, so no counterexample exists:
+
+<!-- verify stdout 0
+build/ears-verify
+policy
+examples/order.ears.md
+--property
+examples/order-same.ears.md
+-->
+```text
+spec: examples/order.ears.md
+property: examples/order-same.ears.md
+No scenario satisfies every requirement and violates the property.
+```
+
+If lint already found that the requirements cannot all hold, policy will not invent a scenario that satisfies them:
+
+<!-- verify stdout 0
+build/ears-verify
+policy
+examples/order-status.ears.md
+--property
+examples/status-placed.ears.md
+-->
+```text
+spec: examples/order-status.ears.md
+property: examples/status-placed.ears.md
+No scenario satisfies every requirement, so none violates the property.
+```
+
+Run lint for the clash, and ask which requirement should win, before you spend time on the property.
 
 ## What you do not do
 

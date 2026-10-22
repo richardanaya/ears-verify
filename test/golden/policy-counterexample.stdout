@@ -1,0 +1,13 @@
+spec: examples/order.ears.md
+property: examples/order-always.ears.md
+counterexample:
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": false
+}
+This scenario satisfies every requirement and violates the property.
+
+P1 line 3
+The Order System shall fulfill the order.
+not fulfill the order.

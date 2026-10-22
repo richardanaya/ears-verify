@@ -5,7 +5,8 @@
 
 import { readFileSync } from "node:fs";
 import { bindScenario, evaluate } from "../src/check.ts";
-import { parseSpec } from "../src/ears.ts";
+import { parseProperty, parseSpec } from "../src/ears.ts";
+import { analyzePolicy } from "../src/policy.ts";
 import { parseScenarioJson } from "../src/jsonvalue.ts";
 import { lintSpec } from "../src/lint.ts";
 import type { Spec } from "../src/spec.ts";
@@ -468,6 +469,41 @@ if (statusLint.kind === "report") {
   check("status requires", item.requires[0].value === "the status is shipped" && item.requires[1].value === "the status is cancelled");
   check("status example", item.example.length === 1 && item.example[0].value === "shipped");
 }
+
+const listed = analyzePolicy(order, "", []);
+check(
+  "policy accepted",
+  listed.accepted !== null && listed.accepted.code[0] === 0 && listed.accepted.code[1] === 0 && listed.accepted.code[2] === 0,
+);
+check(
+  "policy rejected",
+  listed.rejected !== null && listed.rejected.code[0] === 1 && listed.rejected.code[1] === 1 && listed.rejected.code[2] === 0,
+);
+const alwaysProp = parseProperty(readFileSync("examples/order-always.ears.md", "utf8"), order);
+check("always parsed", alwaysProp.ok === true);
+if (alwaysProp.ok) {
+  const counter = analyzePolicy(order, "examples/order-always.ears.md", alwaysProp.requirements);
+  check("counterexample", counter.holds === false && counter.counterexample !== null && counter.breaks.length === 1 && counter.breaks[0].because === "not fulfill the order.");
+}
+const sameProp = parseProperty(readFileSync("examples/order-same.ears.md", "utf8"), order);
+if (sameProp.ok) {
+  const held = analyzePolicy(order, "examples/order-same.ears.md", sameProp.requirements);
+  check("property holds", held.holds === true && held.counterexample === null && held.note === "No scenario satisfies every requirement and violates the property.");
+}
+const statusSpec = mustSpec(readFileSync("examples/order-status.ears.md", "utf8"));
+const statusList = analyzePolicy(statusSpec, "", []);
+check("status no model", statusList.accepted === null && statusList.rejected !== null && statusList.breaks.length === 2);
+const placedProp = parseProperty(readFileSync("examples/status-placed.ears.md", "utf8"), statusSpec);
+if (placedProp.ok) {
+  const vacuous = analyzePolicy(statusSpec, "examples/status-placed.ears.md", placedProp.requirements);
+  check("vacuous property", vacuous.holds === true && vacuous.note === "No scenario satisfies every requirement, so none violates the property.");
+}
+const declaredProp = parseProperty('event flag: Bool "Flag."\n', order);
+check("property declares", declaredProp.ok === false);
+if (!declaredProp.ok) check("property declare message", declaredProp.message === "a property cannot declare symbols" && declaredProp.line === 1);
+const emptyProp = parseProperty("", order);
+check("empty property", emptyProp.ok === false);
+if (!emptyProp.ok) check("empty property message", emptyProp.message === "expected a requirement");
 
 const hyphen = mustSpec('event ready: Bool "Ready." phrase "user-friendly checkout"\n\nR1 The Box shall user-friendly checkout.\n');
 check("hyphen phrase", formatTerm(hyphen.requirements[0].consequent) === "user-friendly checkout");

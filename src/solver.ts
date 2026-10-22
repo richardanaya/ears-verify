@@ -11,7 +11,7 @@
  * sizes is capped.
  */
 
-import { codeAt, domainSize, isDriver, requirementMentions, type Spec } from "./spec.ts";
+import { codeAt, domainSize, isDriver, requirementMentions, type Requirement, type Spec } from "./spec.ts";
 import { Binding, evalAssertion, evalBool, T_FALSE, T_TRUE } from "./term.ts";
 
 export const SEARCH_LIMIT = 250000;
@@ -106,6 +106,66 @@ export function conflictingSets(spec: Spec): ConflictGroup[] {
     groups.push({ indexes: maskIndexes(found[i], n), minimal: true });
   }
   return groups;
+}
+
+/**
+ * Smallest assignment of every symbol.
+ * mode 0: every requirement holds.
+ * mode 1: some requirement fails.
+ * mode 2: every requirement holds and some extra requirement fails.
+ * Values are tried in the same order as the linter: false, then true.
+ */
+export function firstScenario(spec: Spec, mode: number, extra: Requirement[]): Binding | null {
+  const found = new ScenarioFound();
+  const env = new Binding(spec.symbols.length);
+  walkAll(spec, mode, extra, env, 0, found);
+  return found.env;
+}
+
+class ScenarioFound {
+  env: Binding | null;
+
+  constructor() {
+    this.env = null;
+  }
+}
+
+function walkAll(spec: Spec, mode: number, extra: Requirement[], env: Binding, pos: number, found: ScenarioFound): void {
+  if (found.env !== null) return;
+  if (pos === spec.symbols.length) {
+    if (scenarioMatches(spec, mode, extra, env)) found.env = env.copy();
+    return;
+  }
+  const sym = spec.symbols[pos];
+  const count = domainSize(spec, sym);
+  for (let v = 0; v < count; v++) {
+    env.known[pos] = true;
+    env.code[pos] = codeAt(sym, v);
+    walkAll(spec, mode, extra, env, pos + 1, found);
+    if (found.env !== null) break;
+  }
+  env.known[pos] = false;
+}
+
+function scenarioMatches(spec: Spec, mode: number, extra: Requirement[], env: Binding): boolean {
+  if (mode === 1) return anyReqFalse(spec, spec.requirements, env);
+  if (!allReqTrue(spec, spec.requirements, env)) return false;
+  if (mode === 2) return anyReqFalse(spec, extra, env);
+  return true;
+}
+
+function allReqTrue(spec: Spec, reqs: Requirement[], env: Binding): boolean {
+  for (let i = 0; i < reqs.length; i++) {
+    if (evalAssertion(reqs[i].antecedent, reqs[i].consequent, spec, env) !== T_TRUE) return false;
+  }
+  return true;
+}
+
+function anyReqFalse(spec: Spec, reqs: Requirement[], env: Binding): boolean {
+  for (let i = 0; i < reqs.length; i++) {
+    if (evalAssertion(reqs[i].antecedent, reqs[i].consequent, spec, env) === T_FALSE) return true;
+  }
+  return false;
 }
 
 export function bestGap(spec: Spec, outputIndex: number): Binding | null {

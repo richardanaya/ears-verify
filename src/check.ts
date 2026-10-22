@@ -4,7 +4,7 @@
  */
 
 import type { JsonObject, JsonValue } from "./jsonvalue.ts";
-import { describeAssignment, displayCode, type Spec } from "./spec.ts";
+import { describeAssignment, displayCode, type Requirement, type Spec } from "./spec.ts";
 import { Binding, evalAssertion, mentionedIndexes, T_FALSE, T_UNKNOWN } from "./term.ts";
 import { displayQuote, englishList, formatInt } from "./text.ts";
 
@@ -77,9 +77,13 @@ function bindValue(spec: Spec, index: number, value: JsonValue): { ok: true; cod
 }
 
 export function evaluate(spec: Spec, env: Binding): Violation[] {
+  return evaluateRequirements(spec, spec.requirements, env);
+}
+
+export function evaluateRequirements(spec: Spec, requirements: Requirement[], env: Binding): Violation[] {
   const violations: Violation[] = [];
-  for (let i = 0; i < spec.requirements.length; i++) {
-    const req = spec.requirements[i];
+  for (let i = 0; i < requirements.length; i++) {
+    const req = requirements[i];
     const result = evalAssertion(req.antecedent, req.consequent, spec, env);
     if (result === T_FALSE) {
       violations.push({

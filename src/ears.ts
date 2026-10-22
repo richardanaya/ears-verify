@@ -116,13 +116,72 @@ export function parseSpec(text: string): SpecResult {
   return { ok: true, spec: spec };
 }
 
+export type PropertyResult = { ok: true; requirements: Requirement[] } | { ok: false; line: number; message: string };
+
+/** Requirement lines only. Symbols come from the spec this property is checked against. */
+export function parseProperty(text: string, spec: Spec): PropertyResult {
+  const source = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  const lines = splitLines(source);
+  const requirements: Requirement[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const trimmed = lines[index].trim();
+    if (isIgnorable(trimmed)) {
+      index++;
+      continue;
+    }
+    if (isDeclaration(trimmed)) {
+      return { ok: false, line: index + 1, message: "a property cannot declare symbols" };
+    }
+    const id = matchId(trimmed);
+    if (id === null) {
+      return { ok: false, line: index + 1, message: "expected a requirement id such as P1" };
+    }
+    const startLine = index + 1;
+    let sentence = id.rest.trim();
+    index++;
+    while (index < lines.length) {
+      const next = lines[index].trim();
+      if (next.length === 0 || isIgnorable(next) || matchId(next) !== null || isDeclaration(next)) break;
+      if (sentence.length === 0) sentence = next;
+      else sentence += " " + next;
+      index++;
+    }
+    if (sentence.length === 0) {
+      return { ok: false, line: startLine, message: "expected a sentence after " + id.id };
+    }
+    for (let r = 0; r < requirements.length; r++) {
+      if (requirements[r].id === id.id) {
+        return { ok: false, line: startLine, message: "duplicate requirement " + id.id };
+      }
+    }
+    const parsed = parseSentence(sentence, spec);
+    if (!parsed.ok) return { ok: false, line: startLine, message: parsed.message };
+    requirements.push({
+      id: id.id,
+      line: startLine,
+      sentence: sentence,
+      system: parsed.system,
+      antecedent: parsed.antecedent,
+      consequent: parsed.consequent,
+      hasWhen: parsed.hasWhen,
+      hasIf: parsed.hasIf,
+      whenTerm: parsed.whenTerm,
+    });
+  }
+  if (requirements.length === 0) return { ok: false, line: 1, message: "expected a requirement" };
+  return { ok: true, requirements: requirements };
+}
+
 interface IdMatch {
   id: string;
   rest: string;
 }
 
 function matchId(line: string): IdMatch | null {
-  if (line.length < 2 || line.charCodeAt(0) !== 82) return null;
+  if (line.length < 2) return null;
+  const head = line.charCodeAt(0);
+  if (head !== 82 && head !== 80) return null;
   let i = 1;
   if (!isDigit(line.charCodeAt(i))) return null;
   while (i < line.length && isDigit(line.charCodeAt(i))) i++;
