@@ -65,6 +65,9 @@ function symbolComment(spec: Spec, sym: SymbolDecl): string {
     text += " outcome \"" + escapeComment(sym.outcomeYes) + "\"";
     if (sym.outcomeNo.length > 0) text += " / \"" + escapeComment(sym.outcomeNo) + "\"";
   }
+  if (sym.action.length > 0) text += " action \"" + escapeComment(sym.action) + "\"";
+  if (sym.says.length > 0) text += " says \"" + escapeComment(sym.says) + "\"";
+  if (sym.asText.length > 0) text += " as \"" + escapeComment(sym.asText) + "\"";
   return text;
 }
 

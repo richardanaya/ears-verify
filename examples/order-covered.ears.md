@@ -5,5 +5,5 @@ state inventory_available: Bool "Enough stock is on hand to fill the order." phr
 output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
 
 R1 When an order is submitted and inventory is available, the Order System shall fulfill the order.
-R2 When an order is submitted and not inventory is available, the Order System shall not fulfill the order.
-R3 When not an order is submitted, the Order System shall not fulfill the order.
+R2 When an order is submitted and inventory is not available, the Order System shall not fulfill the order.
+R3 When an order is not submitted, the Order System shall not fulfill the order.

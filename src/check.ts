@@ -4,7 +4,7 @@
  */
 
 import type { JsonObject, JsonValue } from "./jsonvalue.ts";
-import { describeAssignment, displayCode, reportBool, type Requirement, type Spec, type Term } from "./spec.ts";
+import { describeAssignment, displayCode, literalShown, reportBool, speakBound, type Requirement, type Spec, type Term } from "./spec.ts";
 import { Binding, evalAssertion, evalBool, formatTerm, mentionedIndexes, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 import { capitalize, displayQuote, englishList, formatInt, pastVoice } from "./text.ts";
 
@@ -150,7 +150,7 @@ function collectHeld(spec: Spec, env: Binding, term: Term, out: string[]): void 
     const rightTrue = evalBool(term.right, spec, env) === T_TRUE;
     if (leftTrue) collectHeld(spec, env, term.left, out);
     if (rightTrue) collectHeld(spec, env, term.right, out);
-    if (!leftTrue && !rightTrue) out.push(pastVoice(formatTerm(term)));
+    if (!leftTrue && !rightTrue) out.push(spokenOrPast(spec, term));
     return;
   }
   if (term.kind === "sym") {
@@ -170,7 +170,32 @@ function collectHeld(spec: Spec, env: Binding, term: Term, out: string[]): void 
       }
     }
   }
-  out.push(pastVoice(formatTerm(term)));
+  out.push(spokenOrPast(spec, term));
+}
+
+function spokenOrPast(spec: Spec, term: Term): string {
+  const spoken = spokenComparison(spec, term);
+  if (spoken.length > 0) return spoken;
+  return pastVoice(formatTerm(term));
+}
+
+function spokenComparison(spec: Spec, term: Term): string {
+  if (
+    term.kind !== "eq" &&
+    term.kind !== "neq" &&
+    term.kind !== "lt" &&
+    term.kind !== "le" &&
+    term.kind !== "gt" &&
+    term.kind !== "ge"
+  ) {
+    return "";
+  }
+  if (term.left.kind !== "sym") return "";
+  const sym = spec.symbols[term.left.index];
+  if (sym.sort.kind === "bool") return "";
+  const shown = literalShown(term.right);
+  if (shown.length > 0) return speakBound(sym, shown, term.kind, false);
+  return speakBound(sym, formatTerm(term.right), term.kind, true);
 }
 
 function describeActual(spec: Spec, env: Binding, term: Term): string {

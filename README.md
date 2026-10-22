@@ -72,7 +72,7 @@ The agent writes that as EARS. Each declared name is bound to a phrase, and the 
 event order_submitted: Bool "The customer submits an order." phrase "an order is submitted"
 output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
 
-R1 When not an order is submitted, the Order System shall not fulfill the order.
+R1 When an order is not submitted, the Order System shall not fulfill the order.
 R2 When an order is submitted, the Order System shall fulfill the order.
 R3 When an order is submitted, the Order System shall not fulfill the order.
 ```
@@ -120,7 +120,7 @@ Suggested fix: ask which requirement should win. To keep R2, remove R3. To keep 
 The product manager chooses to keep fulfillment of a submitted order and to remove the refusal. The agent deletes R3. `examples/order-chosen.ears.md` is what remains:
 
 ```ears
-R1 When not an order is submitted, the Order System shall not fulfill the order.
+R1 When an order is not submitted, the Order System shall not fulfill the order.
 R2 When an order is submitted, the Order System shall fulfill the order.
 ```
 
@@ -492,9 +492,9 @@ output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order
 unwanted event payment_declined: Bool "The payment was declined." phrase "payment fails"
 ```
 
-The phrase is the only wording a requirement may use for that name. `not fulfill the order` is the phrase with `not` in front. `the quantity is at most 10` is how an integer comparison is written. Matching is exact and case-insensitive: the words have to be the phrase you declared, and the longest phrase wins. A sentence that says `an order was submitted` is not close enough to count. The error names the line and the nearest phrases.
+The phrase is the only wording a requirement may use for that name. `not fulfill the order` is the phrase with `not` in front. When the phrase contains `is`, write `the customer is not cancelling`. `the quantity is at most 10` still parses, and lint flags `shall the quantity is 10`. Bind the response with `as`, for example `as "accept {op} {value} units"`, and write `shall accept at most 10 units`. `says "{value} units were accepted"` is the sentence a report uses. A Bool can add `action "start the subscription"` next to `phrase "the subscription is started"`. Matching is exact and case-insensitive: the words have to be the phrase you declared, and the longest phrase wins. A sentence that says `an order was submitted` is not close enough to count. The error names the line and the nearest phrases.
 
-A Bool can also say how a report states the result, after the phrase: `outcome "the order was fulfilled" / "the order was not fulfilled"`. One string is enough. The false form inserts `not` after the first `was` or `is`, or prefixes `not` when neither word is there. Two strings separated by `/` are used as written. `outcome` is only for Bool, and `not` is allowed in that wording. When it is left off, a phrase that contains `is` is reported with `was` or `was not`. The violation line for the order above is `An order was submitted and inventory was available, but the order was not fulfilled.`
+A Bool can also say how a report states the result, after the phrase: `outcome "the order was fulfilled" / "the order was not fulfilled"`. One string is enough. The false form inserts `not` after the first `was`, `were`, or `is`, or prefixes `not` when none of those words is there. Two strings separated by `/` are used as written. `outcome` is only for Bool, and `not` is allowed in that wording. When it is left off, a phrase that contains `is` is reported with `was` or `was not`. The violation line for the order above is `An order was submitted and inventory was available, but the order was not fulfilled.`
 
 <!-- verify stderr 2
 build/ears-verify
@@ -653,14 +653,14 @@ conflict {R4, R5}
 R4 and R5 cannot both hold.
 
 R4 line 7
-When an order is submitted, the Order System shall the quantity is at most 10.
+When an order is submitted, the Order System shall accept at most 10 units.
 
 R5 line 8
-When an order is submitted, the Order System shall the quantity is 12.
+When an order is submitted, the Order System shall accept 12 units.
 
 They clash when an order was submitted.
-R4 requires that the quantity was at most 10.
-R5 requires that the quantity was 12.
+R4 requires that at most 10 units were accepted.
+R5 requires that 12 units were accepted.
 
 Example scenario:
 {
@@ -695,14 +695,14 @@ conflict {R6, R7}
 R6 and R7 cannot both hold.
 
 R6 line 6
-The Order System shall the status is shipped.
+The Order System shall mark the order shipped.
 
 R7 line 7
-The Order System shall the status is cancelled.
+The Order System shall mark the order cancelled.
 
 They clash in every situation.
-R6 requires that the status was shipped.
-R7 requires that the status was cancelled.
+R6 requires that the order was shipped.
+R7 requires that the order was cancelled.
 
 Example scenario:
 {
@@ -823,7 +823,7 @@ R1 line 7
 When an order is submitted, the Order System shall accept the order.
 
 R2 line 8
-When accept the order, the Order System shall ship the order.
+When the order is accepted, the Order System shall ship the order.
 
 R3 line 9
 When an order is submitted, the Order System shall not ship the order.
@@ -889,7 +889,7 @@ unused: 0
 
 redundant R1 line 7
 R1 adds nothing. Whenever the other requirements hold, R1 holds too.
-When the cart is open and not the cart is open, the Checkout shall accept the order.
+When the cart is open and the cart is not open, the Checkout shall accept the order.
 Suggested fix: remove R1, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 
 redundant R2 line 8
@@ -899,7 +899,7 @@ Suggested fix: remove R2, or ask whether it was meant to say something the other
 
 vacuous R1 line 7
 R1 can never trigger. Its condition is impossible for every allowed value.
-When the cart is open and not the cart is open, the Checkout shall accept the order.
+When the cart is open and the cart is not open, the Checkout shall accept the order.
 Suggested fix: rewrite the condition in R1 so a real situation can make it true, or remove the requirement. Do not invent a response.
 
 vacuous R2 line 8
@@ -936,7 +936,7 @@ region ("the region") is an input and no requirement mentions it.
 Suggested fix: use region in a requirement, or remove it from the schema.
 
 unused receipt_sent
-Nothing sets receipt_sent ("send a receipt"). Requirements mention it, but no response says what it shall be.
+Nothing sets receipt_sent ("a receipt is sent"). Requirements mention it, but no response says what it shall be.
 Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value.
 
 unused Lane.refund
@@ -976,7 +976,7 @@ examples/order-unused.ears.md
     {
       "name": "receipt_sent",
       "kind": "output",
-      "text": "Nothing sets receipt_sent (\"send a receipt\"). Requirements mention it, but no response says what it shall be.",
+      "text": "Nothing sets receipt_sent (\"a receipt is sent\"). Requirements mention it, but no response says what it shall be.",
       "fix": "Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value."
     },
     {

@@ -9,7 +9,7 @@
     {
       "id": "R1",
       "line": 7,
-      "sentence": "When the cart is open and not the cart is open, the Checkout shall accept the order.",
+      "sentence": "When the cart is open and the cart is not open, the Checkout shall accept the order.",
       "text": "R1 adds nothing. Whenever the other requirements hold, R1 holds too.",
       "fix": "Suggested fix: remove R1, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees."
     },
@@ -25,7 +25,7 @@
     {
       "id": "R1",
       "line": 7,
-      "sentence": "When the cart is open and not the cart is open, the Checkout shall accept the order.",
+      "sentence": "When the cart is open and the cart is not open, the Checkout shall accept the order.",
       "text": "R1 can never trigger. Its condition is impossible for every allowed value.",
       "fix": "Suggested fix: rewrite the condition in R1 so a real situation can make it true, or remove the requirement. Do not invent a response."
     },

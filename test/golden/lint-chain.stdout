@@ -14,7 +14,7 @@ R1 line 7
 When an order is submitted, the Order System shall accept the order.
 
 R2 line 8
-When accept the order, the Order System shall ship the order.
+When the order is accepted, the Order System shall ship the order.
 
 R3 line 9
 When an order is submitted, the Order System shall not ship the order.

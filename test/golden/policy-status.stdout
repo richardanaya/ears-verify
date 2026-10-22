@@ -8,9 +8,9 @@ rejected:
 This scenario violates a requirement.
 
 R6 line 6
-The Order System shall the status is shipped.
-The status was placed.
+The Order System shall mark the order shipped.
+The order was placed.
 
 R7 line 7
-The Order System shall the status is cancelled.
-The status was placed.
+The Order System shall mark the order cancelled.
+The order was placed.

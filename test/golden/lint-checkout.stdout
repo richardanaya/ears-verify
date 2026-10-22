@@ -11,17 +11,17 @@ conflict {R8, R12, R14}
 R8, R12, and R14 cannot all hold.
 
 R8 line 32
-When the customer is subscribing and not the customer is cancelling and the customer is signed in, the Checkout shall start the subscription.
+When the customer is subscribing and the customer is not cancelling and the customer is signed in, the Checkout shall start the subscription.
 
 R12 line 36
-When start the subscription, the Checkout shall the lane is fulfill.
+When the subscription is started, the Checkout shall route the order to the fulfill lane.
 
 R14 line 38
-When the customer is subscribing, the Checkout shall the lane is hold.
+When the customer is subscribing, the Checkout shall route the order to the hold lane.
 
 They clash when the cart was not open, an item was not added, checkout was not started, payment was not submitted, payment was not declined, the address was not confirmed, the customer was subscribing, the customer was not cancelling, the customer was signed in, a card was not saved, and stock was not available.
 R8 requires that the subscription was started.
-R14 requires that the lane was hold.
+R14 requires that the order was routed to the hold lane.
 
 Example scenario:
 {
@@ -88,14 +88,14 @@ conflict {R15, R16}
 R15 and R16 cannot both hold.
 
 R15 line 39
-When checkout is started and stock is available, the Checkout shall the billed seats is at most 2.
+When checkout is started and stock is available, the Checkout shall bill at most 2 seats.
 
 R16 line 40
-When checkout is started and stock is available, the Checkout shall the billed seats is 3.
+When checkout is started and stock is available, the Checkout shall bill 3 seats.
 
 They clash when the cart was not open, an item was not added, checkout was started, payment was not submitted, payment was not declined, the address was not confirmed, the customer was not subscribing, the customer was not cancelling, the customer was not signed in, a card was not saved, and stock was available.
-R15 requires that the billed seats was at most 2.
-R16 requires that the billed seats was 3.
+R15 requires that at most 2 seats were billed.
+R16 requires that 3 seats were billed.
 
 Example scenario:
 {

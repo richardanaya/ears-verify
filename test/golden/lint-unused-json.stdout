@@ -23,7 +23,7 @@
     {
       "name": "receipt_sent",
       "kind": "output",
-      "text": "Nothing sets receipt_sent (\"send a receipt\"). Requirements mention it, but no response says what it shall be.",
+      "text": "Nothing sets receipt_sent (\"a receipt is sent\"). Requirements mention it, but no response says what it shall be.",
       "fix": "Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value."
     },
     {

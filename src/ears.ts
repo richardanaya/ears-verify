@@ -7,7 +7,10 @@
  * is present. The response is `the <system> shall <boolean>`.
  *
  * A declaration may bind a symbol to a phrase. Matching is the exact
- * word sequence, case-insensitive, and the longest declared phrase wins.
+ * word sequence, case-insensitive, and the longest match wins.
+ * "is not" inside a phrase that contains "is" is the same symbol, negated.
+ * An Int or enum may also bind `as` (how a requirement states it) and
+ * `says` (how a report states it). A Bool may bind `action` as a second phrase.
  */
 
 import {
@@ -243,17 +246,19 @@ function parseDeclaration(line: string, lineNo: number, spec: Spec): string | nu
   if (!described.ok) return described.message;
   const phrased = parseOptionalPhrase(cur, spec);
   if (!phrased.ok) return phrased.message;
-  const stated = parseOptionalOutcome(cur, sort);
-  if (!stated.ok) return stated.message;
-  if (!cur.eof()) return "unexpected trailing text";
+  const tail = parseWordingTail(cur, spec, sort, name, phrased.phrase);
+  if (!tail.ok) return tail.message;
   const decl: SymbolDecl = {
     role: role,
     name: name,
     sort: sort,
     description: described.text,
     phrase: phrased.phrase,
-    outcomeYes: stated.yes,
-    outcomeNo: stated.no,
+    outcomeYes: tail.yes,
+    outcomeNo: tail.no,
+    action: tail.action,
+    says: tail.says,
+    asText: tail.asText,
     unwanted: unwanted,
     line: lineNo,
     source: line,
@@ -374,6 +379,113 @@ function parseOptionalPhrase(cur: Cur, spec: Spec): { ok: true; phrase: string }
   const clash = phraseClash(spec, phrase);
   if (clash.length > 0) return { ok: false, message: clash };
   return { ok: true, phrase: phrase };
+}
+
+interface WordingTail {
+  ok: true;
+  yes: string;
+  no: string;
+  action: string;
+  says: string;
+  asText: string;
+}
+
+function parseWordingTail(cur: Cur, spec: Spec, sort: Sort, name: string, phrase: string): WordingTail | { ok: false; message: string } {
+  let yes = "";
+  let no = "";
+  let action = "";
+  let says = "";
+  let asText = "";
+  let sawOutcome = false;
+  while (!cur.eof()) {
+    const save = cur.i;
+    const word = readIdent(cur);
+    if (word === null) return { ok: false, message: "unexpected trailing text" };
+    const key = lowerAscii(word);
+    if (key === "outcome") {
+      if (sawOutcome) return { ok: false, message: "repeated outcome" };
+      cur.i = save;
+      const stated = parseOptionalOutcome(cur, sort);
+      if (!stated.ok) return stated;
+      yes = stated.yes;
+      no = stated.no;
+      sawOutcome = true;
+      continue;
+    }
+    if (key === "action") {
+      if (action.length > 0) return { ok: false, message: "repeated action" };
+      if (sort.kind !== "bool") return { ok: false, message: "action is only for Bool" };
+      const quoted = parseQuoted(cur, "action");
+      if (!quoted.ok) return { ok: false, message: articleQuote(quoted.message, "action") };
+      const text = normalizeSpaces(quoted.text);
+      if (phrase.length > 0 && lowerAscii(phrase) === lowerAscii(text)) {
+        return { ok: false, message: displayQuote(text) + " is already a phrase" };
+      }
+      const clash = phraseClash(spec, text);
+      if (clash.length > 0) return { ok: false, message: clash };
+      action = text;
+      continue;
+    }
+    if (key === "says") {
+      if (says.length > 0) return { ok: false, message: "repeated says" };
+      if (sort.kind === "bool") return { ok: false, message: "says is only for Int or enum" };
+      const quoted = parseQuoted(cur, "says");
+      if (!quoted.ok) return { ok: false, message: articleQuote(quoted.message, "says") };
+      const text = normalizeSpaces(quoted.text);
+      if (!holePresent(text, name)) return { ok: false, message: "says needs {value}" };
+      says = text;
+      continue;
+    }
+    if (key === "as") {
+      if (asText.length > 0) return { ok: false, message: "repeated as" };
+      if (sort.kind === "bool") return { ok: false, message: "as is only for Int or enum" };
+      const quoted = parseQuoted(cur, "as");
+      if (!quoted.ok) return { ok: false, message: articleQuote(quoted.message, "as") };
+      const text = normalizeSpaces(quoted.text);
+      const patternError = validateAs(text, name);
+      if (patternError !== null) return { ok: false, message: patternError };
+      asText = text;
+      continue;
+    }
+    return { ok: false, message: "unexpected trailing text" };
+  }
+  return { ok: true, yes: yes, no: no, action: action, says: says, asText: asText };
+}
+
+function articleQuote(message: string, label: string): string {
+  if (message === "expected a " + label) return "expected an " + label;
+  if (message === "expected a " + label + " in quotes") return "expected an " + label + " in quotes";
+  return message;
+}
+
+function holePresent(text: string, symbolName: string): boolean {
+  if (containsToken(text, "{value}")) return true;
+  if (containsToken(text, "{name}")) return true;
+  if (containsToken(text, "{" + symbolName + "}")) return true;
+  return false;
+}
+
+function containsToken(text: string, token: string): boolean {
+  if (token.length === 0 || token.length > text.length) return false;
+  for (let i = 0; i + token.length <= text.length; i++) {
+    if (text.slice(i, i + token.length) === token) return true;
+  }
+  return false;
+}
+
+function validateAs(text: string, symbolName: string): string | null {
+  const tokens = tokenizeAs(text, symbolName);
+  if (tokens === null) return "as can only be words, {op}, and {value}";
+  let values = 0;
+  let ops = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].kind === "value") values++;
+    if (tokens[i].kind === "op") ops++;
+  }
+  if (values === 0) return "as needs {value}";
+  if (values > 1) return "as has more than one {value}";
+  if (ops > 1) return "repeated {op}";
+  return null;
 }
 
 function parseOptionalOutcome(
@@ -581,7 +693,7 @@ function parseNot(cur: Cur, spec: Spec): Parsed {
 }
 
 function parseCmp(cur: Cur, spec: Spec): Parsed {
-  const left = parseSum(cur, spec);
+  const left = parseSum(cur, spec, true);
   if (!left.ok) return left;
   const english = consumeEnglishOp(cur);
   let op = english;
@@ -591,7 +703,7 @@ function parseCmp(cur: Cur, spec: Spec): Parsed {
     cur.skip();
     cur.i += op.length;
   }
-  const right = parseSum(cur, spec);
+  const right = parseSum(cur, spec, true);
   if (!right.ok) return right;
   if (op === "=" || op === "!=") {
     if (!sameSort(left.sort, right.sort)) {
@@ -609,15 +721,15 @@ function parseCmp(cur: Cur, spec: Spec): Parsed {
   return { ok: true, term: { kind: kind, left: left.term, right: right.term }, sort: { kind: "bool" } };
 }
 
-function parseSum(cur: Cur, spec: Spec): Parsed {
-  let left = parseUnary(cur, spec);
+function parseSum(cur: Cur, spec: Spec, allowPattern: boolean): Parsed {
+  let left = parseUnary(cur, spec, allowPattern);
   if (!left.ok) return left;
   while (true) {
     const op = peekAdd(cur);
     if (op.length === 0) return left;
     cur.skip();
     cur.i += 1;
-    const right = parseUnary(cur, spec);
+    const right = parseUnary(cur, spec, allowPattern);
     if (!right.ok) return right;
     if (left.sort.kind !== "int" || right.sort.kind !== "int") return { ok: false, message: op + " expects integers" };
     if (op === "+") left = { ok: true, term: { kind: "add", left: left.term, right: right.term }, sort: { kind: "int" } };
@@ -625,7 +737,7 @@ function parseSum(cur: Cur, spec: Spec): Parsed {
   }
 }
 
-function parseUnary(cur: Cur, spec: Spec): Parsed {
+function parseUnary(cur: Cur, spec: Spec, allowPattern: boolean): Parsed {
   const save = cur.i;
   cur.skip();
   if (cur.i < cur.text.length && cur.text.charCodeAt(cur.i) === 45) {
@@ -633,7 +745,7 @@ function parseUnary(cur: Cur, spec: Spec): Parsed {
     const code = after < cur.text.length ? cur.text.charCodeAt(after) : 0;
     if (code !== 61) {
       cur.i++;
-      const inner = parseUnary(cur, spec);
+      const inner = parseUnary(cur, spec, allowPattern);
       if (!inner.ok) return inner;
       if (inner.sort.kind !== "int") return { ok: false, message: "unary minus expects an integer" };
       if (inner.term.kind === "int") {
@@ -647,10 +759,10 @@ function parseUnary(cur: Cur, spec: Spec): Parsed {
     }
   }
   cur.i = save;
-  return parseAtom(cur, spec);
+  return parseAtom(cur, spec, allowPattern);
 }
 
-function parseAtom(cur: Cur, spec: Spec): Parsed {
+function parseAtom(cur: Cur, spec: Spec, allowPattern: boolean): Parsed {
   cur.skip();
   if (cur.i >= cur.text.length) return { ok: false, message: "expected an expression" };
   const code = cur.text.charCodeAt(cur.i);
@@ -670,9 +782,23 @@ function parseAtom(cur: Cur, spec: Spec): Parsed {
   }
   const save = cur.i;
   const phraseHit = matchPhrase(cur, spec);
-  if (phraseHit !== null) {
-    cur.i = phraseHit.end;
-    return symbolTerm(spec, phraseHit.index);
+  if (!allowPattern) {
+    if (phraseHit !== null) {
+      cur.i = phraseHit.end;
+      return finishPhrase(spec, phraseHit);
+    }
+  } else {
+    const patternHit = matchAsPattern(cur, spec);
+    if (patternHit !== null && !patternHit.ok) return { ok: false, message: patternHit.message };
+    const patternEnd = patternHit !== null && patternHit.ok ? patternHit.end : -1;
+    if (phraseHit !== null && phraseHit.end >= patternEnd) {
+      cur.i = phraseHit.end;
+      return finishPhrase(spec, phraseHit);
+    }
+    if (patternHit !== null && patternHit.ok) {
+      cur.i = patternHit.end;
+      return finishPattern(spec, patternHit);
+    }
   }
   cur.i = save;
   const word = readRawIdent(cur);
@@ -711,6 +837,15 @@ function symbolTerm(spec: Spec, index: number): Parsed {
 interface PhraseHit {
   index: number;
   end: number;
+  negated: boolean;
+}
+
+function finishPhrase(spec: Spec, hit: PhraseHit): Parsed {
+  const base = symbolTerm(spec, hit.index);
+  if (!base.ok) return base;
+  if (!hit.negated) return base;
+  if (base.sort.kind !== "bool") return { ok: false, message: "not expects a boolean" };
+  return { ok: true, term: { kind: "not", term: base.term }, sort: { kind: "bool" } };
 }
 
 function matchPhrase(cur: Cur, spec: Spec): PhraseHit | null {
@@ -726,23 +861,212 @@ function matchPhrase(cur: Cur, spec: Spec): PhraseHit | null {
     pos = read.end;
   }
   if (words.length === 0) return null;
-  let bestLen = 0;
+  let bestEnd = -1;
   let bestIndex = -1;
+  let bestNegated = false;
   for (let s = 0; s < spec.symbols.length; s++) {
-    const phrase = spec.symbols[s].phrase;
-    if (phrase.length === 0) continue;
-    const parts = splitWords(phrase);
-    if (parts.length > words.length || parts.length <= bestLen) continue;
-    let same = true;
-    for (let w = 0; w < parts.length; w++) {
-      if (lowerAscii(parts[w]) !== words[w]) same = false;
+    const sym = spec.symbols[s];
+    const candidates: string[] = [];
+    if (sym.phrase.length > 0) candidates.push(sym.phrase);
+    if (sym.action.length > 0) candidates.push(sym.action);
+    for (let c = 0; c < candidates.length; c++) {
+      const hit = matchParts(splitWords(candidates[c]), words, ends);
+      if (hit === null) continue;
+      if (hit.end > bestEnd) {
+        bestEnd = hit.end;
+        bestIndex = s;
+        bestNegated = hit.negated;
+      }
     }
-    if (!same) continue;
-    bestLen = parts.length;
-    bestIndex = s;
   }
   if (bestIndex < 0) return null;
-  return { index: bestIndex, end: ends[bestLen - 1] };
+  return { index: bestIndex, end: bestEnd, negated: bestNegated };
+}
+
+interface PartHit {
+  end: number;
+  negated: boolean;
+}
+
+function matchParts(parts: string[], words: string[], ends: number[]): PartHit | null {
+  let pos = 0;
+  let negated = false;
+  for (let w = 0; w < parts.length; w++) {
+    if (pos >= words.length) return null;
+    if (lowerAscii(parts[w]) !== words[pos]) return null;
+    const nextPart = w + 1 < parts.length ? lowerAscii(parts[w + 1]) : "";
+    if (lowerAscii(parts[w]) === "is" && nextPart !== "not" && w + 1 < parts.length) {
+      if (pos + 1 < words.length && words[pos + 1] === "not") {
+        negated = true;
+        pos += 2;
+        continue;
+      }
+    }
+    pos++;
+  }
+  if (pos <= 0) return null;
+  return { end: ends[pos - 1], negated: negated };
+}
+
+interface AsToken {
+  kind: string;
+  text: string;
+}
+
+function tokenizeAs(text: string, symbolName: string): AsToken[] | null {
+  const parts = splitWords(text);
+  if (parts.length === 0) return null;
+  const tokens: AsToken[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (part.charCodeAt(0) === 123) {
+      if (part.charCodeAt(part.length - 1) !== 125) return null;
+      const inner = part.slice(1, part.length - 1);
+      if (inner === "op") tokens.push({ kind: "op", text: "" });
+      else if (inner === "value" || inner === "name" || inner === symbolName) tokens.push({ kind: "value", text: "" });
+      else return null;
+      continue;
+    }
+    for (let c = 0; c < part.length; c++) {
+      const code = part.charCodeAt(c);
+      if (isPhraseStop(code) || code === 43 || code === 123 || code === 125) return null;
+    }
+    tokens.push({ kind: "word", text: part });
+  }
+  return tokens;
+}
+
+interface AsOk {
+  ok: true;
+  index: number;
+  end: number;
+  op: string;
+  right: Term;
+  rightSort: SortTag;
+}
+
+type AsHit = AsOk | { ok: false; message: string };
+
+function matchAsPattern(cur: Cur, spec: Spec): AsHit | null {
+  let best: AsOk | null = null;
+  let startedMessage = "";
+  for (let s = 0; s < spec.symbols.length; s++) {
+    if (spec.symbols[s].asText.length === 0) continue;
+    const save = cur.i;
+    const hit = matchOneAs(cur, spec, s);
+    cur.i = save;
+    if (hit === null) continue;
+    if (!hit.ok) {
+      if (startedMessage.length === 0) startedMessage = hit.message;
+      continue;
+    }
+    if (best === null || hit.end > best.end) best = hit;
+  }
+  if (best !== null) return best;
+  if (startedMessage.length > 0) return { ok: false, message: startedMessage };
+  return null;
+}
+
+function matchOneAs(cur: Cur, spec: Spec, index: number): AsOk | { ok: false; message: string } | null {
+  const sym = spec.symbols[index];
+  const tokens = tokenizeAs(sym.asText, sym.name);
+  if (tokens === null) return null;
+  let op = "=";
+  let right: Term = { kind: "int", value: 0 };
+  let rightSort: SortTag = { kind: "int" };
+  let sawValue = false;
+  let started = false;
+  for (let t = 0; t < tokens.length; t++) {
+    const token = tokens[t];
+    if (token.kind === "word") {
+      cur.skip();
+      const word = readRawIdent(cur);
+      if (word === null || !sameLoose(token.text, word)) {
+        if (!started) return null;
+        return { ok: false, message: "expected " + displayQuote(token.text) };
+      }
+      started = true;
+      continue;
+    }
+    if (token.kind === "op") {
+      op = matchOpHole(cur);
+      started = true;
+      continue;
+    }
+    const value = parseValueHole(cur, spec, sym);
+    if (!value.ok) {
+      if (!started) return null;
+      return value;
+    }
+    right = value.term;
+    rightSort = value.sort;
+    sawValue = true;
+    started = true;
+  }
+  if (!sawValue) return null;
+  return { ok: true, index: index, end: cur.i, op: op, right: right, rightSort: rightSort };
+}
+
+function parseValueHole(cur: Cur, spec: Spec, sym: SymbolDecl): Parsed {
+  if (sym.sort.kind === "enum") {
+    const word = readIdent(cur);
+    if (word === null) return { ok: false, message: "expected a " + sym.sort.enumName + " variant" };
+    const variant = findVariant(spec, word);
+    if (variant === null || variant.enumName !== sym.sort.enumName) {
+      return { ok: false, message: "expected a " + sym.sort.enumName + " variant" };
+    }
+    return {
+      ok: true,
+      term: { kind: "enum", enumName: variant.enumName, variant: word, index: variant.index },
+      sort: { kind: "enum", enumName: variant.enumName },
+    };
+  }
+  return parseSum(cur, spec, false);
+}
+
+function matchOpHole(cur: Cur): string {
+  const save = cur.i;
+  if (consumeWord(cur, "at")) {
+    if (consumeWord(cur, "most")) return "<=";
+    if (consumeWord(cur, "least")) return ">=";
+    cur.i = save;
+  }
+  if (consumeWord(cur, "less")) {
+    if (consumeWord(cur, "than")) return "<";
+    cur.i = save;
+  }
+  if (consumeWord(cur, "greater")) {
+    if (consumeWord(cur, "than")) return ">";
+    cur.i = save;
+  }
+  if (consumeWord(cur, "not")) return "!=";
+  cur.i = save;
+  return "=";
+}
+
+function sameLoose(pattern: string, text: string): boolean {
+  const a = lowerAscii(pattern);
+  const b = lowerAscii(text);
+  if (a === b) return true;
+  if (a.length > 1 && a.slice(a.length - 1) === "s" && a.slice(0, a.length - 1) === b) return true;
+  if (b.length > 1 && b.slice(b.length - 1) === "s" && b.slice(0, b.length - 1) === a) return true;
+  return false;
+}
+
+function finishPattern(spec: Spec, hit: AsOk): Parsed {
+  const left = symbolTerm(spec, hit.index);
+  if (!left.ok) return left;
+  if (hit.op !== "=" && hit.op !== "!=") {
+    if (left.sort.kind !== "int" || hit.rightSort.kind !== "int") return { ok: false, message: "comparison expects integers" };
+  } else if (!sameSort(left.sort, hit.rightSort)) {
+    return { ok: false, message: "cannot compare " + sortName(left.sort) + " with " + sortName(hit.rightSort) };
+  }
+  if (hit.op === "=") return { ok: true, term: { kind: "eq", left: left.term, right: hit.right }, sort: { kind: "bool" } };
+  if (hit.op === "!=") return { ok: true, term: { kind: "neq", left: left.term, right: hit.right }, sort: { kind: "bool" } };
+  if (hit.op === "<") return { ok: true, term: { kind: "lt", left: left.term, right: hit.right }, sort: { kind: "bool" } };
+  if (hit.op === "<=") return { ok: true, term: { kind: "le", left: left.term, right: hit.right }, sort: { kind: "bool" } };
+  if (hit.op === ">") return { ok: true, term: { kind: "gt", left: left.term, right: hit.right }, sort: { kind: "bool" } };
+  return { ok: true, term: { kind: "ge", left: left.term, right: hit.right }, sort: { kind: "bool" } };
 }
 
 function unknownPhrase(cur: Cur, spec: Spec, start: number): Parsed {
@@ -882,6 +1206,7 @@ function phraseClash(spec: Spec, phrase: string): string {
   for (let i = 0; i < spec.symbols.length; i++) {
     const sym = spec.symbols[i];
     if (sym.phrase.length > 0 && lowerAscii(sym.phrase) === lower) return displayQuote(phrase) + " is already a phrase";
+    if (sym.action.length > 0 && lowerAscii(sym.action) === lower) return displayQuote(phrase) + " is already a phrase";
     if (lowerAscii(sym.name) === lower) return displayQuote(phrase) + " is already a symbol";
   }
   for (let i = 0; i < spec.enums.length; i++) {
@@ -1003,7 +1328,11 @@ function nameClash(spec: Spec, name: string): string {
   if (findVariant(spec, name) !== null) return displayQuote(name) + " is already an enum variant";
   const lower = lowerAscii(name);
   for (let i = 0; i < spec.symbols.length; i++) {
-    if (spec.symbols[i].phrase.length > 0 && lowerAscii(spec.symbols[i].phrase) === lower) {
+    const sym = spec.symbols[i];
+    if (sym.phrase.length > 0 && lowerAscii(sym.phrase) === lower) {
+      return displayQuote(name) + " is already a phrase";
+    }
+    if (sym.action.length > 0 && lowerAscii(sym.action) === lower) {
       return displayQuote(name) + " is already a phrase";
     }
   }
@@ -1037,7 +1366,10 @@ function isReserved(name: string): boolean {
     word === "bool" ||
     word === "int" ||
     word === "phrase" ||
-    word === "outcome"
+    word === "outcome" ||
+    word === "action" ||
+    word === "says" ||
+    word === "as"
   );
 }
 

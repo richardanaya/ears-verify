@@ -5,4 +5,4 @@ output order_fulfilled: Bool "The system responds quickly." phrase "fulfill the 
 state saved: Bool "Store the order in the database." phrase "the order is saved"
 
 R1 When an order is submitted, the Order System shall fulfill the order.
-R2 When not an order is submitted, the Order System shall not fulfill the order.
+R2 When an order is not submitted, the Order System shall not fulfill the order.

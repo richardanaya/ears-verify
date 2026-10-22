@@ -178,6 +178,8 @@ function main(): void {
     { name: "lint-unused", args: ["lint", "examples/order-unused.ears.md"] },
     { name: "lint-unused-json", args: ["lint", "--json", "examples/order-unused.ears.md"] },
     { name: "lint-checkout", args: ["lint", "examples/checkout.ears.md"] },
+    { name: "lint-awkward", args: ["lint", "examples/order-awkward.ears.md"] },
+    { name: "lint-clear", args: ["lint", "examples/order-clear.ears.md"] },
     { name: "scenarios", args: ["scenarios", "examples/order.ears.md"] },
     { name: "scenarios-json", args: ["scenarios", "--json", "examples/order.ears.md"] },
     { name: "scenarios-status", args: ["scenarios", "examples/order-status.ears.md"] },

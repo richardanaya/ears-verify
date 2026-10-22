@@ -11,14 +11,14 @@ conflict {R6, R7}
 R6 and R7 cannot both hold.
 
 R6 line 6
-The Order System shall the status is shipped.
+The Order System shall mark the order shipped.
 
 R7 line 7
-The Order System shall the status is cancelled.
+The Order System shall mark the order cancelled.
 
 They clash in every situation.
-R6 requires that the status was shipped.
-R7 requires that the status was cancelled.
+R6 requires that the order was shipped.
+R7 requires that the order was cancelled.
 
 Example scenario:
 {

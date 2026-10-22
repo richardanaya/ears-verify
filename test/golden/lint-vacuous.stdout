@@ -9,7 +9,7 @@ unused: 0
 
 redundant R1 line 7
 R1 adds nothing. Whenever the other requirements hold, R1 holds too.
-When the cart is open and not the cart is open, the Checkout shall accept the order.
+When the cart is open and the cart is not open, the Checkout shall accept the order.
 Suggested fix: remove R1, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 
 redundant R2 line 8
@@ -19,7 +19,7 @@ Suggested fix: remove R2, or ask whether it was meant to say something the other
 
 vacuous R1 line 7
 R1 can never trigger. Its condition is impossible for every allowed value.
-When the cart is open and not the cart is open, the Checkout shall accept the order.
+When the cart is open and the cart is not open, the Checkout shall accept the order.
 Suggested fix: rewrite the condition in R1 so a real situation can make it true, or remove the requirement. Do not invent a response.
 
 vacuous R2 line 8

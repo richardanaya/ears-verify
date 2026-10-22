@@ -60,13 +60,13 @@ A Bool may also declare how a report states that fact. Put `outcome` after the p
 
 `output order_fulfilled: Bool "The order is fulfilled." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"`
 
-One quoted string is enough. The false wording inserts `not` after the first `was` or `is`, and prefixes `not` when neither word is there. Two strings separated by `/` are used exactly as written. `outcome` is only for Bool. Its words follow the same punctuation rules as a phrase, and the word `not` is allowed. When no outcome is declared, a phrase that contains `is` is reported as `was` when the symbol is true and `was not` when it is false, so `an order is submitted` becomes `an order was submitted` or `an order was not submitted`. A violation then reads `An order was submitted and inventory was available, but the order was not fulfilled.`
+One quoted string is enough. The false wording inserts `not` after the first `was`, `were`, or `is`, and prefixes `not` when none of those words is there. Two strings separated by `/` are used exactly as written. `outcome` is only for Bool. Its words follow the same punctuation rules as a phrase, and the word `not` is allowed. When no outcome is declared, a phrase that contains `is` is reported as `was` when the symbol is true and `was not` when it is false, so `an order is submitted` becomes `an order was submitted` or `an order was not submitted`. A violation then reads `An order was submitted and inventory was available, but the order was not fulfilled.`
 
 `Type` is `Bool`, `Int min..max`, or an enum name declared above that line. Events and states are `Bool` only. An unwanted marker applies only to an event. Ranges are inclusive and both ends sit inside `-1000000..1000000`. At least one variant is required. Variant names are unique across the whole spec and cannot match a symbol name.
 
 A description and a phrase are double-quoted strings. `\"`, `\\`, `\/`, and `\t` are the escapes. A newline is rejected, and an empty description or phrase is rejected. Extra spaces inside a phrase collapse to one space. A phrase is words: a hyphen may sit inside a word (`user-friendly`), and `+`, `=`, and other punctuation may not. A phrase cannot start with `not`, `and`, or `or`. A one-word phrase cannot be a reserved word. Two phrases that match ignoring case are an error, and a phrase cannot repeat another symbol, enum, or variant.
 
-These words are reserved and cannot be names: `not`, `and`, `or`, `true`, `false`, `while`, `when`, `if`, `where`, `then`, `the`, `shall`, `should`, `must`, `will`, `event`, `state`, `input`, `output`, `unwanted`, `enum`, `bool`, `int`, `phrase`, `outcome`.
+These words are reserved and cannot be names: `not`, `and`, `or`, `true`, `false`, `while`, `when`, `if`, `where`, `then`, `the`, `shall`, `should`, `must`, `will`, `event`, `state`, `input`, `output`, `unwanted`, `enum`, `bool`, `int`, `phrase`, `outcome`, `action`, `says`, `as`.
 
 Blank lines, `#` headings, `//` comments, and a full-line `<!-- ...` are ignored. A requirement may continue onto the next lines until a blank line, a comment, a declaration, or the next id. The requirement's line number is the line of its id.
 
@@ -74,7 +74,11 @@ Blank lines, `#` headings, `//` comments, and a full-line `<!-- ...` are ignored
 
 Matching is exact. The words in the sentence have to be a declared phrase, compared without regard to case. The longest phrase wins, so `an order` does not steal `an order is submitted` when both are declared. There is no fuzzy match and no stemming.
 
-`not` in front of a phrase is the negation: `not fulfill the order`. Write that. Do not declare a second phrase for the false case.
+`not` in front of a phrase is the negation: `not fulfill the order`. Write that. Do not declare a second phrase for the false case. When the phrase itself contains `is`, write `is not` inside it: `the customer is not cancelling`, not `not the customer is cancelling`. Both parse as the same negation. Lint flags the second shape.
+
+A Bool may also declare `action "start the subscription"` beside `phrase "the subscription is started"`. The action is a second phrase for the same fact, so a response can say `shall start the subscription` and a condition can say `when the subscription is started`.
+
+An Int or enum may declare `as` and `says` after the phrase. `as` is the verb phrase a requirement uses. `{value}` is the number or the variant. `{op}` is optional and matches `at most`, `at least`, `less than`, `greater than`, `not`, or nothing when the value is exact. A pattern word with a trailing `s` also matches the word without that `s`, so `seats` matches `seat`. `says` is how a report states the result, and `{value}` is filled in: `says "{value} seats were billed"` turns 3 into `3 seats were billed` and `at most` into `at most 2 seats were billed`. `{name}` and `{symbolName}` are the same hole. `says` is skipped when the right side is another phrase, so `the number shipped was the quantity` stays a phrase. With no `says`, a singular integer reads `the quantity was 12`, and a plural or an enum reads `were set to` or `was set to`.
 
 An unknown run of words is an error. The message names the line and up to three closest phrases, nearest edit distance first:
 
@@ -112,7 +116,59 @@ A condition or a response is a boolean expression. This is the whole language. T
 
 `is`, `is not`, `is at most`, `is at least`, `is less than`, and `is greater than` are the same comparisons as `=`, `!=`, `<=`, `>=`, `<`, and `>`. When the left side has a phrase, reports print the English form.
 
-`shall the quantity` is rejected, because the response has to be a boolean. `shall the quantity is 1` is accepted. `+` and `-` expect integers.
+`shall the quantity` is rejected, because the response has to be a boolean. `shall the quantity is 1` still parses, and lint flags it. Bind `as "accept {value} units"` and write `shall accept 1 unit`. `+` and `-` expect integers.
+
+`examples/order-awkward.ears.md` is the shape to stop writing. The trigger is a bare verb, and the response is `shall the lane is fulfill`. Lint names both. It does not pick a lane.
+
+<!-- verify stdout 1
+build/ears-verify
+lint
+examples/order-awkward.ears.md
+-->
+```text
+spec: examples/order-awkward.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 4
+redundant: 0
+vacuous: 0
+unused: 0
+
+wording line 7
+"shall the ... is ..." is awkward. Write the response as a verb phrase, such as "bill at most 2 seats", and bind it with as.
+When start the subscription, the Checkout shall the lane is fulfill.
+
+wording line 7
+"When" needs a condition with "is", not a bare verb. "When the subscription is started" is the form.
+When start the subscription, the Checkout shall the lane is fulfill.
+
+wording line 8
+"shall the ... is ..." is awkward. Write the response as a verb phrase, such as "bill at most 2 seats", and bind it with as.
+When not start the subscription, the Checkout shall the lane is hold.
+
+wording line 8
+"When" needs a condition with "is", not a bare verb. "When the subscription is started" is the form.
+When not start the subscription, the Checkout shall the lane is hold.
+```
+
+`examples/order-clear.ears.md` is the same lane, written so the sentence can be read aloud. `as "route the order to the {value} lane"` binds the verb phrase, and `says` is what a later explanation uses. Lint is clean.
+
+<!-- verify stdout 0
+build/ears-verify
+lint
+examples/order-clear.ears.md
+-->
+```text
+spec: examples/order-clear.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+vacuous: 0
+unused: 0
+```
 
 ## EARS patterns
 
@@ -129,7 +185,7 @@ While <state>, when <trigger>, if <condition>, where <feature>, then the <system
 | If, then | An unwanted or exceptional case | `If payment fails, then the Order System shall reject the order.` |
 | While | A state that already holds | `While inventory is available, the Order System shall fulfill the order.` |
 | Where | A variant, such as a region | `Where the region is us, the Order System shall fulfill the order.` |
-| Combined | Any of the above, in the order above | `While inventory is available, when an order is submitted, if the quantity is at least 1, where the region is us, then the Warehouse shall the number shipped is the quantity.` |
+| Combined | Any of the above, in the order above | `While inventory is available, when an order is submitted, if the quantity is at least 1, where the region is us, then the Warehouse shall ship the quantity.` |
 
 `should`, `must`, and `will` are not `shall`. The parser stops and asks for `shall`.
 
@@ -137,7 +193,7 @@ Each requirement with at least one clause becomes one implication. The clauses a
 
 An unwanted event is written with `if` ... `then`. `when` is the normal trigger. Lint flags an unwanted event used in `when` without an `if`.
 
-The line has to be something a scenario can make true or false. Lint rejects these whole words as too vague to test: `fast`, `slow`, `large`, `small`, `appropriate`, `quickly`, `easy`, `robust`, `flexible`, `user-friendly`, `efficient`. It also rejects solution words: `database`, `api`, `algorithm`, `microservice`, `server`, `class`, `function`. Put the PM's phrasing in the description only after those words are gone, or say the testable fact in the requirement.
+The line has to be something a scenario can make true or false. Lint rejects these whole words as too vague to test: `fast`, `slow`, `large`, `small`, `appropriate`, `quickly`, `easy`, `robust`, `flexible`, `user-friendly`, `efficient`. It also rejects solution words: `database`, `api`, `algorithm`, `microservice`, `server`, `class`, `function`. Put the PM's phrasing in the description only after those words are gone, or say the testable fact in the requirement. Lint also flags an awkward response (`shall the lane is fulfill`), a `When` that is a bare verb (`When start the subscription`), and a `not` that sits in front of a phrase containing `is` (`not the customer is cancelling`). The finding kind is `form`. Show the sentence and the wording line, and ask the PM to use the verb phrase and `is not`.
 
 ## Workflow
 
@@ -438,10 +494,10 @@ examples/order-combined.ears.md
 (assert (and (>= quantity 1) (<= quantity 5)))
 ; input region: Region "The region the order ships to." phrase "the region"
 (declare-fun region () Region)
-; output shipped: Int 1..5 "How many units are shipped." phrase "the number shipped"
+; output shipped: Int 1..5 "How many units are shipped." phrase "the number shipped" as "ship {value}"
 (declare-fun shipped () Int)
 (assert (and (>= shipped 1) (<= shipped 5)))
-; R1.2_L10 line 10: While inventory is available, when an order is submitted, if the quantity is at least 1, where the region is us, then the Warehouse shall the number shipped is the quantity.
+; R1.2_L10 line 10: While inventory is available, when an order is submitted, if the quantity is at least 1, where the region is us, then the Warehouse shall ship the quantity.
 (assert (! (=> (and (and (and inventory_available order_submitted) (>= quantity 1)) (= region us)) (= shipped quantity)) :named R1.2_L10))
 ```
 
@@ -669,14 +725,14 @@ conflict {R4, R5}
 R4 and R5 cannot both hold.
 
 R4 line 7
-When an order is submitted, the Order System shall the quantity is at most 10.
+When an order is submitted, the Order System shall accept at most 10 units.
 
 R5 line 8
-When an order is submitted, the Order System shall the quantity is 12.
+When an order is submitted, the Order System shall accept 12 units.
 
 They clash when an order was submitted.
-R4 requires that the quantity was at most 10.
-R5 requires that the quantity was 12.
+R4 requires that at most 10 units were accepted.
+R5 requires that 12 units were accepted.
 
 Example scenario:
 {
@@ -711,14 +767,14 @@ conflict {R6, R7}
 R6 and R7 cannot both hold.
 
 R6 line 6
-The Order System shall the status is shipped.
+The Order System shall mark the order shipped.
 
 R7 line 7
-The Order System shall the status is cancelled.
+The Order System shall mark the order cancelled.
 
 They clash in every situation.
-R6 requires that the status was shipped.
-R7 requires that the status was cancelled.
+R6 requires that the order was shipped.
+R7 requires that the order was cancelled.
 
 Example scenario:
 {
@@ -797,7 +853,7 @@ rejected:
 This scenario violates a requirement.
 
 R3 line 9
-When not an order is submitted, the Order System shall not fulfill the order.
+When an order is not submitted, the Order System shall not fulfill the order.
 An order was not submitted, but the order was fulfilled.
 ```
 
@@ -886,7 +942,7 @@ R1 line 7
 When an order is submitted, the Order System shall accept the order.
 
 R2 line 8
-When accept the order, the Order System shall ship the order.
+When the order is accepted, the Order System shall ship the order.
 
 R3 line 9
 When an order is submitted, the Order System shall not ship the order.
@@ -952,7 +1008,7 @@ unused: 0
 
 redundant R1 line 7
 R1 adds nothing. Whenever the other requirements hold, R1 holds too.
-When the cart is open and not the cart is open, the Checkout shall accept the order.
+When the cart is open and the cart is not open, the Checkout shall accept the order.
 Suggested fix: remove R1, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 
 redundant R2 line 8
@@ -962,7 +1018,7 @@ Suggested fix: remove R2, or ask whether it was meant to say something the other
 
 vacuous R1 line 7
 R1 can never trigger. Its condition is impossible for every allowed value.
-When the cart is open and not the cart is open, the Checkout shall accept the order.
+When the cart is open and the cart is not open, the Checkout shall accept the order.
 Suggested fix: rewrite the condition in R1 so a real situation can make it true, or remove the requirement. Do not invent a response.
 
 vacuous R2 line 8
@@ -999,7 +1055,7 @@ region ("the region") is an input and no requirement mentions it.
 Suggested fix: use region in a requirement, or remove it from the schema.
 
 unused receipt_sent
-Nothing sets receipt_sent ("send a receipt"). Requirements mention it, but no response says what it shall be.
+Nothing sets receipt_sent ("a receipt is sent"). Requirements mention it, but no response says what it shall be.
 Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value.
 
 unused Lane.refund
@@ -1039,7 +1095,7 @@ examples/order-unused.ears.md
     {
       "name": "receipt_sent",
       "kind": "output",
-      "text": "Nothing sets receipt_sent (\"send a receipt\"). Requirements mention it, but no response says what it shall be.",
+      "text": "Nothing sets receipt_sent (\"a receipt is sent\"). Requirements mention it, but no response says what it shall be.",
       "fix": "Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value."
     },
     {

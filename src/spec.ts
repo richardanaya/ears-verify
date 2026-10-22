@@ -4,7 +4,7 @@
  * Every Int has an inclusive range so the solver's domain is finite.
  */
 
-import { replaceWord } from "./text.ts";
+import { formatInt, replaceWord } from "./text.ts";
 
 export type Role = "event" | "state" | "input" | "output";
 
@@ -30,6 +30,12 @@ export interface SymbolDecl {
   outcomeYes: string;
   /** How a report states this Bool when it is false. Empty means it is derived. */
   outcomeNo: string;
+  /** Verb words that also name this Bool, such as "start the subscription". */
+  action: string;
+  /** Report template for an Int or enum. `{value}` stands for the number or variant. */
+  says: string;
+  /** Requirement pattern for an Int or enum. `{value}` and `{op}` are holes. */
+  asText: string;
   unwanted: boolean;
   line: number;
   source: string;
@@ -129,12 +135,41 @@ export function displayCode(spec: Spec, sym: SymbolDecl, code: number): string {
  * A Bool uses its outcome when one is declared. Otherwise a phrase that
  * contains "is" is stated with "was" or "was not", and any other phrase
  * stays as written, with "not" in front when the Bool is false.
- * An integer or enum phrase is stated with "was".
+ * An integer or enum uses `says` when that template is declared.
+ * Otherwise a singular integer reads "the quantity was 12", and a plural
+ * or an enum reads "were set to" or "was set to".
  */
 export function describeAssignment(sym: SymbolDecl, shown: string, isTrue: boolean): string {
   if (sym.sort.kind === "bool") return reportBool(sym, isTrue);
-  if (sym.phrase.length === 0) return sym.name + " is " + shown;
-  return replaceWord(sym.phrase + " is " + shown, "is", "was");
+  return speakBound(sym, shown, "eq", false);
+}
+
+/**
+ * How a report states an integer or enum comparison.
+ * `linked` means the right side is another phrase, so a numeric `says`
+ * template is left unused. `rel` is eq, neq, lt, le, gt, or ge.
+ */
+export function speakBound(sym: SymbolDecl, shown: string, rel: string, linked: boolean): string {
+  if (!linked && sym.says.length > 0) return speakSays(sym, shown, rel);
+  const name = sym.phrase.length > 0 ? sym.phrase : sym.name;
+  const be = copulaOf(name);
+  if (linked) return name + " " + be + " " + linkedTail(rel, shown);
+  if (rel === "eq") {
+    if (sym.sort.kind === "enum" || pluralNoun(name)) return name + " " + be + " set to " + shown;
+    return name + " " + be + " " + shown;
+  }
+  if (rel === "neq") {
+    if (sym.sort.kind === "enum" || pluralNoun(name)) return name + " " + be + " not set to " + shown;
+    return name + " " + be + " not " + shown;
+  }
+  return name + " " + be + " " + relationTail(rel, shown);
+}
+
+/** The number or variant on the right of a comparison, or empty when it is not a literal. */
+export function literalShown(term: Term): string {
+  if (term.kind === "int") return formatInt(term.value);
+  if (term.kind === "enum") return term.variant;
+  return "";
 }
 
 /** How a report states a Bool. */
@@ -151,13 +186,89 @@ export function reportBool(sym: SymbolDecl, isTrue: boolean): string {
   return "not " + sym.phrase;
 }
 
-/** Insert "not" after the first "was" or "is", or prefix "not" when neither is there. */
+/** Insert "not" after the first "was", "were", or "is", or prefix "not" when none is there. */
 export function negateReport(text: string): string {
   const afterWas = insertNotAfter(text, "was");
   if (afterWas.length > 0) return afterWas;
+  const afterWere = insertNotAfter(text, "were");
+  if (afterWere.length > 0) return afterWere;
   const afterIs = insertNotAfter(text, "is");
   if (afterIs.length > 0) return afterIs;
   return "not " + text;
+}
+
+function speakSays(sym: SymbolDecl, shown: string, rel: string): string {
+  const filled = fillTemplate(sym.says, shown, sym.name);
+  if (rel === "eq") return filled;
+  if (rel === "neq") return negateReport(filled);
+  if (rel === "le") return "at most " + filled;
+  if (rel === "ge") return "at least " + filled;
+  if (rel === "lt") return "less than " + filled;
+  if (rel === "gt") return "greater than " + filled;
+  return filled;
+}
+
+function fillTemplate(template: string, shown: string, symbolName: string): string {
+  let text = replaceToken(template, "{value}", shown);
+  text = replaceToken(text, "{name}", shown);
+  text = replaceToken(text, "{" + symbolName + "}", shown);
+  return text;
+}
+
+function replaceToken(text: string, token: string, shown: string): string {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    if (text.slice(i, i + token.length) === token) {
+      out += shown;
+      i += token.length;
+      continue;
+    }
+    out += text.slice(i, i + 1);
+    i++;
+  }
+  return out;
+}
+
+function linkedTail(rel: string, shown: string): string {
+  if (rel === "neq") return "not " + shown;
+  return relationTail(rel, shown);
+}
+
+function relationTail(rel: string, shown: string): string {
+  if (rel === "le") return "at most " + shown;
+  if (rel === "ge") return "at least " + shown;
+  if (rel === "lt") return "less than " + shown;
+  if (rel === "gt") return "greater than " + shown;
+  return shown;
+}
+
+function copulaOf(phrase: string): string {
+  if (pluralNoun(phrase)) return "were";
+  return "was";
+}
+
+function pluralNoun(phrase: string): boolean {
+  const last = lowerLast(phrase);
+  if (last.length === 0) return false;
+  if (last === "status" || last === "is" || last === "bus") return false;
+  if (last.length >= 2 && last.slice(last.length - 2) === "ss") return false;
+  if (last.length >= 4 && last.slice(last.length - 4) === "ness") return false;
+  return last.slice(last.length - 1) === "s";
+}
+
+function lowerLast(phrase: string): string {
+  let start = 0;
+  for (let i = 0; i < phrase.length; i++) {
+    if (phrase.charCodeAt(i) === 32) start = i + 1;
+  }
+  let out = "";
+  for (let i = start; i < phrase.length; i++) {
+    const code = phrase.charCodeAt(i);
+    if (code >= 65 && code <= 90) out += String.fromCharCode(code + 32);
+    else out += phrase.slice(i, i + 1);
+  }
+  return out;
 }
 
 function insertNotAfter(text: string, word: string): string {

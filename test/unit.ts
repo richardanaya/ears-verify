@@ -558,7 +558,7 @@ if (quantityLint.kind === "report") {
   check("quantity not every", item.everySituation === false);
   check(
     "quantity requires",
-    item.requires[0].value === "that the quantity was at most 10" && item.requires[1].value === "that the quantity was 12",
+    item.requires[0].value === "that at most 10 units were accepted" && item.requires[1].value === "that 12 units were accepted",
   );
   check("quantity example", item.example.length === 2 && item.example[1].name === "quantity" && item.example[1].value === "0");
   check("quantity keeps", item.keeps.length === 1 && item.keeps[0] === "R4" && item.breaks === "R5");
@@ -572,7 +572,7 @@ if (statusLint.kind === "report") {
   check("status every", item.everySituation === true);
   check(
     "status requires",
-    item.requires[0].value === "that the status was shipped" && item.requires[1].value === "that the status was cancelled",
+    item.requires[0].value === "that the order was shipped" && item.requires[1].value === "that the order was cancelled",
   );
   check("status example", item.example.length === 1 && item.example[0].value === "shipped");
 }
@@ -885,6 +885,103 @@ if (unusedLint.kind === "report") {
   check("unused variant", unusedLint.report.unused[3].name === "Lane.refund" && unusedLint.report.unused[3].kind === "variant");
   check("unused fix", unusedLint.report.unused[3].fix.indexOf("Suggested fix: use refund") === 0);
 }
+
+const embedded = mustSpec(
+  'state cancelling: Bool "Cancels." phrase "the customer is cancelling"\noutput done: Bool "Done."\n\nR1 When the customer is not cancelling, the Box shall done.\nR2 When not the customer is cancelling, the Box shall done.\n',
+);
+check(
+  "embedded is not",
+  embedded.requirements[0].antecedent !== null &&
+    embedded.requirements[0].antecedent.kind === "not" &&
+    embedded.requirements[1].antecedent !== null &&
+    embedded.requirements[1].antecedent.kind === "not" &&
+    formatTerm(embedded.requirements[0].antecedent) === formatTerm(embedded.requirements[1].antecedent),
+);
+const seated = mustSpec(
+  'output billed_seats: Int 1..3 "Seats." phrase "the billed seats" as "bill {op} {value} seats" says "{value} seats were billed"\n\nR1 The Box shall bill 1 seat.\nR2 The Box shall bill at most 2 seats.\nR3 The Box shall bill 3 seats.\n',
+);
+check("seat singular", formatTerm(seated.requirements[0].consequent) === "the billed seats is 1");
+check("seats at most", formatTerm(seated.requirements[1].consequent) === "the billed seats is at most 2");
+check("seats equal", seated.requirements[2].consequent.kind === "eq");
+const seatClash = mustSpec(
+  'output billed_seats: Int 1..3 "Seats." phrase "the billed seats" as "bill {op} {value} seats" says "{value} seats were billed"\n\nR1 The Box shall bill at most 2 seats.\nR2 The Box shall bill 3 seats.\n',
+);
+const seatedLint = lintSpec(seatClash);
+check(
+  "says seats",
+  seatedLint.kind === "report" &&
+    seatedLint.report.conflicts.length === 1 &&
+    seatedLint.report.conflicts[0].requires[0].value === "that at most 2 seats were billed" &&
+    seatedLint.report.conflicts[0].requires[1].value === "that 3 seats were billed",
+);
+const routed = mustSpec(
+  'enum Lane { hold, fulfill }\noutput lane: Lane "Lane." phrase "the lane" as "route the order to the {value} lane" says "the order was routed to the {value} lane"\n\nR1 The Box shall route the order to the fulfill lane.\nR2 The Box shall the lane is hold.\n',
+);
+check("route phrase", formatTerm(routed.requirements[0].consequent) === "the lane is fulfill");
+check("old lane still parses", formatTerm(routed.requirements[1].consequent) === "the lane is hold");
+const routedLint = lintSpec(routed);
+check(
+  "says lane",
+  routedLint.kind === "report" &&
+    routedLint.report.conflicts.length === 1 &&
+    routedLint.report.conflicts[0].requires[0].value === "that the order was routed to the fulfill lane",
+);
+const plainPlural = mustSpec(
+  'output billed_seats: Int 1..3 "Seats." phrase "the billed seats"\n\nR1 The Box shall the billed seats is 3.\nR2 The Box shall the billed seats is at most 2.\n',
+);
+const plainLint = lintSpec(plainPlural);
+check(
+  "plural default",
+  plainLint.kind === "report" &&
+    plainLint.report.conflicts.length === 1 &&
+    plainLint.report.conflicts[0].requires[0].value === "that the billed seats were set to 3" &&
+    plainLint.report.conflicts[0].requires[1].value === "that the billed seats were at most 2",
+);
+const linked = mustSpec(
+  'input quantity: Int 0..5 "Count." phrase "the quantity"\noutput shipped: Int 0..6 "Sent." phrase "the number shipped" says "{value} units were shipped" as "ship {value}"\n\nR1 The Box shall ship the quantity.\n',
+);
+check("linked ignores says", formatTerm(linked.requirements[0].consequent) === "the number shipped is the quantity");
+const formLint = lintSpec(mustSpec(readFileSync("examples/order-awkward.ears.md", "utf8")));
+check("awkward ran", formLint.kind === "report");
+if (formLint.kind === "report") {
+  check("awkward conflicts", formLint.report.conflicts.length === 0 && formLint.report.gaps.length === 0);
+  let shalls = 0;
+  let whens = 0;
+  let nots = 0;
+  for (let i = 0; i < formLint.report.wording.length; i++) {
+    const item = formLint.report.wording[i];
+    if (item.kind === "form" && item.word === "shall") shalls++;
+    if (item.kind === "form" && item.word === "when") whens++;
+    if (item.kind === "form" && item.word === "not") nots++;
+  }
+  check("awkward forms", shalls === 2 && whens === 2 && nots === 0 && formLint.report.wording.length === 4);
+}
+const clearLint = lintSpec(mustSpec(readFileSync("examples/order-clear.ears.md", "utf8")));
+check(
+  "clear form",
+  clearLint.kind === "report" &&
+    clearLint.report.wording.length === 0 &&
+    clearLint.report.conflicts.length === 0 &&
+    clearLint.report.gaps.length === 0 &&
+    clearLint.report.unused.length === 0,
+);
+check("action on int", parseMessage('output n: Int 0..1 "N." action "count it"\n') === "1: action is only for Bool");
+check("says on bool", parseMessage('output done: Bool "D." says "done {value}"\n') === "1: says is only for Int or enum");
+check("as on bool", parseMessage('output done: Bool "D." as "do {value}"\n') === "1: as is only for Int or enum");
+check("says needs value", parseMessage('output n: Int 0..1 "N." says "the count"\n') === "1: says needs {value}");
+check("as needs value", parseMessage('output n: Int 0..1 "N." as "count the items"\n') === "1: as needs {value}");
+check("reserved name as", parseMessage('output as: Int 0..1 "N."\n') === '1: "as" is a reserved word');
+check("reserved name says", parseMessage('event says: Bool "S."\n') === '1: "says" is a reserved word');
+check("reserved name action", parseMessage('event action: Bool "A."\n') === '1: "action" is a reserved word');
+const acted = mustSpec(
+  'output started: Bool "Starts." phrase "the subscription is started" action "start the subscription"\n\nR1 When start the subscription, the Box shall start the subscription.\n',
+);
+check(
+  "action phrase",
+  acted.requirements[0].antecedent !== null &&
+    acted.requirements[0].antecedent.kind === "sym" &&
+    acted.requirements[0].consequent.kind === "sym",
+);
 
 const soundnessSpecs = runSoundness();
 check("soundness specs", soundnessSpecs === 1010);

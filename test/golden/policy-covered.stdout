@@ -15,5 +15,5 @@ rejected:
 This scenario violates a requirement.
 
 R3 line 9
-When not an order is submitted, the Order System shall not fulfill the order.
+When an order is not submitted, the Order System shall not fulfill the order.
 An order was not submitted, but the order was fulfilled.

@@ -11,14 +11,14 @@ conflict {R4, R5}
 R4 and R5 cannot both hold.
 
 R4 line 7
-When an order is submitted, the Order System shall the quantity is at most 10.
+When an order is submitted, the Order System shall accept at most 10 units.
 
 R5 line 8
-When an order is submitted, the Order System shall the quantity is 12.
+When an order is submitted, the Order System shall accept 12 units.
 
 They clash when an order was submitted.
-R4 requires that the quantity was at most 10.
-R5 requires that the quantity was 12.
+R4 requires that at most 10 units were accepted.
+R5 requires that 12 units were accepted.
 
 Example scenario:
 {

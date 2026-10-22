@@ -6,7 +6,7 @@
  * situation, an example, and a fix that does not pick a winner.
  */
 
-import { describeAssignment, displayCode, isDriver, reportBool, requirementMentions, termMentions, type Requirement, type Spec, type SymbolDecl, type Term } from "./spec.ts";
+import { describeAssignment, displayCode, isDriver, literalShown, reportBool, requirementMentions, speakBound, termMentions, type Requirement, type Spec, type SymbolDecl, type Term } from "./spec.ts";
 import { satisfiable } from "./decide.ts";
 import { bestGap, conflictingSets, modelFor, redundantFlags, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
 import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
@@ -452,7 +452,28 @@ function voiceObligation(spec: Spec, term: Term): string {
       if (sym.sort.kind === "bool" && (sym.phrase.length > 0 || sym.outcomeYes.length > 0)) return reportBool(sym, false);
     }
   }
+  const spoken = voiceBound(spec, term);
+  if (spoken.length > 0) return spoken;
   return pastVoice(formatTerm(term));
+}
+
+function voiceBound(spec: Spec, term: Term): string {
+  if (
+    term.kind !== "eq" &&
+    term.kind !== "neq" &&
+    term.kind !== "lt" &&
+    term.kind !== "le" &&
+    term.kind !== "gt" &&
+    term.kind !== "ge"
+  ) {
+    return "";
+  }
+  if (term.left.kind !== "sym") return "";
+  const sym = spec.symbols[term.left.index];
+  if (sym.sort.kind === "bool") return "";
+  const shown = literalShown(term.right);
+  if (shown.length > 0) return speakBound(sym, shown, term.kind, false);
+  return speakBound(sym, formatTerm(term.right), term.kind, true);
 }
 
 function explainGap(spec: Spec, outputIndex: number, situation: Binding): Gap {
@@ -501,8 +522,194 @@ function findWording(spec: Spec): Wording[] {
   }
   for (let i = 0; i < spec.requirements.length; i++) {
     collectWords(spec.requirements[i].sentence, spec.requirements[i].line, spec.requirements[i].sentence, found);
+    collectForm(spec, spec.requirements[i].sentence, spec.requirements[i].line, found);
   }
   return found;
+}
+
+function collectForm(spec: Spec, text: string, line: number, found: Wording[]): void {
+  const lower = lowerAscii(text);
+  if (hasAwkwardShall(lower)) {
+    found.push({
+      line: line,
+      word: "shall",
+      kind: "form",
+      context: text,
+      text:
+        '"shall the ... is ..." is awkward. Write the response as a verb phrase, such as "bill at most 2 seats", and bind it with as.',
+    });
+  }
+  if (hasBareWhen(spec, lower)) {
+    found.push({
+      line: line,
+      word: "when",
+      kind: "form",
+      context: text,
+      text: '"When" needs a condition with "is", not a bare verb. "When the subscription is started" is the form.',
+    });
+  }
+  if (hasMisplacedNot(lower)) {
+    found.push({
+      line: line,
+      word: "not",
+      kind: "form",
+      context: text,
+      text: 'Put "not" after "is": "the customer is not cancelling", not "not the customer is cancelling".',
+    });
+  }
+}
+
+function hasAwkwardShall(lower: string): boolean {
+  const at = wordIndex(lower, "shall", 0);
+  if (at < 0) return false;
+  if (wordAt(lower, at + 5) !== "the") return false;
+  return wordIndex(lower, "is", at + 5) >= 0;
+}
+
+function hasBareWhen(spec: Spec, lower: string): boolean {
+  let from = 0;
+  while (from < lower.length) {
+    const at = wordIndex(lower, "when", from);
+    if (at < 0) return false;
+    const stop = clauseEnd(lower, at + 4);
+    if (clauseHasBareVerb(spec, lower.slice(at + 4, stop))) return true;
+    from = stop + 1;
+  }
+  return false;
+}
+
+function clauseHasBareVerb(spec: Spec, clause: string): boolean {
+  const parts = splitConjuncts(clause);
+  for (let i = 0; i < parts.length; i++) {
+    let part = trimSpaces(parts[i]);
+    if (startsWithWord(part, "not")) {
+      const notAt = wordIndex(part, "not", 0);
+      part = trimSpaces(part.slice(notAt + 3));
+    }
+    if (wordIndex(part, "is", 0) >= 0) continue;
+    if (matchesResponsePhrase(spec, part)) return true;
+  }
+  return false;
+}
+
+function matchesResponsePhrase(spec: Spec, text: string): boolean {
+  const target = trimSpaces(text);
+  if (target.length === 0) return false;
+  for (let i = 0; i < spec.symbols.length; i++) {
+    const sym = spec.symbols[i];
+    if (sym.action.length > 0 && lowerAscii(sym.action) === target) return true;
+    if (sym.role === "output" && sym.phrase.length > 0 && wordIndex(lowerAscii(sym.phrase), "is", 0) < 0 && lowerAscii(sym.phrase) === target) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function splitConjuncts(clause: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  let i = 0;
+  while (i < clause.length) {
+    const atAnd = wordIndex(clause, "and", i);
+    const atOr = wordIndex(clause, "or", i);
+    let at = -1;
+    if (atAnd >= 0 && (atOr < 0 || atAnd <= atOr)) at = atAnd;
+    else at = atOr;
+    if (at < 0) break;
+    parts.push(clause.slice(start, at));
+    let j = at;
+    while (j < clause.length && isWordChar(clause.charCodeAt(j))) j++;
+    start = j;
+    i = j;
+  }
+  parts.push(clause.slice(start));
+  return parts;
+}
+
+function startsWithWord(text: string, word: string): boolean {
+  const at = wordIndex(text, word, 0);
+  if (at < 0) return false;
+  for (let i = 0; i < at; i++) {
+    if (text.charCodeAt(i) !== 32) return false;
+  }
+  return true;
+}
+
+function trimSpaces(text: string): string {
+  let start = 0;
+  let end = text.length;
+  while (start < end && text.charCodeAt(start) === 32) start++;
+  while (end > start && text.charCodeAt(end - 1) === 32) end--;
+  return text.slice(start, end);
+}
+
+function hasMisplacedNot(lower: string): boolean {
+  let from = 0;
+  while (from < lower.length) {
+    const at = wordIndex(lower, "not", from);
+    if (at < 0) return false;
+    if (previousWord(lower, at) !== "is") {
+      const stop = notSpanEnd(lower, at + 3);
+      const span = lower.slice(at + 3, stop);
+      const isAt = wordIndex(span, "is", 0);
+      if (isAt >= 0 && wordAt(span, isAt + 2) !== "not") return true;
+    }
+    from = at + 3;
+  }
+  return false;
+}
+
+function clauseEnd(text: string, from: number): number {
+  for (let i = from; i < text.length; i++) {
+    if (text.charCodeAt(i) === 44) return i;
+  }
+  return text.length;
+}
+
+function notSpanEnd(text: string, from: number): number {
+  let i = from;
+  while (i < text.length) {
+    if (text.charCodeAt(i) === 44) return i;
+    if (isWordChar(text.charCodeAt(i))) {
+      const start = i;
+      while (i < text.length && isWordChar(text.charCodeAt(i))) i++;
+      const word = text.slice(start, i);
+      if (word === "and" || word === "or") return start;
+      continue;
+    }
+    i++;
+  }
+  return text.length;
+}
+
+function wordIndex(text: string, word: string, from: number): number {
+  let i = from;
+  while (i < text.length) {
+    while (i < text.length && !isWordChar(text.charCodeAt(i))) i++;
+    if (i >= text.length) return -1;
+    const start = i;
+    while (i < text.length && isWordChar(text.charCodeAt(i))) i++;
+    if (text.slice(start, i) === word) return start;
+  }
+  return -1;
+}
+
+function wordAt(text: string, from: number): string {
+  let i = from;
+  while (i < text.length && !isWordChar(text.charCodeAt(i))) i++;
+  if (i >= text.length) return "";
+  const start = i;
+  while (i < text.length && isWordChar(text.charCodeAt(i))) i++;
+  return text.slice(start, i);
+}
+
+function previousWord(text: string, index: number): string {
+  let i = index - 1;
+  while (i >= 0 && !isWordChar(text.charCodeAt(i))) i--;
+  if (i < 0) return "";
+  const end = i + 1;
+  while (i >= 0 && isWordChar(text.charCodeAt(i))) i--;
+  return text.slice(i + 1, end);
 }
 
 function collectWords(text: string, line: number, context: string, found: Wording[]): void {
