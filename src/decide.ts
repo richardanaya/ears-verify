@@ -10,7 +10,7 @@
  * finitely many points where a comparison changes, not by listing the domain.
  */
 
-import { domainSize, findEnum, isDriver, type Requirement, type Spec, type Term } from "./spec.ts";
+import { domainSize, findEnum, isDriver, requirementMentions, termMentions, type Requirement, type Spec, type Term } from "./spec.ts";
 import { Binding, evalAssertion, evalBool, T_FALSE, T_TRUE } from "./term.ts";
 
 const TRUE_ATOM = 0;
@@ -125,6 +125,19 @@ class Engine {
   isBool: boolean[];
   drivers: number[];
   atoms: AtomInfo[];
+  /** Indexes of linear-comparison atoms. */
+  theoryAtoms: number[];
+  /** Parallel to atoms. Theory-atom slot, or -1. */
+  atomSlot: number[];
+  /** Parallel to theoryAtoms. Index in thLive, or -1 when the atom is assigned. */
+  thPos: number[];
+  /** Unassigned theory-atom slots. */
+  thLive: number[];
+  /** Symbol index for a one-variable comparison, or -1 when the atom is not unary. */
+  thVar: number[];
+  thCoeff: number[];
+  thOp: number[];
+  thConst: number[];
   boolAtom: number[];
   clauses: number[][];
   holds: Requirement[];
@@ -153,6 +166,8 @@ class Engine {
   propH: number;
   propN: number;
   scratch: Binding;
+  /** Driver symbols that searchBad may branch on. Others stay at the low end. */
+  activeDriver: boolean[];
 
   constructor(spec: Spec) {
     this.spec = spec;
@@ -162,6 +177,14 @@ class Engine {
     this.isBool = [];
     this.drivers = [];
     this.atoms = [];
+    this.theoryAtoms = [];
+    this.atomSlot = [];
+    this.thPos = [];
+    this.thLive = [];
+    this.thVar = [];
+    this.thCoeff = [];
+    this.thOp = [];
+    this.thConst = [];
     this.boolAtom = [];
     this.clauses = [];
     this.holds = [];
@@ -190,9 +213,10 @@ class Engine {
     this.propH = 0;
     this.propN = 0;
     this.scratch = new Binding(this.nsym);
+    this.activeDriver = [];
     const truth = new AtomInfo();
     truth.kind = 3;
-    this.atoms.push(truth);
+    this.pushAtom(truth);
     for (let i = 0; i < this.nsym; i++) {
       const sym = spec.symbols[i];
       if (sym.sort.kind === "bool") {
@@ -203,7 +227,7 @@ class Engine {
         info.kind = 0;
         info.sym = i;
         this.boolAtom.push(this.atoms.length);
-        this.atoms.push(info);
+        this.pushAtom(info);
       } else if (sym.sort.kind === "int") {
         this.baseLo.push(sym.sort.min);
         this.baseHi.push(sym.sort.max);
@@ -218,6 +242,20 @@ class Engine {
         this.boolAtom.push(-1);
       }
       if (isDriver(sym)) this.drivers.push(i);
+      this.activeDriver.push(true);
+    }
+  }
+
+  limitDrivers(active: number[]): void {
+    for (let i = 0; i < this.drivers.length; i++) this.activeDriver[this.drivers[i]] = false;
+    for (let i = 0; i < active.length; i++) this.activeDriver[active[i]] = true;
+  }
+
+  pinInactive(): void {
+    for (let i = 0; i < this.drivers.length; i++) {
+      const si = this.drivers[i];
+      if (this.activeDriver[si]) continue;
+      this.force(si, this.baseLo[si]);
     }
   }
 
@@ -334,13 +372,16 @@ class Engine {
     this.val[TRUE_ATOM] = 1;
     this.assigned = 1;
     this.ticks = 1;
+    this.reviveAllTheory();
   }
 
   setVal(atom: number, truth: number): void {
     if (this.val[atom] === truth) return;
-    this.remember(0, atom, this.val[atom]);
+    const prev = this.val[atom];
+    this.remember(0, atom, prev);
     this.val[atom] = truth;
     this.ticks++;
+    this.retargetTheory(atom, prev, truth);
   }
 
   setLo(si: number, value: number): void {
@@ -419,6 +460,33 @@ class Engine {
     return false;
   }
 
+  anyBad(pos: number): boolean {
+    if (!this.propagate()) return true;
+    if (pos >= this.drivers.length) return !this.existsOut();
+    const si = this.drivers[pos];
+    if (!this.activeDriver[si]) return this.anyBad(pos + 1);
+    let lo = this.lo[si];
+    let hi = this.hi[si];
+    if (lo < this.baseLo[si]) lo = this.baseLo[si];
+    if (hi > this.baseHi[si]) hi = this.baseHi[si];
+    if (lo > hi) return true;
+    for (let v = lo; v <= hi; v++) {
+      if (this.pinAny(pos, si, v)) return true;
+    }
+    return false;
+  }
+
+  pinAny(pos: number, si: number, value: number): boolean {
+    const snap = this.snap();
+    if (!this.force(si, value) || !this.propagate()) {
+      this.restore(snap);
+      return true;
+    }
+    const bad = this.anyBad(pos + 1);
+    this.restore(snap);
+    return bad;
+  }
+
   searchBad(pos: number): boolean {
     if (!this.propagate()) {
       this.fillMins(pos);
@@ -426,6 +494,7 @@ class Engine {
     }
     if (pos >= this.drivers.length) return !this.existsOut();
     const si = this.drivers[pos];
+    if (!this.activeDriver[si]) return this.searchBad(pos + 1);
     const domLo = this.baseLo[si];
     const domHi = this.baseHi[si];
     let lo = this.lo[si];
@@ -441,7 +510,7 @@ class Engine {
       return true;
     }
     const span = hi - lo;
-    if (span <= 64 || this.isBool[si]) {
+    if (this.isBool[si] || span <= 0) {
       for (let v = lo; v <= hi; v++) {
         if (this.pinBad(pos, si, v)) return true;
       }
@@ -452,6 +521,16 @@ class Engine {
       return false;
     }
     if (this.uniform(si)) return this.badIntervals(pos, si, lo, hi, domHi);
+    if (span <= 64) {
+      for (let v = lo; v <= hi; v++) {
+        if (this.pinBad(pos, si, v)) return true;
+      }
+      if (hi < domHi) {
+        this.choiceFill(pos, si, hi + 1);
+        return true;
+      }
+      return false;
+    }
     if (this.solid(si)) return this.badSolid(pos, si, lo, hi, domHi);
     return this.badSplit(pos, si, lo, hi, domHi);
   }
@@ -789,14 +868,51 @@ class Engine {
   }
 
   imply(): boolean {
-    for (let a = 0; a < this.atoms.length; a++) {
-      if (this.atoms[a].kind !== 1 || this.val[a] >= 0) continue;
-      const forced = this.forced(this.atoms[a]);
-      if (forced === 1) {
-        if (!this.assignLit(this.pos(a))) return false;
-      } else if (forced === 0) {
-        if (!this.assignLit(this.neg(this.pos(a)))) return false;
+    const live = this.thLive;
+    let i = 0;
+    while (i < live.length) {
+      const slot = live[i];
+      const a = this.theoryAtoms[slot];
+      if (this.val[a] >= 0) {
+        this.retireTheory(slot);
+        continue;
       }
+      const si = this.thVar[slot];
+      let forced = -1;
+      if (si >= 0) {
+        const coeff = this.thCoeff[slot];
+        const constant = this.thConst[slot];
+        const op = this.thOp[slot];
+        const boundLo = this.lo[si];
+        const boundHi = this.hi[si];
+        let low = constant;
+        let high = constant;
+        if (coeff > 0) {
+          low += coeff * boundLo;
+          high += coeff * boundHi;
+        } else {
+          low += coeff * boundHi;
+          high += coeff * boundLo;
+        }
+        if (op === OP_LE) {
+          if (high <= 0) forced = 1;
+          else if (low > 0) forced = 0;
+        } else if (op === OP_GE) {
+          if (low >= 0) forced = 1;
+          else if (high < 0) forced = 0;
+        } else if (op === OP_EQ) {
+          if (low === 0 && high === 0) forced = 1;
+          else if (low > 0 || high < 0) forced = 0;
+        } else if (low === 0 && high === 0) forced = 0;
+        else if (low > 0 || high < 0) forced = 1;
+      } else forced = this.forced(this.atoms[a]);
+      if (forced < 0) {
+        i++;
+        continue;
+      }
+      const lit = forced === 1 ? this.pos(a) : this.neg(this.pos(a));
+      if (!this.assignLit(lit)) return false;
+      if (i < live.length && live[i] === slot) i++;
     }
     for (let i = 0; i < this.nsym; i++) {
       if (!this.isBool[i] || this.boolAtom[i] < 0) continue;
@@ -807,6 +923,39 @@ class Engine {
       }
     }
     return true;
+  }
+
+  retargetTheory(atom: number, prev: number, next: number): void {
+    if (atom < 0 || atom >= this.atomSlot.length) return;
+    const slot = this.atomSlot[atom];
+    if (slot < 0) return;
+    if (prev < 0 && next >= 0) this.retireTheory(slot);
+    else if (prev >= 0 && next < 0) this.reviveTheory(slot);
+  }
+
+  retireTheory(slot: number): void {
+    const pos = this.thPos[slot];
+    if (pos < 0) return;
+    const last = this.thLive.length - 1;
+    const moved = this.thLive[last];
+    this.thLive[pos] = moved;
+    this.thPos[moved] = pos;
+    this.thLive.pop();
+    this.thPos[slot] = -1;
+  }
+
+  reviveTheory(slot: number): void {
+    if (this.thPos[slot] >= 0) return;
+    this.thPos[slot] = this.thLive.length;
+    this.thLive.push(slot);
+  }
+
+  reviveAllTheory(): void {
+    while (this.thLive.length > 0) this.thLive.pop();
+    for (let slot = 0; slot < this.theoryAtoms.length; slot++) {
+      this.thPos[slot] = this.thLive.length;
+      this.thLive.push(slot);
+    }
   }
 
   forced(info: AtomInfo): number {
@@ -1123,8 +1272,7 @@ class Engine {
     info.coeffs = expr.coeffs;
     info.constant = expr.constant;
     info.op = op;
-    const id = this.atoms.length;
-    this.atoms.push(info);
+    const id = this.pushAtom(info);
     this.val.push(-1);
     return this.pos(id);
   }
@@ -1202,10 +1350,30 @@ class Engine {
   fresh(): number {
     const info = new AtomInfo();
     info.kind = 2;
-    const id = this.atoms.length;
-    this.atoms.push(info);
+    const id = this.pushAtom(info);
     this.val.push(-1);
     return this.pos(id);
+  }
+
+  pushAtom(info: AtomInfo): number {
+    const id = this.atoms.length;
+    this.atoms.push(info);
+    if (info.kind === 1) {
+      const slot = this.theoryAtoms.length;
+      this.theoryAtoms.push(id);
+      this.atomSlot.push(slot);
+      this.thPos.push(-1);
+      if (info.vars.length === 1) {
+        this.thVar.push(info.vars[0]);
+        this.thCoeff.push(info.coeffs[0]);
+      } else {
+        this.thVar.push(-1);
+        this.thCoeff.push(0);
+      }
+      this.thOp.push(info.op);
+      this.thConst.push(info.constant);
+    } else this.atomSlot.push(-1);
+    return id;
   }
 
   pos(atom: number): number {
@@ -1255,7 +1423,10 @@ class Engine {
       const kind = this.trailK[this.trailN];
       const index = this.trailI[this.trailN];
       const prev = this.trailP[this.trailN];
-      if (kind === 0) this.val[index] = prev;
+      if (kind === 0) {
+        this.retargetTheory(index, this.val[index], prev);
+        this.val[index] = prev;
+      }
       else if (kind === 1) this.lo[index] = prev;
       else this.hi[index] = prev;
     }
@@ -1276,10 +1447,15 @@ class Engine {
 export class TheoryQuery {
   engine: Engine;
   ok: boolean;
+  /** True after partList is filled. Empty partList means this set is not split. */
+  partReady: boolean;
+  partList: TheoryQuery[];
 
   constructor(spec: Spec, holds: Requirement[]) {
     this.engine = new Engine(spec);
     this.ok = this.engine.compile(holds, [], null, 0);
+    this.partReady = false;
+    this.partList = [];
   }
 
   hasModel(): boolean {
@@ -1299,16 +1475,170 @@ export class TheoryQuery {
     return this.engine.search(0, false);
   }
 
+  /**
+   * True when every completion of the unpinned drivers is realizable.
+   * False when that is not known, including when the requirements do not split
+   * into independent output groups. A false result still allows a later search.
+   */
+  provenSat(prefix: Binding): boolean {
+    const parts = this.parts();
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i].anyBad(prefix)) return false;
+    }
+    return parts.length > 0;
+  }
+
+  /**
+   * Independent output groups, compiled once. Empty when the requirements
+   * share an output or a condition reads an output, so the split would be unsound.
+   */
+  parts(): TheoryQuery[] {
+    if (this.partReady) return this.partList;
+    this.partReady = true;
+    if (!this.ok) return this.partList;
+    const groups = factorize(this.engine.spec, this.engine.holds);
+    if (groups === null || groups.length <= 1) return this.partList;
+    for (let g = 0; g < groups.length; g++) {
+      const query = new TheoryQuery(this.engine.spec, groups[g].holds);
+      query.engine.limitDrivers(groups[g].drivers);
+      this.partList.push(query);
+    }
+    return this.partList;
+  }
+
+  anyBad(prefix: Binding): boolean {
+    if (!this.ok) return true;
+    this.engine.reset();
+    this.engine.pinInactive();
+    const drivers = this.engine.drivers;
+    for (let i = 0; i < drivers.length; i++) {
+      const si = drivers[i];
+      if (!this.engine.activeDriver[si]) continue;
+      if (!prefix.known[si]) continue;
+      if (!this.engine.force(si, prefix.code[si])) return true;
+    }
+    if (!this.engine.propagate()) return true;
+    return this.engine.anyBad(0);
+  }
+
   badDrivers(): Binding | null {
     if (!this.ok) {
       this.engine.reset();
       return this.engine.driverBinding();
     }
+    const groups = factorize(this.engine.spec, this.engine.holds);
+    if (groups === null || groups.length <= 1) {
+      if (groups !== null && groups.length === 1) this.engine.limitDrivers(groups[0].drivers);
+      return this.badDriversRaw();
+    }
+    let best: Binding | null = null;
+    for (let g = 0; g < groups.length; g++) {
+      const query = new TheoryQuery(this.engine.spec, groups[g].holds);
+      query.engine.limitDrivers(groups[g].drivers);
+      const bad = query.badDriversRaw();
+      if (bad === null) continue;
+      if (best === null || driverBefore(this.engine.spec, bad, best)) best = bad;
+    }
+    return best;
+  }
+
+  badDriversRaw(): Binding | null {
+    if (!this.ok) {
+      this.engine.reset();
+      this.engine.pinInactive();
+      return this.engine.driverBinding();
+    }
     this.engine.reset();
+    this.engine.pinInactive();
     if (!this.engine.propagate()) return this.engine.driverBinding();
     if (!this.engine.searchBad(0)) return null;
     return this.engine.driverBinding();
   }
+}
+
+class FactorGroup {
+  holds: Requirement[];
+  drivers: number[];
+
+  constructor() {
+    this.holds = [];
+    this.drivers = [];
+  }
+}
+
+/**
+ * Requirements that never share an output, and whose conditions do not
+ * read an output, split into independent groups. A driver situation is bad
+ * exactly when one group is bad. Drivers a group does not mention stay at
+ * the low end, which is where the least bad situation puts them.
+ * Null means the split would be unsound.
+ */
+function factorize(spec: Spec, holds: Requirement[]): FactorGroup[] | null {
+  const buckets: Requirement[][] = [];
+  for (let i = 0; i < spec.symbols.length; i++) buckets.push([]);
+  const driverOnly: Requirement[] = [];
+  for (let r = 0; r < holds.length; r++) {
+    const req = holds[r];
+    if (antecedentMentionsOutput(spec, req)) return null;
+    const outs = outputMentions(spec, req);
+    if (outs.length > 1) return null;
+    if (outs.length === 0) driverOnly.push(req);
+    else buckets[outs[0]].push(req);
+  }
+  const groups: FactorGroup[] = [];
+  if (driverOnly.length > 0) groups.push(makeGroup(spec, driverOnly));
+  for (let i = 0; i < buckets.length; i++) {
+    if (buckets[i].length === 0) continue;
+    groups.push(makeGroup(spec, buckets[i]));
+  }
+  return groups;
+}
+
+function makeGroup(spec: Spec, holds: Requirement[]): FactorGroup {
+  const group = new FactorGroup();
+  group.holds = holds;
+  group.drivers = mentionedDrivers(spec, holds);
+  return group;
+}
+
+function outputMentions(spec: Spec, req: Requirement): number[] {
+  const outs: number[] = [];
+  for (let i = 0; i < spec.symbols.length; i++) {
+    if (isDriver(spec.symbols[i])) continue;
+    if (requirementMentions(req, i)) outs.push(i);
+  }
+  return outs;
+}
+
+function antecedentMentionsOutput(spec: Spec, req: Requirement): boolean {
+  if (req.antecedent === null) return false;
+  for (let i = 0; i < spec.symbols.length; i++) {
+    if (isDriver(spec.symbols[i])) continue;
+    if (termMentions(req.antecedent, i)) return true;
+  }
+  return false;
+}
+
+function mentionedDrivers(spec: Spec, holds: Requirement[]): number[] {
+  const drivers: number[] = [];
+  for (let i = 0; i < spec.symbols.length; i++) {
+    if (!isDriver(spec.symbols[i])) continue;
+    let hit = false;
+    for (let r = 0; r < holds.length; r++) {
+      if (requirementMentions(holds[r], i)) hit = true;
+    }
+    if (hit) drivers.push(i);
+  }
+  return drivers;
+}
+
+function driverBefore(spec: Spec, left: Binding, right: Binding): boolean {
+  for (let i = 0; i < spec.symbols.length; i++) {
+    if (!isDriver(spec.symbols[i])) continue;
+    if (left.code[i] < right.code[i]) return true;
+    if (left.code[i] > right.code[i]) return false;
+  }
+  return false;
 }
 
 export function driverWide(spec: Spec): boolean {

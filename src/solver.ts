@@ -14,7 +14,7 @@
  * that would reuse a requirement already reported.
  */
 
-import { codeAt, domainSize, isDriver, requirementMentions, type Requirement, type Spec, type Term } from "./spec.ts";
+import { codeAt, domainSize, isDriver, requirementMentions, termMentions, type Requirement, type Spec, type Term } from "./spec.ts";
 import { driverWide, firstUnsatDrivers, minimumModel, satisfiable, TheoryQuery } from "./decide.ts";
 import { Binding, evalAssertion, evalBool, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 
@@ -216,43 +216,113 @@ export function conflictingSets(spec: Spec): ConflictGroup[] {
     if (driverWide(spec)) return coresLarge(spec);
     return coresByDeletion(spec);
   }
-  let size = 1;
-  for (let i = 0; i < n; i++) size = size * 2;
-  const cacheKnown: boolean[] = [];
-  const cacheReal: boolean[] = [];
-  for (let i = 0; i < size; i++) {
-    cacheKnown.push(false);
-    cacheReal.push(false);
+  const found = coresByHitting(spec);
+  sortCores(found);
+  return found;
+}
+
+/**
+ * Every minimal unrealizable subset, for 12 requirements or fewer.
+ * Deletion finds one core. Recursing without each of its requirements
+ * finds the rest. The caller sorts them into the same order as a
+ * width-then-mask listing.
+ */
+function coresByHitting(spec: Spec): ConflictGroup[] {
+  const search = new CoreSearch(spec);
+  const pool: number[] = [];
+  for (let i = 0; i < spec.requirements.length; i++) pool.push(i);
+  gatherCores(search, pool);
+  return search.found;
+}
+
+class CoreSearch {
+  spec: Spec;
+  pools: string[];
+  keys: string[];
+  unsat: boolean[];
+  found: ConflictGroup[];
+
+  constructor(spec: Spec) {
+    this.spec = spec;
+    this.pools = [];
+    this.keys = [];
+    this.unsat = [];
+    this.found = [];
   }
-  const found: number[] = [];
-  for (let width = 1; width <= n; width++) {
-    for (let mask = 1; mask < size; mask++) {
-      if (popcount(mask) !== width) continue;
-      let skip = false;
-      for (let f = 0; f < found.length; f++) {
-        if (includesAll(mask, found[f])) {
-          skip = true;
-          break;
-        }
+}
+
+function gatherCores(search: CoreSearch, pool: number[]): void {
+  if (pool.length === 0) return;
+  const poolKey = indexKey(pool);
+  for (let i = 0; i < search.pools.length; i++) {
+    if (search.pools[i] === poolKey) return;
+  }
+  search.pools.push(poolKey);
+  if (!indexesUnsat(search, pool)) return;
+  const core = shrinkCore(search, pool);
+  if (core.length === 0) return;
+  if (!hasCore(search.found, core)) search.found.push({ indexes: core, minimal: true });
+  for (let c = 0; c < core.length; c++) {
+    const next: number[] = [];
+    for (let i = 0; i < pool.length; i++) {
+      if (pool[i] !== core[c]) next.push(pool[i]);
+    }
+    gatherCores(search, next);
+  }
+}
+
+function shrinkCore(search: CoreSearch, indexes: number[]): number[] {
+  let current = copyIndexes(indexes);
+  let i = 0;
+  while (i < current.length) {
+    const trial = withoutAt(current, i);
+    if (trial.length > 0 && indexesUnsat(search, trial)) current = trial;
+    else i++;
+  }
+  return current;
+}
+
+function indexesUnsat(search: CoreSearch, indexes: number[]): boolean {
+  const key = indexKey(indexes);
+  for (let i = 0; i < search.keys.length; i++) {
+    if (search.keys[i] === key) return search.unsat[i];
+  }
+  const unsat = firstUnsatDrivers(search.spec, reqsOf(search.spec, indexes)) !== null;
+  search.keys.push(key);
+  search.unsat.push(unsat);
+  return unsat;
+}
+
+function indexKey(indexes: number[]): string {
+  let key = "";
+  for (let i = 0; i < indexes.length; i++) {
+    if (i > 0) key += ",";
+    key += String(indexes[i]);
+  }
+  return key;
+}
+
+function sortCores(groups: ConflictGroup[]): void {
+  for (let i = 0; i < groups.length; i++) {
+    for (let j = i + 1; j < groups.length; j++) {
+      if (coreAfter(groups[i], groups[j])) {
+        const tmp = groups[i];
+        groups[i] = groups[j];
+        groups[j] = tmp;
       }
-      if (skip) continue;
-      if (maskRealizable(spec, mask, n, cacheKnown, cacheReal)) continue;
-      let minimal = true;
-      for (let bit = 0; bit < n; bit++) {
-        if (!hasBit(mask, bit)) continue;
-        if (!maskRealizable(spec, mask - pow2(bit), n, cacheKnown, cacheReal)) {
-          minimal = false;
-          break;
-        }
-      }
-      if (minimal) found.push(mask);
     }
   }
-  const groups: ConflictGroup[] = [];
-  for (let i = 0; i < found.length; i++) {
-    groups.push({ indexes: maskIndexes(found[i], n), minimal: true });
-  }
-  return groups;
+}
+
+function coreAfter(left: ConflictGroup, right: ConflictGroup): boolean {
+  if (left.indexes.length !== right.indexes.length) return left.indexes.length > right.indexes.length;
+  return coreMask(left.indexes) > coreMask(right.indexes);
+}
+
+function coreMask(indexes: number[]): number {
+  let mask = 0;
+  for (let i = 0; i < indexes.length; i++) mask += pow2(indexes[i]);
+  return mask;
 }
 
 /**
@@ -326,14 +396,61 @@ export function bestGap(spec: Spec, outputIndex: number): Binding | null {
   }
   const drivers = driverIndexes(spec);
   if (!mentioned) return maxDriverBinding(spec, drivers);
-  if (driverWalkFits(spec, drivers)) {
+  const relevant = gapDrivers(spec, outputIndex, drivers);
+  if (driverWalkFits(spec, relevant)) {
     const env = new Binding(spec.symbols.length);
+    pinGapMax(spec, drivers, relevant, env);
     const state = new GapState();
-    walkGaps(spec, outputIndex, drivers, outputIndexes(spec), env, 0, state);
+    walkGaps(spec, outputIndex, relevant, outputIndexes(spec), env, 0, state);
     return state.best;
   }
   const box = new GapBox(spec, outputIndex, drivers);
+  pinBoxMax(spec, drivers, relevant, box);
   return box.solve();
+}
+
+/** Drivers that appear in a condition of a requirement that names this output. */
+function gapDrivers(spec: Spec, outputIndex: number, drivers: number[]): number[] {
+  const relevant: number[] = [];
+  for (let d = 0; d < drivers.length; d++) {
+    const si = drivers[d];
+    let hit = false;
+    for (let r = 0; r < spec.requirements.length; r++) {
+      const req = spec.requirements[r];
+      if (!requirementMentions(req, outputIndex)) continue;
+      if (req.antecedent !== null && termMentions(req.antecedent, si)) hit = true;
+    }
+    if (hit) relevant.push(si);
+  }
+  return relevant;
+}
+
+function pinGapMax(spec: Spec, drivers: number[], relevant: number[], env: Binding): void {
+  for (let d = 0; d < drivers.length; d++) {
+    const si = drivers[d];
+    if (hasIndex(relevant, si)) continue;
+    const count = domainSize(spec, spec.symbols[si]);
+    env.known[si] = true;
+    env.code[si] = count <= 0 ? 0 : codeAt(spec.symbols[si], count - 1);
+  }
+}
+
+function pinBoxMax(spec: Spec, drivers: number[], relevant: number[], box: GapBox): void {
+  for (let d = 0; d < drivers.length; d++) {
+    const si = drivers[d];
+    if (hasIndex(relevant, si)) continue;
+    const count = domainSize(spec, spec.symbols[si]);
+    const code = count <= 0 ? 0 : codeAt(spec.symbols[si], count - 1);
+    box.lo[si] = code;
+    box.hi[si] = code;
+  }
+}
+
+function hasIndex(indexes: number[], value: number): boolean {
+  for (let i = 0; i < indexes.length; i++) {
+    if (indexes[i] === value) return true;
+  }
+  return false;
 }
 
 function reqsOf(spec: Spec, indexes: number[]): Requirement[] {
@@ -692,6 +809,7 @@ function walkCores(
     harvestCores(spec, all, env, cores, cache);
     return;
   }
+  if (remainWide(spec, drivers, pos) && cache.get(all).provenSat(env)) return;
   const si = drivers[pos];
   const sym = spec.symbols[si];
   const count = domainSize(spec, sym);
@@ -701,6 +819,17 @@ function walkCores(
     walkCores(spec, all, drivers, env, pos + 1, cores, cache);
   }
   env.known[si] = false;
+}
+
+function remainWide(spec: Spec, drivers: number[], pos: number): boolean {
+  let product = 1;
+  for (let i = pos; i < drivers.length; i++) {
+    const size = domainSize(spec, spec.symbols[drivers[i]]);
+    if (size <= 0 || size > 64) return true;
+    if (product > 64 / size) return true;
+    product = product * size;
+  }
+  return false;
 }
 
 function harvestCores(spec: Spec, all: number[], env: Binding, cores: ConflictGroup[], cache: TheoryCache): void {
@@ -815,40 +944,6 @@ function subtractIndexes(indexes: number[], remove: number[]): number[] {
     if (!drop) out.push(indexes[i]);
   }
   return out;
-}
-
-function maskRealizable(spec: Spec, mask: number, n: number, cacheKnown: boolean[], cacheReal: boolean[]): boolean {
-  if (mask === 0) return true;
-  if (cacheKnown[mask]) return cacheReal[mask];
-  const scan = scanRequirements(spec, maskIndexes(mask, n));
-  const ok = scan.unsat === null;
-  cacheKnown[mask] = true;
-  cacheReal[mask] = ok;
-  return ok;
-}
-
-function maskIndexes(mask: number, n: number): number[] {
-  const indexes: number[] = [];
-  for (let bit = 0; bit < n; bit++) {
-    if (hasBit(mask, bit)) indexes.push(bit);
-  }
-  return indexes;
-}
-
-function includesAll(candidate: number, found: number): boolean {
-  let bit = 0;
-  let rest = found;
-  while (rest > 0) {
-    if (rest % 2 === 1 && !hasBit(candidate, bit)) return false;
-    rest = Math.trunc(rest / 2);
-    bit++;
-  }
-  return true;
-}
-
-function hasBit(mask: number, bit: number): boolean {
-  const bitValue = pow2(bit);
-  return Math.trunc(mask / bitValue) % 2 === 1;
 }
 
 function pow2(bit: number): number {
