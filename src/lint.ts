@@ -8,7 +8,7 @@
 
 import { describeAssignment, displayCode, isDriver, literalShown, reportBool, requirementMentions, speakBound, termMentions, type Requirement, type Spec, type SymbolDecl, type Term } from "./spec.ts";
 import { satisfiable } from "./decide.ts";
-import { conflictKey, findRepairs, type Repair } from "./repair.ts";
+import { conflictKey, findRepairs, GroupCores, type Repair } from "./repair.ts";
 import { bestGap, conflictingSets, modelFor, redundantFlags, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
 import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, termsEqual, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 import { displayQuote, englishList, formatInt, pastVoice } from "./text.ts";
@@ -143,7 +143,8 @@ export function lintSpec(spec: Spec): LintOutcome {
   const originalKeys: string[] = [];
   for (let i = 0; i < groups.length; i++) originalKeys.push(conflictKey(spec, groups[i].indexes));
   const earlier = earlierDuplicate(spec);
-  for (let i = 0; i < groups.length; i++) conflicts.push(explainConflict(spec, groups[i], originalKeys));
+  const cores = new GroupCores(spec);
+  for (let i = 0; i < groups.length; i++) conflicts.push(explainConflict(spec, groups[i], originalKeys, cores));
   const gaps: Gap[] = [];
   for (let i = 0; i < spec.symbols.length; i++) {
     if (isDriver(spec.symbols[i])) continue;
@@ -422,7 +423,7 @@ function explainUnhandled(spec: Spec, index: number): Gap {
   };
 }
 
-function explainConflict(spec: Spec, group: ConflictGroup, originalKeys: string[]): Conflict {
+function explainConflict(spec: Spec, group: ConflictGroup, originalKeys: string[], cores: GroupCores): Conflict {
   const ids: string[] = [];
   const lines: number[] = [];
   const sentences: string[] = [];
@@ -466,7 +467,7 @@ function explainConflict(spec: Spec, group: ConflictGroup, originalKeys: string[
   const summary = summaryText(ids, group.minimal);
   const clash = clashText(spec, everySituation, situationPairs);
   const fix = fixText(ids, group.minimal);
-  const repairs = findRepairs(spec, group.indexes, originalKeys);
+  const repairs = findRepairs(spec, group.indexes, originalKeys, cores);
   return {
     ids: ids,
     lines: lines,
