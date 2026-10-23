@@ -7,6 +7,7 @@ redundant: 23
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 conflict {R8, R12, R14}
 R8, R12, and R14 cannot all hold.

@@ -87,7 +87,7 @@ The rest of the report lists repairs and does not choose one. The full output is
 | `scenarios` | What accepted and rejected examples show each requirement? |
 | `help` | What commands are available? |
 
-Exit status is `0` when the command is clean, `1` when something is wrong in the requirements, and `2` when the files or the arguments are wrong.
+Exit status is `0` when the command is clean, `1` when something is wrong in the requirements, and `2` when the files or the arguments are wrong. A lint warning for a vague word, a weak modal, an escape clause, two outputs in one response, or a result that constrains no output stays exit 0.
 
 ## How it works
 

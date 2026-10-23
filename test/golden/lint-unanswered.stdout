@@ -7,6 +7,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 gap payment_declined
 No requirement states a response when "payment fails". Suggested fix: add an if ... then requirement, and ask what the system shall do. Do not choose the response.

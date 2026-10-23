@@ -237,7 +237,149 @@ if (wording.kind === "report") {
   check("two wording hits", wording.report.wording.length === 2);
   check("vague quickly", wording.report.wording[0].word === "quickly" && wording.report.wording[0].kind === "vague");
   check("solution database", wording.report.wording[1].word === "database" && wording.report.wording[1].kind === "solution");
+  check("wording is not a warning", wording.report.warnings.length === 0);
 }
+
+const shouldLint = lintSpec(
+  mustSpec('event flag: Bool "Flag." phrase "a flag is set"\noutput done: Bool "Done." phrase "fulfill the order"\n\nR1 When a flag is set, the Order System should fulfill the order.\nR2 When a flag is not set, the Order System shall not fulfill the order.\n'),
+);
+check(
+  "should warns",
+  shouldLint.kind === "report" &&
+    shouldLint.report.warnings.length === 1 &&
+    shouldLint.report.warnings[0].kind === "modal" &&
+    shouldLint.report.warnings[0].word === "should" &&
+    shouldLint.report.warnings[0].id === "R1" &&
+    shouldLint.report.gaps.length === 0 &&
+    shouldLint.report.wording.length === 0,
+);
+
+const tryLint = lintSpec(
+  mustSpec('event flag: Bool "Flag." phrase "a flag is set"\noutput done: Bool "Done." phrase "fulfill the order"\n\nR1 When a flag is set, the Order System will try fulfill the order.\nR2 When a flag is not set, the Order System shall not fulfill the order.\n'),
+);
+check(
+  "will try warns",
+  tryLint.kind === "report" && tryLint.report.warnings.length === 1 && tryLint.report.warnings[0].word === "will try" && tryLint.report.gaps.length === 0,
+);
+
+const mayLint = lintSpec(
+  mustSpec('event flag: Bool "Flag." phrase "a flag is set"\noutput done: Bool "Done." phrase "fulfill the order"\n\nR1 When a flag is set, the Order System may fulfill the order.\nR2 When a flag is not set, the Order System might not fulfill the order.\nR3 When a flag is set, the Order System could fulfill the order.\nR4 When a flag is set, the Order System can fulfill the order.\n'),
+);
+check(
+  "weak modals warn",
+  mayLint.kind === "report" &&
+    mayLint.report.warnings.length === 4 &&
+    mayLint.report.warnings[0].word === "may" &&
+    mayLint.report.warnings[1].word === "might" &&
+    mayLint.report.warnings[2].word === "could" &&
+    mayLint.report.warnings[3].word === "can",
+);
+
+const timelyLint = lintSpec(mustSpec(readFileSync("examples/order-timely.ears.md", "utf8")));
+check(
+  "timely warns",
+  timelyLint.kind === "report" &&
+    timelyLint.report.warnings.length === 1 &&
+    timelyLint.report.warnings[0].kind === "vague" &&
+    timelyLint.report.warnings[0].word === "timely" &&
+    timelyLint.report.wording.length === 0 &&
+    timelyLint.report.gaps.length === 0,
+);
+
+const boundLint = lintSpec(
+  mustSpec('output done: Bool "Done." phrase "timely fulfill the order"\n\nR1 The Box shall timely fulfill the order.\n'),
+);
+check("timely inside a phrase", boundLint.kind === "report" && boundLint.report.warnings.length === 0 && boundLint.report.wording.length === 0);
+
+const quickSentence = lintSpec(
+  mustSpec('event flag: Bool "Flag." phrase "a flag is set"\noutput done: Bool "Done." phrase "fulfill the order"\n\nR1 When a flag is set, the Box shall fulfill the order quickly.\nR2 When a flag is not set, the Box shall not fulfill the order.\n'),
+);
+check(
+  "quickly stays wording",
+  quickSentence.kind === "report" &&
+    quickSentence.report.wording.length === 1 &&
+    quickSentence.report.wording[0].word === "quickly" &&
+    quickSentence.report.warnings.length === 0 &&
+    quickSentence.report.gaps.length === 0,
+);
+
+const escapeLint = lintSpec(mustSpec(readFileSync("examples/order-escape.ears.md", "utf8")));
+check(
+  "escapes warn",
+  escapeLint.kind === "report" &&
+    escapeLint.report.warnings.length === 2 &&
+    escapeLint.report.warnings[0].word === "where possible" &&
+    escapeLint.report.warnings[1].word === "if possible" &&
+    escapeLint.report.gaps.length === 0 &&
+    escapeLint.report.wording.length === 0,
+);
+
+const splitLint = lintSpec(mustSpec(readFileSync("examples/order-split.ears.md", "utf8")));
+check(
+  "compound warns",
+  splitLint.kind === "report" &&
+    splitLint.report.warnings.length === 2 &&
+    splitLint.report.warnings[0].kind === "compound" &&
+    splitLint.report.warnings[0].word === "and" &&
+    splitLint.report.gaps.length === 0,
+);
+
+const orLint = lintSpec(
+  mustSpec('event flag: Bool "Flag." phrase "a flag is set"\noutput done: Bool "Done." phrase "fulfill the order"\noutput receipt: Bool "Receipt." phrase "send a receipt"\n\nR1 When a flag is set, the Box shall fulfill the order or send a receipt.\n'),
+);
+check(
+  "or warns",
+  orLint.kind === "report" && orLint.report.warnings.length === 1 && orLint.report.warnings[0].kind === "compound" && orLint.report.warnings[0].word === "or",
+);
+
+const singleJoin = lintSpec(
+  mustSpec('output done: Bool "Done." phrase "fulfill the order"\ninput quantity: Int 1..3 "Count." phrase "the quantity"\n\nR1 The Box shall fulfill the order and the quantity is at least 1.\n'),
+);
+check("one output is not compound", singleJoin.kind === "report" && singleJoin.report.warnings.length === 0);
+
+const failLint = lintSpec(mustSpec(readFileSync("examples/order-untestable.ears.md", "utf8")));
+check(
+  "untestable warns",
+  failLint.kind === "report" &&
+    failLint.report.warnings.length === 1 &&
+    failLint.report.warnings[0].kind === "untestable" &&
+    failLint.report.warnings[0].word === "not fail" &&
+    failLint.report.redundant.length === 0 &&
+    failLint.report.gaps.length === 0 &&
+    failLint.report.conflicts.length === 0,
+);
+const alwaysLint = lintSpec(mustSpec(readFileSync("examples/order-always-work.ears.md", "utf8")));
+check(
+  "always work warns",
+  alwaysLint.kind === "report" &&
+    alwaysLint.report.warnings.length === 1 &&
+    alwaysLint.report.warnings[0].word === "always work" &&
+    alwaysLint.report.redundant.length === 0 &&
+    alwaysLint.report.gaps.length === 0,
+);
+
+const worksLint = lintSpec(
+  mustSpec('event flag: Bool "Flag." phrase "a flag is set"\n\nR1 When a flag is set, the Box shall always works.\n'),
+);
+check(
+  "always works warns",
+  worksLint.kind === "report" && worksLint.report.warnings.length === 1 && worksLint.report.warnings[0].word === "always works",
+);
+
+const namedFail = lintSpec(
+  mustSpec('output fail: Bool "Fail." phrase "fail"\n\nR1 The Box shall not fail.\n'),
+);
+check("not fail constrains an output", namedFail.kind === "report" && namedFail.report.warnings.length === 0);
+
+const cleanWarn = lintSpec(mustSpec(readFileSync("examples/order-testable.ears.md", "utf8")));
+check(
+  "testable is clean",
+  cleanWarn.kind === "report" &&
+    cleanWarn.report.warnings.length === 0 &&
+    cleanWarn.report.gaps.length === 0 &&
+    cleanWarn.report.conflicts.length === 0 &&
+    cleanWarn.report.wording.length === 0,
+);
 
 const wide = mustSpec(readFileSync("examples/order-wide.ears.md", "utf8"));
 check("wide space", spaceSize(wide) === 250001);
@@ -351,7 +493,8 @@ const both = mustSpec(
 const bothLint = lintSpec(both);
 check("when plus if is not misuse", bothLint.kind === "report" && bothLint.report.misuse.length === 0);
 
-check("should", parseMessage('event flag: Bool "Flag."\n\nR1 When flag, the Order System should flag.\n') === '3: expected "shall"');
+check("must", parseMessage('event flag: Bool "Flag."\n\nR1 When flag, the Order System must flag.\n') === '3: expected "shall"');
+check("will", parseMessage('event flag: Bool "Flag."\n\nR1 When flag, the Order System will flag.\n') === '3: expected "shall"');
 check("then missing", parseMessage('event flag: Bool "Flag."\n\nR1 If flag, the Order System shall flag.\n') === '3: expected "then"');
 check(
   "then extra",

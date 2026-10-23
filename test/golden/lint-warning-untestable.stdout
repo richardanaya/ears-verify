@@ -1,0 +1,15 @@
+spec: examples/order-untestable.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 1
+
+warning R1 line 5
+R1 says "not fail", and no output is constrained.
+When an order is submitted, the Order System shall not fail.
+Suggested fix: name the output the response sets.

@@ -2,7 +2,10 @@
  * Lint a spec for contradictions, uncovered outputs, events nobody handles,
  * error conditions with no response, EARS pattern mistakes, words a test
  * cannot pin down, conditions that can never be true, and schema the
- * requirements never use. Contradiction reports name the smallest set, the
+ * requirements never use. Warnings (vague words, weak modals, a response
+ * that names two outputs, and a result that constrains no output) are
+ * advisory and do not by themselves fail the command. Contradiction reports
+ * name the smallest set, the
  * situation, an example, and candidate repairs that do not pick a winner.
  */
 
@@ -118,6 +121,16 @@ export interface Unused {
   fix: string;
 }
 
+export interface Warning {
+  id: string;
+  line: number;
+  sentence: string;
+  kind: string;
+  word: string;
+  text: string;
+  fix: string;
+}
+
 export interface LintReport {
   conflicts: Conflict[];
   gaps: Gap[];
@@ -127,6 +140,7 @@ export interface LintReport {
   duplicate: Duplicate[];
   vacuous: Vacuous[];
   unused: Unused[];
+  warnings: Warning[];
 }
 
 export type LintOutcome = { kind: "report"; report: LintReport } | { kind: "error"; message: string };
@@ -168,8 +182,302 @@ export function lintSpec(spec: Spec): LintOutcome {
       duplicate: findDuplicates(spec, earlier),
       vacuous: findVacuous(spec),
       unused: findUnused(spec),
+      warnings: findWarnings(spec),
     },
   };
+}
+
+/** Vague words that are warnings. Words already in WORD_RULES stay wording findings. */
+const VAGUE_WARNINGS: string[] = [
+  "appropriately",
+  "reasonable",
+  "adequate",
+  "sufficient",
+  "timely",
+  "normally",
+  "usually",
+  "several",
+  "minimal",
+  "optimal",
+  "some",
+  "many",
+  "few",
+  "etc",
+];
+
+const ESCAPE_WARNINGS: string[] = ["where possible", "if possible"];
+
+const WEAK_MODALS: string[] = ["should", "may", "might", "could", "can", "will try"];
+
+function findWarnings(spec: Spec): Warning[] {
+  const found: Warning[] = [];
+  for (let i = 0; i < spec.requirements.length; i++) {
+    const req = spec.requirements[i];
+    collectVagueWarnings(spec, req, found);
+    collectModalWarning(req, found);
+    collectEscapeWarnings(spec, req, found);
+    collectCompoundWarning(spec, req, found);
+    collectUntestableWarning(spec, req, found);
+  }
+  return found;
+}
+
+function collectVagueWarnings(spec: Spec, req: Requirement, found: Warning[]): void {
+  const lower = lowerAscii(req.sentence);
+  let i = 0;
+  while (i < lower.length) {
+    if (!boundaryBefore(lower, i)) {
+      i++;
+      continue;
+    }
+    let matched = -1;
+    for (let w = 0; w < VAGUE_WARNINGS.length; w++) {
+      const word = VAGUE_WARNINGS[w];
+      if (i + word.length > lower.length) continue;
+      if (lower.slice(i, i + word.length) !== word) continue;
+      if (!boundaryAfter(lower, i + word.length)) continue;
+      if (matched < 0 || word.length > VAGUE_WARNINGS[matched].length) matched = w;
+    }
+    if (matched < 0) {
+      i++;
+      continue;
+    }
+    const word = VAGUE_WARNINGS[matched];
+    const end = i + word.length;
+    if (!coveredBySchema(spec, lower, i, end)) {
+      found.push({
+        id: req.id,
+        line: req.line,
+        sentence: req.sentence,
+        kind: "vague",
+        word: word,
+        text: displayQuote(word) + " is too vague to test. Replace it with a value a scenario can check.",
+        fix: "Suggested fix: replace " + displayQuote(word) + " with a declared bound.",
+      });
+    }
+    i = end;
+  }
+}
+
+function collectModalWarning(req: Requirement, found: Warning[]): void {
+  const modal = responseModal(req.sentence, req.system);
+  if (!weakModal(modal)) return;
+  found.push({
+    id: req.id,
+    line: req.line,
+    sentence: req.sentence,
+    kind: "modal",
+    word: modal,
+    text: req.id + " uses " + displayQuote(modal) + " instead of \"shall\".",
+    fix: "Suggested fix: write \"shall\" so the response is required.",
+  });
+}
+
+function collectEscapeWarnings(spec: Spec, req: Requirement, found: Warning[]): void {
+  const lower = lowerAscii(req.sentence);
+  let i = 0;
+  while (i < lower.length) {
+    if (!boundaryBefore(lower, i)) {
+      i++;
+      continue;
+    }
+    let matched = -1;
+    for (let w = 0; w < ESCAPE_WARNINGS.length; w++) {
+      const word = ESCAPE_WARNINGS[w];
+      if (i + word.length > lower.length) continue;
+      if (lower.slice(i, i + word.length) !== word) continue;
+      if (!boundaryAfter(lower, i + word.length)) continue;
+      if (matched < 0 || word.length > ESCAPE_WARNINGS[matched].length) matched = w;
+    }
+    if (matched < 0) {
+      i++;
+      continue;
+    }
+    const word = ESCAPE_WARNINGS[matched];
+    const end = i + word.length;
+    if (!coveredBySchema(spec, lower, i, end)) {
+      found.push({
+        id: req.id,
+        line: req.line,
+        sentence: req.sentence,
+        kind: "modal",
+        word: word,
+        text: req.id + " uses " + displayQuote(word) + ", which lets the response slip.",
+        fix: "Suggested fix: delete " + displayQuote(word) + " and keep \"shall\".",
+      });
+    }
+    i = end;
+  }
+}
+
+function collectCompoundWarning(spec: Spec, req: Requirement, found: Warning[]): void {
+  const term = req.consequent;
+  if (term.kind !== "and" && term.kind !== "or") return;
+  const outputs = distinctOutputs(spec, term);
+  if (outputs.length < 2) return;
+  const labels: string[] = [];
+  for (let i = 0; i < outputs.length; i++) labels.push(outputLabel(spec.symbols[outputs[i]]));
+  found.push({
+    id: req.id,
+    line: req.line,
+    sentence: req.sentence,
+    kind: "compound",
+    word: term.kind,
+    text: req.id + " joins " + englishList(labels) + " with \"" + term.kind + "\" in one response.",
+    fix: "Suggested fix: split this into one requirement per output.",
+  });
+}
+
+function collectUntestableWarning(spec: Spec, req: Requirement, found: Warning[]): void {
+  if (distinctOutputs(spec, req.consequent).length > 0) return;
+  const phrase = untestablePhrase(responseTail(req.sentence, req.system));
+  if (phrase.length === 0) return;
+  found.push({
+    id: req.id,
+    line: req.line,
+    sentence: req.sentence,
+    kind: "untestable",
+    word: phrase,
+    text: req.id + " says " + displayQuote(phrase) + ", and no output is constrained.",
+    fix: "Suggested fix: name the output the response sets.",
+  });
+}
+
+function weakModal(modal: string): boolean {
+  for (let i = 0; i < WEAK_MODALS.length; i++) {
+    if (WEAK_MODALS[i] === modal) return true;
+  }
+  return false;
+}
+
+function responseModal(sentence: string, system: string): string {
+  const lower = lowerAscii(sentence);
+  const mark = "the " + lowerAscii(system) + " ";
+  let from = 0;
+  while (from < lower.length) {
+    const at = lower.indexOf(mark, from);
+    if (at < 0) return "";
+    if (!boundaryBefore(lower, at)) {
+      from = at + 1;
+      continue;
+    }
+    const start = at + mark.length;
+    const first = wordAt(lower, start);
+    if (first.length === 0) return "";
+    if (first === "will") {
+      const second = wordAt(lower, start + spanOfWord(lower, start));
+      if (second === "try") return "will try";
+    }
+    return first;
+  }
+  return "";
+}
+
+function responseTail(sentence: string, system: string): string {
+  const lower = lowerAscii(sentence);
+  const mark = "the " + lowerAscii(system) + " ";
+  let from = 0;
+  while (from < lower.length) {
+    const at = lower.indexOf(mark, from);
+    if (at < 0) return "";
+    if (!boundaryBefore(lower, at)) {
+      from = at + 1;
+      continue;
+    }
+    let i = at + mark.length;
+    const first = wordAt(lower, i);
+    i += spanOfWord(lower, i);
+    if (first === "will") {
+      const second = wordAt(lower, i);
+      if (second === "try") i += spanOfWord(lower, i);
+    }
+    while (i < sentence.length && sentence.charCodeAt(i) === 32) i++;
+    let end = sentence.length;
+    if (end > i && sentence.charCodeAt(end - 1) === 46) end--;
+    return trimSpaces(sentence.slice(i, end));
+  }
+  return "";
+}
+
+function spanOfWord(text: string, from: number): number {
+  let i = from;
+  while (i < text.length && !isWordChar(text.charCodeAt(i))) i++;
+  const start = i;
+  while (i < text.length && isWordChar(text.charCodeAt(i))) i++;
+  return i - start + (start - from);
+}
+
+function untestablePhrase(tail: string): string {
+  let lower = lowerAscii(trimSpaces(tail));
+  lower = stripEscapes(lower);
+  lower = trimSpaces(lower);
+  if (lower === "not fail" || lower === "always work" || lower === "always works") return lower;
+  return "";
+}
+
+function stripEscapes(lower: string): string {
+  let out = "";
+  let i = 0;
+  while (i < lower.length) {
+    if (boundaryBefore(lower, i)) {
+      let matched = -1;
+      for (let w = 0; w < ESCAPE_WARNINGS.length; w++) {
+        const word = ESCAPE_WARNINGS[w];
+        if (i + word.length > lower.length) continue;
+        if (lower.slice(i, i + word.length) !== word) continue;
+        if (!boundaryAfter(lower, i + word.length)) continue;
+        matched = w;
+      }
+      if (matched >= 0) {
+        i += ESCAPE_WARNINGS[matched].length;
+        continue;
+      }
+    }
+    out += lower.slice(i, i + 1);
+    i++;
+  }
+  return out;
+}
+
+function distinctOutputs(spec: Spec, term: Term): number[] {
+  const found: number[] = [];
+  collectOutputs(spec, term, found);
+  return found;
+}
+
+function collectOutputs(spec: Spec, term: Term, found: number[]): void {
+  if (term.kind === "sym") {
+    if (spec.symbols[term.index].role !== "output") return;
+    for (let i = 0; i < found.length; i++) {
+      if (found[i] === term.index) return;
+    }
+    found.push(term.index);
+    return;
+  }
+  if (term.kind === "not") {
+    collectOutputs(spec, term.term, found);
+    return;
+  }
+  if (
+    term.kind === "and" ||
+    term.kind === "or" ||
+    term.kind === "eq" ||
+    term.kind === "neq" ||
+    term.kind === "lt" ||
+    term.kind === "le" ||
+    term.kind === "gt" ||
+    term.kind === "ge" ||
+    term.kind === "add" ||
+    term.kind === "sub"
+  ) {
+    collectOutputs(spec, term.left, found);
+    collectOutputs(spec, term.right, found);
+  }
+}
+
+function outputLabel(sym: SymbolDecl): string {
+  if (sym.phrase.length > 0) return displayQuote(sym.phrase);
+  return sym.name;
 }
 
 function findVacuous(spec: Spec): Vacuous[] {
@@ -1001,6 +1309,7 @@ export function formatLintText(specPath: string, report: LintReport): string {
   lines.push("duplicate: " + formatInt(report.duplicate.length));
   lines.push("vacuous: " + formatInt(report.vacuous.length));
   lines.push("unused: " + formatInt(report.unused.length));
+  lines.push("warnings: " + formatInt(report.warnings.length));
   for (let i = 0; i < report.conflicts.length; i++) {
     const conflict = report.conflicts[i];
     lines.push("");
@@ -1079,6 +1388,14 @@ export function formatLintText(specPath: string, report: LintReport): string {
     lines.push(item.text);
     lines.push(item.fix);
   }
+  for (let i = 0; i < report.warnings.length; i++) {
+    const item = report.warnings[i];
+    lines.push("");
+    lines.push("warning " + item.id + " line " + formatInt(item.line));
+    lines.push(item.text);
+    lines.push(item.sentence);
+    lines.push(item.fix);
+  }
   return lines.join("\n");
 }
 
@@ -1151,6 +1468,19 @@ export function formatLintJson(specPath: string, report: LintReport): string {
     const item = report.unused[i];
     unused.push({ name: item.name, kind: item.kind, text: item.text, fix: item.fix });
   }
+  const warnings = [];
+  for (let i = 0; i < report.warnings.length; i++) {
+    const item = report.warnings[i];
+    warnings.push({
+      id: item.id,
+      line: item.line,
+      sentence: item.sentence,
+      kind: item.kind,
+      word: item.word,
+      text: item.text,
+      fix: item.fix,
+    });
+  }
   const ok =
     conflicts.length === 0 &&
     gaps.length === 0 &&
@@ -1172,6 +1502,7 @@ export function formatLintJson(specPath: string, report: LintReport): string {
       duplicate: duplicate,
       vacuous: vacuous,
       unused: unused,
+      warnings: warnings,
     },
     null,
     2,

@@ -195,6 +195,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 wording line 7
 "shall the ... is ..." is awkward. Write the response as a verb phrase, such as "bill at most 2 seats", and bind it with as.
@@ -234,6 +235,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 ```
 
 ## EARS patterns
@@ -253,13 +255,261 @@ While <state>, when <trigger>, if <condition>, where <feature>, then the <system
 | Where | A variant, such as a region | `Where the region is us, the Order System shall fulfill the order.` |
 | Combined | Any of the above, in the order above | `While inventory is available, when an order is submitted, if the quantity is at least 1, where the region is us, then the Warehouse shall ship the quantity.` |
 
-`should`, `must`, and `will` are not `shall`. The parser stops and asks for `shall`.
+`should`, `may`, `might`, `could`, `can`, and `will try` parse where `shall` would stand, and lint warns. `must` and a bare `will` are still rejected. The parser stops and asks for `shall`.
 
 Each requirement with at least one clause becomes one implication. The clauses are joined with `and` in the order while, when, if, where, and that antecedent implies the response. A ubiquitous requirement is asserted as the response itself. Assertion names are the id, `_L`, and the line, such as `R1_L7`. The SMT-LIB uses the symbol names. The comment above each assertion repeats the original sentence.
 
 An unwanted event is written with `if` ... `then`. `when` is the normal trigger. Lint flags an unwanted event used in `when` without an `if`.
 
-The line has to be something a scenario can make true or false. Lint rejects these whole words as too vague to test: `as needed`, `fast`, `slow`, `large`, `small`, `appropriate`, `quickly`, `easy`, `robust`, `flexible`, `user-friendly`, `efficient`. It also rejects solution words: `database`, `api`, `algorithm`, `microservice`, `server`, `class`, `function`. A word that sits inside a declared phrase or action is already bound to a schema item, so that use is not a wording finding. Put the PM's phrasing in the description only after those words are gone, or say the testable fact in the requirement. Lint also flags an awkward response (`shall the lane is fulfill`), a `When` that is a bare verb (`When start the subscription`), and a `not` that sits in front of a phrase containing `is` (`not the customer is cancelling`). Those findings have kind `form`. A trigger or state that starts with bare `not`, such as `When not a member asks` or `While not a member asks`, has kind `negation`. Ask for a positive condition, such as `When a non-member asks`, or a positive event. Show the sentence and the wording line.
+The line has to be something a scenario can make true or false. Lint rejects these whole words as too vague to test, and that rejection exits 1: `as needed`, `fast`, `slow`, `large`, `small`, `appropriate`, `quickly`, `easy`, `robust`, `flexible`, `user-friendly`, `efficient`. It also rejects solution words: `database`, `api`, `algorithm`, `microservice`, `server`, `class`, `function`. A further list is a warning and exits 0 when it is the only finding: `appropriately`, `reasonable`, `etc`, `adequate`, `sufficient`, `timely`, `normally`, `usually`, `some`, `several`, `many`, `few`, `minimal`, `optimal`, plus `if possible` and `where possible`. A word that sits inside a declared phrase or action is already bound to a schema item, so that use is not a wording finding. Put the PM's phrasing in the description only after those words are gone, or say the testable fact in the requirement. Lint also flags an awkward response (`shall the lane is fulfill`), a `When` that is a bare verb (`When start the subscription`), and a `not` that sits in front of a phrase containing `is` (`not the customer is cancelling`). Those findings have kind `form`. A trigger or state that starts with bare `not`, such as `When not a member asks` or `While not a member asks`, has kind `negation`. Ask for a positive condition, such as `When a non-member asks`, or a positive event. Show the sentence and the wording line.
+
+## Testability warnings
+
+A warning names the requirement id, the line, the sentence, and a short fix. The count is `warnings`. `--json` puts the same findings in `warnings`, and `ok` stays true when warnings are the only findings. A conflict, a gap, misuse, a wording finding, a redundant requirement, a duplicate, a vacuous requirement, or unused schema still exits 1. A word the schema does not declare is a parse error and exits 2. The warning list is scanned in requirement sentences only. A word inside a declared phrase or action is skipped.
+
+### A vague word
+
+`examples/order-timely.ears.md` says the system shall timely fulfill the order.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-timely.ears.md
+-->
+```text
+spec: examples/order-timely.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 1
+
+warning R1 line 6
+"timely" is too vague to test. Replace it with a value a scenario can check.
+When an order is submitted, the Order System shall timely fulfill the order.
+Suggested fix: replace "timely" with a declared bound.
+```
+
+The fixed sentence drops the vague word and names the output:
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+```
+
+### A weak modal
+
+`examples/order-should.ears.md` uses `should` where the response needs `shall`. `may`, `might`, `could`, `can`, and `will try` are the same warning.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-should.ears.md
+-->
+```text
+spec: examples/order-should.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 1
+
+warning R1 line 6
+R1 uses "should" instead of "shall".
+When an order is submitted, the Order System should fulfill the order.
+Suggested fix: write "shall" so the response is required.
+```
+
+The fixed sentence:
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+```
+
+### An escape clause
+
+`examples/order-escape.ears.md` lets the response slip with `where possible` and `if possible`.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-escape.ears.md
+-->
+```text
+spec: examples/order-escape.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 2
+
+warning R1 line 6
+R1 uses "where possible", which lets the response slip.
+When an order is submitted, the Order System shall fulfill the order where possible.
+Suggested fix: delete "where possible" and keep "shall".
+
+warning R2 line 7
+R2 uses "if possible", which lets the response slip.
+When an order is not submitted, the Order System shall not fulfill the order if possible.
+Suggested fix: delete "if possible" and keep "shall".
+```
+
+The fixed sentences:
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+When an order is not submitted, the Order System shall not fulfill the order.
+```
+
+### Two outputs in one response
+
+`examples/order-split.ears.md` joins two outputs with `and`. The same warning is raised for `or`. One output joined to an input bound stays quiet, and `not` of a single output stays quiet.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-split.ears.md
+-->
+```text
+spec: examples/order-split.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 2
+
+warning R1 line 7
+R1 joins "fulfill the order" and "send a receipt" with "and" in one response.
+When an order is submitted, the Order System shall fulfill the order and send a receipt.
+Suggested fix: split this into one requirement per output.
+
+warning R2 line 8
+R2 joins "fulfill the order" and "send a receipt" with "and" in one response.
+When an order is not submitted, the Order System shall not fulfill the order and not send a receipt.
+Suggested fix: split this into one requirement per output.
+```
+
+The fixed sentences give each output its own requirement:
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+When an order is submitted, the Order System shall send a receipt.
+When an order is not submitted, the Order System shall not fulfill the order.
+When an order is not submitted, the Order System shall not send a receipt.
+```
+
+### A result no scenario can fail
+
+`examples/order-untestable.ears.md` says the system shall not fail, and no output is constrained. `examples/order-always-work.ears.md` says the system shall always work. `shall always works` is the same warning.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-untestable.ears.md
+-->
+```text
+spec: examples/order-untestable.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 1
+
+warning R1 line 5
+R1 says "not fail", and no output is constrained.
+When an order is submitted, the Order System shall not fail.
+Suggested fix: name the output the response sets.
+```
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-always-work.ears.md
+-->
+```text
+spec: examples/order-always-work.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 1
+
+warning R1 line 5
+R1 says "always work", and no output is constrained.
+When a shipment is requested, the Order System shall always work.
+Suggested fix: name the output the response sets.
+```
+
+The fixed sentences name an output:
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+When a shipment is requested, the Order System shall send a receipt.
+```
+
+### A word the schema does not declare
+
+This is already a parse error, so lint adds no second warning. `test/fixtures/unknown-phrase.ears.md` says "an order was submitted". The declared phrase is "an order is submitted".
+
+<!-- verify stderr 2
+build/plan-verify
+lint
+test/fixtures/unknown-phrase.ears.md
+-->
+```text
+error: test/fixtures/unknown-phrase.ears.md:5: unknown phrase "an order was submitted". Closest: "an order is submitted", "inventory is available", "fulfill the order".
+```
+
+The fixed sentence uses the declared phrase:
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+```
+
+### The same rules, written so a scenario can check them
+
+`examples/order-testable.ears.md` is those sentences after the fixes. Lint is quiet, including warnings:
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-testable.ears.md
+-->
+```text
+spec: examples/order-testable.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 0
+```
 
 ## Workflow
 
@@ -267,7 +517,7 @@ The line has to be something a scenario can make true or false. Lint rejects the
 2. Add or reuse declarations. If they describe something you already named, use that name and its phrase. Bind a new phrase to the words they keep using.
 3. Write one EARS line per requirement, using the phrases. Normal triggers use `when`. Unwanted conditions use `if` ... `then`.
 4. Run `build/plan-verify lint <spec>`. Run `build/plan-verify report <spec>` for the logical problems in one plain-language list. Run `build/plan-verify scenarios <spec>` when you want an accepted and a rejected example of each trigger.
-5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Also show the candidate repairs: dropping one requirement in the set, and any rewritten line that adds one Bool, enum equality, or integer bound to one condition. Stop until they answer. Do not choose a requirement or a repair. If a requirement adds nothing, including a repeat that sits outside a conflict, ask whether they meant something the others do not already require. Do not delete it. If two requirements are the same condition and the same response, show the duplicate and ask whether the later line was meant to differ. Do not delete it. If a trigger starts with bare `not`, ask for a positive condition or a positive event. If a condition can never be true, show the suggested fix and ask them to rewrite the condition. Do not invent a response. If a state, an input, an enum variant, or an output is unused, ask whether to use it or remove it. For a gap, read the suggested fix and ask what the system shall do in that situation. Do not choose the response.
+5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Also show the candidate repairs: dropping one requirement in the set, and any rewritten line that adds one Bool, enum equality, or integer bound to one condition. Stop until they answer. Do not choose a requirement or a repair. If a requirement adds nothing, including a repeat that sits outside a conflict, ask whether they meant something the others do not already require. Do not delete it. If two requirements are the same condition and the same response, show the duplicate and ask whether the later line was meant to differ. Do not delete it. If a trigger starts with bare `not`, ask for a positive condition or a positive event. If a condition can never be true, show the suggested fix and ask them to rewrite the condition. Do not invent a response. If a state, an input, an enum variant, or an output is unused, ask whether to use it or remove it. For a gap, read the suggested fix and ask what the system shall do in that situation. Do not choose the response. For a warning, show the requirement id, the line, the sentence, and the suggested fix. A warning by itself leaves the command at exit 0. Ask the PM for the testable wording. Do not invent a bound or an output.
 6. When they describe a concrete story, write a flat JSON scenario with every declared name and run `build/plan-verify check <spec> --input <scenario>`. When they hope something is always true, write that hope as a property file of `P` requirements and run `build/plan-verify policy <spec> --property <file>`. A counterexample is a scenario the requirements allow and the property forbids. If you have no property yet, `policy <spec>` prints one allowed scenario and one forbidden scenario. The search tries false before true, so the first hit is not a recommendation.
 7. Report every check violation by requirement ID, line, and sentence, then the values. A passing check can still leave a gap. If lint reported one, say which output is uncovered and in what situation.
 
@@ -386,7 +636,8 @@ examples/order-conflict.ears.md
   "redundant": [],
   "duplicate": [],
   "vacuous": [],
-  "unused": []
+  "unused": [],
+  "warnings": []
 }
 ```
 
@@ -530,6 +781,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 gap order_fulfilled
 Nothing says whether the order was fulfilled when an order was submitted and inventory was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
@@ -552,6 +804,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 ```
 
 ## Combined clauses
@@ -603,6 +856,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 conflict {R2, R3}
 R2 and R3 cannot both hold.
@@ -656,6 +910,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 conflict {R1, R2}
 R1 and R2 cannot both hold.
@@ -722,6 +977,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 wording line 7
 The trigger is a bare negation. Write a positive condition, such as "When a non-member asks", or declare a positive event.
@@ -745,6 +1001,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 misuse R4 line 6
 "payment fails" is an unwanted event. Write if ... then, not when.
@@ -775,6 +1032,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 1
+warnings: 0
 
 wording line 4
 "quickly" is too vague to test. Replace it with something a scenario can check.
@@ -808,6 +1066,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 gap order_cancelled
 No requirement handles "an order is cancelled". Suggested fix: add a requirement that says what the system shall do, or remove the event.
@@ -832,6 +1091,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 gap payment_declined
 No requirement states a response when "payment fails". Suggested fix: add an if ... then requirement, and ask what the system shall do. Do not choose the response.
@@ -856,6 +1116,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 wording line 4
 "fast" is too vague to test. Replace it with something a scenario can check.
@@ -889,6 +1150,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 conflict {R4, R5}
 R4 and R5 cannot both hold.
@@ -942,6 +1204,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 1
+warnings: 0
 
 conflict {R6, R7}
 R6 and R7 cannot both hold.
@@ -1125,6 +1388,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 conflict {R1, R2, R3}
 R1, R2, and R3 cannot all hold.
@@ -1193,6 +1457,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 redundant R2 line 8
 R2 adds nothing. Whenever the other requirements hold, R2 holds too.
@@ -1217,6 +1482,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 conflict {R1, R2}
 R1 and R2 cannot both hold.
@@ -1273,6 +1539,7 @@ redundant: 0
 duplicate: 1
 vacuous: 0
 unused: 0
+warnings: 0
 
 duplicate R2 line 7
 R2 duplicates R1. The condition and the response are the same.
@@ -1295,6 +1562,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 wording line 6
 The trigger is a bare negation. Write a positive condition, such as "When a non-member asks", or declare a positive event.
@@ -1316,6 +1584,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 wording line 4
 "as needed" is too vague to test. Replace it with something a scenario can check.
@@ -1341,6 +1610,7 @@ redundant: 0
 duplicate: 0
 vacuous: 2
 unused: 0
+warnings: 0
 
 vacuous R1 line 7
 R1 can never trigger. Its condition is impossible for every allowed value.
@@ -1372,6 +1642,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 4
+warnings: 0
 
 unused loyalty
 loyalty ("the customer is loyal") is a state and no requirement mentions it.
@@ -1432,7 +1703,8 @@ examples/order-unused.ears.md
       "text": "Lane.refund is never mentioned.",
       "fix": "Suggested fix: use refund in a requirement, or remove it from Lane."
     }
-  ]
+  ],
+  "warnings": []
 }
 ```
 

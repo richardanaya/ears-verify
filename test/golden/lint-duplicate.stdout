@@ -7,6 +7,7 @@ redundant: 0
 duplicate: 1
 vacuous: 0
 unused: 0
+warnings: 0
 
 duplicate R2 line 7
 R2 duplicates R1. The condition and the response are the same.

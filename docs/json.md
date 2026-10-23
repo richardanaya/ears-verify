@@ -40,7 +40,7 @@ examples/order-fail.json
 }
 ```
 
-`lint` is `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `duplicate`, `vacuous`, and `unused`. A conflict is `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements` (`id`, `line`, `sentence`), `situation` and `example` (`name`, `value`), `requires` (`id`, `text`), `keeps`, `breaks`, and `fix`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. `kind` is `vague`, `solution`, `form`, or `negation`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. An exact duplicate is `id`, `line`, `sameAs`, `sentence`, `text`, and `fix`. A vacuous requirement has the same fields as a redundant requirement. An unused entry is `name`, `kind` (`state`, `input`, `output`, or `variant`), `text`, and `fix`.
+`lint` is `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `duplicate`, `vacuous`, `unused`, and `warnings`. A conflict is `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements` (`id`, `line`, `sentence`), `situation` and `example` (`name`, `value`), `requires` (`id`, `text`), `keeps`, `breaks`, and `fix`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. `kind` is `vague`, `solution`, `form`, or `negation`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. An exact duplicate is `id`, `line`, `sameAs`, `sentence`, `text`, and `fix`. A vacuous requirement has the same fields as a redundant requirement. An unused entry is `name`, `kind` (`state`, `input`, `output`, or `variant`), `text`, and `fix`. A warning is `id`, `line`, `sentence`, `kind` (`vague`, `modal`, `compound`, or `untestable`), `word`, `text`, and `fix`. `ok` stays true when warnings are the only findings, and the exit status stays 0. The other lint arrays still make `ok` false and exit 1.
 
 <!-- verify stdout 1
 build/plan-verify
@@ -127,7 +127,8 @@ examples/order-conflict.ears.md
   "redundant": [],
   "duplicate": [],
   "vacuous": [],
-  "unused": []
+  "unused": [],
+  "warnings": []
 }
 ```
 
@@ -321,6 +322,43 @@ examples/order-unused.ears.md
       "kind": "variant",
       "text": "Lane.refund is never mentioned.",
       "fix": "Suggested fix: use refund in a requirement, or remove it from Lane."
+    }
+  ],
+  "warnings": []
+}
+```
+
+## Warnings
+
+`examples/order-timely.ears.md` has one vague-word warning. `ok` stays true, and the exit status is 0.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+--json
+examples/order-timely.ears.md
+-->
+```text
+{
+  "ok": true,
+  "spec": "examples/order-timely.ears.md",
+  "conflicts": [],
+  "gaps": [],
+  "misuse": [],
+  "wording": [],
+  "redundant": [],
+  "duplicate": [],
+  "vacuous": [],
+  "unused": [],
+  "warnings": [
+    {
+      "id": "R1",
+      "line": 6,
+      "sentence": "When an order is submitted, the Order System shall timely fulfill the order.",
+      "kind": "vague",
+      "word": "timely",
+      "text": "\"timely\" is too vague to test. Replace it with a value a scenario can check.",
+      "fix": "Suggested fix: replace \"timely\" with a declared bound."
     }
   ]
 }

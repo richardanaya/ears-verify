@@ -151,7 +151,7 @@ WHEN an order is submitted AND inventory is available, THE Order System SHALL fu
 An order was submitted and inventory was available, but the order was not fulfilled.
 ```
 
-Exit status is `0` when the command is clean, `1` when a scenario violates a requirement, lint finds something, a property has a counterexample, or a revised spec changes what is accepted, and `2` when the spec, the scenario, the property, or the arguments are wrong. `--json` is for the agent. The text report is for the product manager.
+Exit status is `0` when the command is clean or lint reports only warnings, `1` when a scenario violates a requirement, lint finds a conflict, a gap, misuse, a wording issue, a redundant or duplicate requirement, a vacuous requirement, or unused schema, a property has a counterexample, or a revised spec changes what is accepted, and `2` when the spec, the scenario, the property, or the arguments are wrong. `--json` is for the agent. The text report is for the product manager.
 
 ## What EARS is
 

@@ -7,6 +7,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 misuse R4 line 6
 "payment fails" is an unwanted event. Write if ... then, not when.

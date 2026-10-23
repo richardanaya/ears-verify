@@ -1,0 +1,15 @@
+spec: examples/order-always-work.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 1
+
+warning R1 line 5
+R1 says "always work", and no output is constrained.
+When a shipment is requested, the Order System shall always work.
+Suggested fix: name the output the response sets.
