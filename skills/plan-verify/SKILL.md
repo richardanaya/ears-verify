@@ -18,6 +18,7 @@ help
 ```text
 usage:
   plan-verify check [--json] <spec> --input <scenario>
+  plan-verify diff [--json] <old-spec> <new-spec>
   plan-verify emit-smt [--json] <spec>
   plan-verify lint [--json] <spec>
   plan-verify report <spec>
@@ -29,6 +30,62 @@ usage:
 `report <spec>` prints the logical problems in plain language: contradictions, uncovered situations, conditions that can never be true, requirements that add nothing, and exact duplicates. For a contradiction it asks which requirement should win and does not choose. Lint itself names a repeat that sits outside every conflict. The report still explains a stricter repeat by naming the wider requirement.
 
 `policy` searches the same finite domain as lint. With no property it prints one scenario the requirements allow and one they forbid. With a property file it looks for a scenario the requirements allow and the property forbids. Do not treat either scenario as the behavior the PM agreed to, and do not pick a winning requirement.
+
+## Revising a spec
+
+When the product manager changes a requirement, keep the previous spec and write the new one beside it. Leave each requirement's id in place so the two files can be matched. Then diff them:
+
+`build/plan-verify diff <old-spec> <new-spec>`
+
+The report names what was added, removed, or reworded. It searches for one scenario the old spec accepts and the new spec rejects, and one the other way. Each is the first assignment, false before true, with the plain-English reason and the requirement that fails. If neither exists, the report says `No scenario changes acceptance.` Conflicts and gaps that appeared or went away are listed after that. Exit 0 means acceptance did not change. Exit 1 means it did. Ask the product manager about a scenario that changed acceptance before anyone builds it.
+
+`examples/order-v1.ears.md` fulfills an order only when it was submitted and inventory is available. `examples/order-v2.ears.md` keeps that rule and says what happens in the other situations. The smallest scenario the old spec still allows is an order that was never submitted and was fulfilled anyway:
+
+<!-- verify stdout 1
+build/plan-verify
+diff
+examples/order-v1.ears.md
+examples/order-v2.ears.md
+-->
+```text
+old: examples/order-v1.ears.md
+new: examples/order-v2.ears.md
+added:
+R2 line 8
+WHEN an order is submitted AND inventory is not available, THE Order System SHALL not fulfill the order.
+
+R3 line 9
+WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
+removed:
+none
+reworded:
+none
+schema:
+none
+behavior:
+The old spec accepts this scenario and the new spec rejects it.
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": true
+}
+
+R3 line 9
+WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
+An order was not submitted, but the order was fulfilled.
+
+No scenario is accepted by the new spec and rejected by the old spec.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+order_fulfilled
+Nothing says whether the order was fulfilled when an order was submitted and inventory was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
+gaps new:
+none
+```
 
 The samples below are the built CLI. `node --experimental-strip-types src/main.ts` prints the same bytes when `build/plan-verify` is not there yet. The same spec always produces the same SMT-LIB.
 

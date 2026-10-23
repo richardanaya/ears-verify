@@ -5,6 +5,7 @@
 
 import { readFileSync } from "node:fs";
 import { bindScenario, evaluate, formatCheckJson, formatCheckText, formatErrorJson } from "./check.ts";
+import { diffSpecs, formatDiffJson, formatDiffText } from "./diff.ts";
 import { parseProperty, parseSpec } from "./ears.ts";
 import { parseScenarioJson } from "./jsonvalue.ts";
 import { formatLintJson, formatLintText, lintSpec } from "./lint.ts";
@@ -39,6 +40,10 @@ function main(): void {
   }
   if (command === "check") {
     commandCheck(args.slice(1));
+    return;
+  }
+  if (command === "diff") {
+    commandDiff(args.slice(1));
     return;
   }
   if (command === "emit-smt") {
@@ -136,6 +141,28 @@ function commandCheck(args: string[]): void {
   else console.log(formatCheckText(specPath, scenarioPath, violations));
   if (violations.length === 0) process.exit(EXIT_OK);
   process.exit(EXIT_VIOLATIONS);
+}
+
+function commandDiff(args: string[]): void {
+  const flags = parseFlags(args, false, false);
+  if (flags.error.length > 0) fail(flags.json, flags.error);
+  if (flags.positionals.length !== 2) fail(flags.json, "usage: plan-verify diff [--json] <old-spec> <new-spec>");
+  const oldPath = flags.positionals[0];
+  const newPath = flags.positionals[1];
+  const oldText = readText(oldPath);
+  if (oldText === null) fail(flags.json, "cannot read " + oldPath);
+  const newText = readText(newPath);
+  if (newText === null) fail(flags.json, "cannot read " + newPath);
+  const oldParsed = parseSpec(oldText);
+  if (!oldParsed.ok) fail(flags.json, oldPath + ":" + String(oldParsed.line) + ": " + oldParsed.message);
+  const newParsed = parseSpec(newText);
+  if (!newParsed.ok) fail(flags.json, newPath + ":" + String(newParsed.line) + ": " + newParsed.message);
+  const outcome = diffSpecs(oldPath, oldParsed.spec, newPath, newParsed.spec);
+  if (outcome.kind === "error") fail(flags.json, outcome.message);
+  if (flags.json) console.log(formatDiffJson(oldPath, newPath, outcome.report));
+  else console.log(formatDiffText(oldPath, newPath, outcome.report));
+  if (outcome.report.oldAcceptsNewRejectsFound || outcome.report.newAcceptsOldRejectsFound) process.exit(EXIT_VIOLATIONS);
+  process.exit(EXIT_OK);
 }
 
 function commandEmit(args: string[]): void {
@@ -260,6 +287,7 @@ function usage(toStderr: boolean): void {
   const text =
     "usage:\n" +
     "  plan-verify check [--json] <spec> --input <scenario>\n" +
+    "  plan-verify diff [--json] <old-spec> <new-spec>\n" +
     "  plan-verify emit-smt [--json] <spec>\n" +
     "  plan-verify lint [--json] <spec>\n" +
     "  plan-verify report <spec>\n" +

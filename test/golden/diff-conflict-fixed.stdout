@@ -1,0 +1,33 @@
+old: test/fixtures/diff-conflict-new.ears.md
+new: test/fixtures/diff-conflict-old.ears.md
+added:
+none
+removed:
+R3 line 6
+When an order is submitted, the Order System shall not fulfill the order.
+reworded:
+none
+schema:
+none
+behavior:
+No scenario is accepted by the old spec and rejected by the new spec.
+
+The new spec accepts this scenario and the old spec rejects it.
+{
+  "order_submitted": true,
+  "order_fulfilled": true
+}
+
+R3 line 6
+When an order is submitted, the Order System shall not fulfill the order.
+An order was submitted, but the order was fulfilled.
+lint:
+conflicts fixed:
+R2, R3
+R2 and R3 cannot both hold.
+conflicts new:
+none
+gaps fixed:
+none
+gaps new:
+none

@@ -178,6 +178,90 @@ examples/order-always.ears.md
 }
 ```
 
+`diff` is `ok`, `old`, `new`, `added`, `removed`, `reworded`, `onlyOld`, `onlyNew`, `changed`, `oldAcceptsNewRejectsFound`, `oldAcceptsNewRejects`, `oldAcceptsBreaks`, `newAcceptsOldRejectsFound`, `newAcceptsOldRejects`, `newAcceptsBreaks`, `note`, `conflictsFixed`, `conflictsNew`, `gapsFixed`, and `gapsNew`. `ok` is true when neither scenario exists. `note` is then `No scenario changes acceptance.`, and otherwise it is empty. An added or removed requirement is `id`, `line`, and `sentence`. A reworded requirement is `id`, `oldLine`, `oldSentence`, `newLine`, and `newSentence`. `onlyOld` and `onlyNew` are names declared in one spec. `changed` is `name` and `text` for a range or a variant list that was narrowed to the overlap. A scenario is a list of `name` and `value`, empty when the matching `Found` flag is false. A break is `id`, `line`, `sentence`, and `because`. A conflict delta is `ids` and `summary`. A gap delta is `output` and `text`. A type, range, or variant that cannot be compared is the usual error object and exit 2.
+
+<!-- verify stdout 1
+build/plan-verify
+diff
+--json
+examples/order-v1.ears.md
+examples/order-v2.ears.md
+-->
+```text
+{
+  "ok": false,
+  "old": "examples/order-v1.ears.md",
+  "new": "examples/order-v2.ears.md",
+  "added": [
+    {
+      "id": "R2",
+      "line": 8,
+      "sentence": "WHEN an order is submitted AND inventory is not available, THE Order System SHALL not fulfill the order."
+    },
+    {
+      "id": "R3",
+      "line": 9,
+      "sentence": "WHEN an order is not submitted, THE Order System SHALL not fulfill the order."
+    }
+  ],
+  "removed": [],
+  "reworded": [],
+  "onlyOld": [],
+  "onlyNew": [],
+  "changed": [],
+  "oldAcceptsNewRejectsFound": true,
+  "oldAcceptsNewRejects": [
+    {
+      "name": "order_submitted",
+      "value": "false"
+    },
+    {
+      "name": "inventory_available",
+      "value": "false"
+    },
+    {
+      "name": "order_fulfilled",
+      "value": "true"
+    }
+  ],
+  "oldAcceptsBreaks": [
+    {
+      "id": "R3",
+      "line": 9,
+      "sentence": "WHEN an order is not submitted, THE Order System SHALL not fulfill the order.",
+      "because": "An order was not submitted, but the order was fulfilled."
+    }
+  ],
+  "newAcceptsOldRejectsFound": false,
+  "newAcceptsOldRejects": [],
+  "newAcceptsBreaks": [],
+  "note": "",
+  "conflictsFixed": [],
+  "conflictsNew": [],
+  "gapsFixed": [
+    {
+      "output": "order_fulfilled",
+      "text": "Nothing says whether the order was fulfilled when an order was submitted and inventory was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response."
+    }
+  ],
+  "gapsNew": []
+}
+```
+
+<!-- verify stdout 2
+build/plan-verify
+diff
+--json
+test/fixtures/diff-type-old.ears.md
+test/fixtures/diff-type-new.ears.md
+-->
+```text
+{
+  "ok": false,
+  "error": "order_fulfilled is Bool in test/fixtures/diff-type-old.ears.md and Int in test/fixtures/diff-type-new.ears.md."
+}
+```
+
 `emit-smt` is `ok`, `spec`, and `smt`. `smt` is the same SMT-LIB text as the plain command, with a newline between lines and none after the last line.
 
 <!-- verify stdout 0

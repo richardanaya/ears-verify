@@ -1,0 +1,41 @@
+old: test/fixtures/diff-enum-old.ears.md
+new: test/fixtures/diff-enum-new.ears.md
+added:
+none
+removed:
+none
+reworded:
+R1
+old line 4
+The Order System shall mark the order placed.
+new line 4
+The Order System shall mark the order shipped.
+schema:
+status variants changed from placed, shipped, and cancelled to placed and shipped. Compared over placed and shipped.
+behavior:
+The old spec accepts this scenario and the new spec rejects it.
+{
+  "status": "placed"
+}
+
+R1 line 4
+The Order System shall mark the order shipped.
+The order was placed.
+
+The new spec accepts this scenario and the old spec rejects it.
+{
+  "status": "shipped"
+}
+
+R1 line 4
+The Order System shall mark the order placed.
+The order was shipped.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+none
+gaps new:
+none

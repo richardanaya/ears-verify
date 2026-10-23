@@ -1,0 +1,58 @@
+{
+  "ok": false,
+  "old": "examples/order-v1.ears.md",
+  "new": "examples/order-v2.ears.md",
+  "added": [
+    {
+      "id": "R2",
+      "line": 8,
+      "sentence": "WHEN an order is submitted AND inventory is not available, THE Order System SHALL not fulfill the order."
+    },
+    {
+      "id": "R3",
+      "line": 9,
+      "sentence": "WHEN an order is not submitted, THE Order System SHALL not fulfill the order."
+    }
+  ],
+  "removed": [],
+  "reworded": [],
+  "onlyOld": [],
+  "onlyNew": [],
+  "changed": [],
+  "oldAcceptsNewRejectsFound": true,
+  "oldAcceptsNewRejects": [
+    {
+      "name": "order_submitted",
+      "value": "false"
+    },
+    {
+      "name": "inventory_available",
+      "value": "false"
+    },
+    {
+      "name": "order_fulfilled",
+      "value": "true"
+    }
+  ],
+  "oldAcceptsBreaks": [
+    {
+      "id": "R3",
+      "line": 9,
+      "sentence": "WHEN an order is not submitted, THE Order System SHALL not fulfill the order.",
+      "because": "An order was not submitted, but the order was fulfilled."
+    }
+  ],
+  "newAcceptsOldRejectsFound": false,
+  "newAcceptsOldRejects": [],
+  "newAcceptsBreaks": [],
+  "note": "",
+  "conflictsFixed": [],
+  "conflictsNew": [],
+  "gapsFixed": [
+    {
+      "output": "order_fulfilled",
+      "text": "Nothing says whether the order was fulfilled when an order was submitted and inventory was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response."
+    }
+  ],
+  "gapsNew": []
+}

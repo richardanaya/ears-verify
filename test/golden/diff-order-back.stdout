@@ -1,0 +1,37 @@
+old: examples/order-v2.ears.md
+new: examples/order-v1.ears.md
+added:
+none
+removed:
+R2 line 8
+WHEN an order is submitted AND inventory is not available, THE Order System SHALL not fulfill the order.
+
+R3 line 9
+WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
+reworded:
+none
+schema:
+none
+behavior:
+No scenario is accepted by the old spec and rejected by the new spec.
+
+The new spec accepts this scenario and the old spec rejects it.
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": true
+}
+
+R3 line 9
+WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
+An order was not submitted, but the order was fulfilled.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+none
+gaps new:
+order_fulfilled
+Nothing says whether the order was fulfilled when an order was submitted and inventory was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
