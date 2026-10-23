@@ -133,6 +133,19 @@ class Engine {
   thPos: number[];
   /** Unassigned theory-atom slots. */
   thLive: number[];
+  /**
+   * Unassigned slots whose bounds changed since the last check.
+   * Parked slots stay out of this list until setLo, setHi, or restore wakes them.
+   */
+  thHot: number[];
+  /** Parallel to theory atoms. Index in thHot, or -1 when parked or assigned. */
+  thHotPos: number[];
+  /** Parallel to symbols. Theory slots that read that symbol's bounds. */
+  thWatch: number[][];
+  /** Bool symbols whose bounds changed and may force the bool atom. */
+  boolHot: number[];
+  /** Parallel to symbols. Index in boolHot, or -1. */
+  boolHotPos: number[];
   /** Symbol index for a one-variable comparison, or -1 when the atom is not unary. */
   thVar: number[];
   thCoeff: number[];
@@ -181,6 +194,11 @@ class Engine {
     this.atomSlot = [];
     this.thPos = [];
     this.thLive = [];
+    this.thHot = [];
+    this.thHotPos = [];
+    this.thWatch = [];
+    this.boolHot = [];
+    this.boolHotPos = [];
     this.thVar = [];
     this.thCoeff = [];
     this.thOp = [];
@@ -243,6 +261,8 @@ class Engine {
       }
       if (isDriver(sym)) this.drivers.push(i);
       this.activeDriver.push(true);
+      this.thWatch.push([]);
+      this.boolHotPos.push(-1);
     }
   }
 
@@ -389,6 +409,7 @@ class Engine {
     this.remember(1, si, this.lo[si]);
     this.lo[si] = value;
     this.ticks++;
+    this.wakeBounds(si);
   }
 
   setHi(si: number, value: number): void {
@@ -396,6 +417,7 @@ class Engine {
     this.remember(2, si, this.hi[si]);
     this.hi[si] = value;
     this.ticks++;
+    this.wakeBounds(si);
   }
 
   remember(kind: number, index: number, prev: number): void {
@@ -431,8 +453,8 @@ class Engine {
 
   search(pos: number, wantMin: boolean): boolean {
     if (!this.propagate()) return false;
+    while (pos < this.nsym && this.lo[pos] === this.hi[pos]) pos++;
     if (pos >= this.nsym) return this.fulfilled();
-    if (this.lo[pos] === this.hi[pos]) return this.search(pos + 1, wantMin);
     const lo = this.lo[pos];
     const hi = this.hi[pos];
     if (wantMin && hi - lo > 48 && !this.isBool[pos]) {
@@ -868,10 +890,10 @@ class Engine {
   }
 
   imply(): boolean {
-    const live = this.thLive;
+    const hot = this.thHot;
     let i = 0;
-    while (i < live.length) {
-      const slot = live[i];
+    while (i < hot.length) {
+      const slot = hot[i];
       const a = this.theoryAtoms[slot];
       if (this.val[a] >= 0) {
         this.retireTheory(slot);
@@ -907,20 +929,25 @@ class Engine {
         else if (low > 0 || high < 0) forced = 1;
       } else forced = this.forced(this.atoms[a]);
       if (forced < 0) {
-        i++;
+        this.parkHot(slot);
         continue;
       }
       const lit = forced === 1 ? this.pos(a) : this.neg(this.pos(a));
       if (!this.assignLit(lit)) return false;
-      if (i < live.length && live[i] === slot) i++;
+      if (i < hot.length && hot[i] === slot) i++;
     }
-    for (let i = 0; i < this.nsym; i++) {
-      if (!this.isBool[i] || this.boolAtom[i] < 0) continue;
-      if (this.val[this.boolAtom[i]] >= 0) continue;
-      if (this.lo[i] === this.hi[i]) {
-        const lit = this.lo[i] === 1 ? this.pos(this.boolAtom[i]) : this.neg(this.pos(this.boolAtom[i]));
-        if (!this.assignLit(lit)) return false;
+    const bools = this.boolHot;
+    let b = 0;
+    while (b < bools.length) {
+      const si = bools[b];
+      const atom = this.boolAtom[si];
+      if (atom < 0 || this.val[atom] >= 0 || this.lo[si] !== this.hi[si]) {
+        this.parkBool(si);
+        continue;
       }
+      const lit = this.lo[si] === 1 ? this.pos(atom) : this.neg(this.pos(atom));
+      if (!this.assignLit(lit)) return false;
+      if (b < bools.length && bools[b] === si) b++;
     }
     return true;
   }
@@ -934,6 +961,7 @@ class Engine {
   }
 
   retireTheory(slot: number): void {
+    this.parkHot(slot);
     const pos = this.thPos[slot];
     if (pos < 0) return;
     const last = this.thLive.length - 1;
@@ -948,14 +976,74 @@ class Engine {
     if (this.thPos[slot] >= 0) return;
     this.thPos[slot] = this.thLive.length;
     this.thLive.push(slot);
+    this.noteHot(slot);
   }
 
   reviveAllTheory(): void {
     while (this.thLive.length > 0) this.thLive.pop();
+    while (this.thHot.length > 0) this.thHot.pop();
     for (let slot = 0; slot < this.theoryAtoms.length; slot++) {
       this.thPos[slot] = this.thLive.length;
       this.thLive.push(slot);
+      this.thHotPos[slot] = this.thHot.length;
+      this.thHot.push(slot);
     }
+    while (this.boolHot.length > 0) this.boolHot.pop();
+    for (let si = 0; si < this.nsym; si++) {
+      this.boolHotPos[si] = -1;
+      if (!this.isBool[si] || this.boolAtom[si] < 0) continue;
+      this.boolHotPos[si] = this.boolHot.length;
+      this.boolHot.push(si);
+    }
+  }
+
+  noteHot(slot: number): void {
+    if (slot < 0 || slot >= this.thHotPos.length) return;
+    if (this.thHotPos[slot] >= 0) return;
+    this.thHotPos[slot] = this.thHot.length;
+    this.thHot.push(slot);
+  }
+
+  parkHot(slot: number): void {
+    if (slot < 0 || slot >= this.thHotPos.length) return;
+    const pos = this.thHotPos[slot];
+    if (pos < 0) return;
+    const last = this.thHot.length - 1;
+    const moved = this.thHot[last];
+    this.thHot[pos] = moved;
+    this.thHotPos[moved] = pos;
+    this.thHot.pop();
+    this.thHotPos[slot] = -1;
+  }
+
+  noteBool(si: number): void {
+    if (si < 0 || si >= this.boolHotPos.length) return;
+    if (this.boolHotPos[si] >= 0) return;
+    this.boolHotPos[si] = this.boolHot.length;
+    this.boolHot.push(si);
+  }
+
+  parkBool(si: number): void {
+    if (si < 0 || si >= this.boolHotPos.length) return;
+    const pos = this.boolHotPos[si];
+    if (pos < 0) return;
+    const last = this.boolHot.length - 1;
+    const moved = this.boolHot[last];
+    this.boolHot[pos] = moved;
+    this.boolHotPos[moved] = pos;
+    this.boolHot.pop();
+    this.boolHotPos[si] = -1;
+  }
+
+  wakeBounds(si: number): void {
+    if (si < 0 || si >= this.thWatch.length) return;
+    const slots = this.thWatch[si];
+    for (let k = 0; k < slots.length; k++) {
+      const slot = slots[k];
+      if (this.thPos[slot] < 0) continue;
+      this.noteHot(slot);
+    }
+    if (si < this.isBool.length && this.isBool[si]) this.noteBool(si);
   }
 
   forced(info: AtomInfo): number {
@@ -1363,12 +1451,15 @@ class Engine {
       this.theoryAtoms.push(id);
       this.atomSlot.push(slot);
       this.thPos.push(-1);
+      this.thHotPos.push(-1);
       if (info.vars.length === 1) {
         this.thVar.push(info.vars[0]);
         this.thCoeff.push(info.coeffs[0]);
+        this.thWatch[info.vars[0]].push(slot);
       } else {
         this.thVar.push(-1);
         this.thCoeff.push(0);
+        for (let v = 0; v < info.vars.length; v++) this.thWatch[info.vars[v]].push(slot);
       }
       this.thOp.push(info.op);
       this.thConst.push(info.constant);
@@ -1426,9 +1517,13 @@ class Engine {
       if (kind === 0) {
         this.retargetTheory(index, this.val[index], prev);
         this.val[index] = prev;
+      } else if (kind === 1) {
+        this.lo[index] = prev;
+        this.wakeBounds(index);
+      } else {
+        this.hi[index] = prev;
+        this.wakeBounds(index);
       }
-      else if (kind === 1) this.lo[index] = prev;
-      else this.hi[index] = prev;
     }
     while (this.ineq.length > ineqLen) this.ineq.pop();
     while (this.ne.length > neLen) this.ne.pop();
@@ -1573,6 +1668,19 @@ class FactorGroup {
  * the low end, which is where the least bad situation puts them.
  * Null means the split would be unsound.
  */
+/**
+ * Independent output groups, or null when a requirement mentions two outputs
+ * or a condition reads an output. Driver-only requirements form one group.
+ * Order inside a group follows holds.
+ */
+export function independentGroups(spec: Spec, holds: Requirement[]): Requirement[][] | null {
+  const groups = factorize(spec, holds);
+  if (groups === null) return null;
+  const out: Requirement[][] = [];
+  for (let i = 0; i < groups.length; i++) out.push(groups[i].holds);
+  return out;
+}
+
 function factorize(spec: Spec, holds: Requirement[]): FactorGroup[] | null {
   const buckets: Requirement[][] = [];
   for (let i = 0; i < spec.symbols.length; i++) buckets.push([]);

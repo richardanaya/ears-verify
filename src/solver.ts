@@ -222,6 +222,45 @@ export function conflictingSets(spec: Spec): ConflictGroup[] {
 }
 
 /**
+ * Conflict keys for holds, using the same core search root would use.
+ * holds may be one output group of root. The search still follows root's
+ * size and driver width, so a small group of a wide spec stays on the wide path.
+ */
+export function conflictKeysMatched(root: Spec, holds: Requirement[]): string[] {
+  const part: Spec = { enums: root.enums, symbols: root.symbols, requirements: holds };
+  const large = root.requirements.length > 12;
+  let found: ConflictGroup[];
+  if (!large) found = conflictingSets(part);
+  else if (driverWide(root)) found = coresLarge(part);
+  else found = coresByDeletionOn(part, holdsDrivers(root, holds));
+  const keys: string[] = [];
+  for (let i = 0; i < found.length; i++) keys.push(idKey(part, found[i].indexes));
+  return keys;
+}
+
+function holdsDrivers(spec: Spec, holds: Requirement[]): number[] {
+  const drivers: number[] = [];
+  for (let i = 0; i < spec.symbols.length; i++) {
+    if (!isDriver(spec.symbols[i])) continue;
+    let hit = false;
+    for (let r = 0; r < holds.length; r++) {
+      if (requirementMentions(holds[r], i)) hit = true;
+    }
+    if (hit) drivers.push(i);
+  }
+  return drivers;
+}
+
+function idKey(spec: Spec, indexes: number[]): string {
+  let key = "";
+  for (let i = 0; i < indexes.length; i++) {
+    if (i > 0) key += ",";
+    key += spec.requirements[indexes[i]].id;
+  }
+  return key;
+}
+
+/**
  * Every minimal unrealizable subset, for 12 requirements or fewer.
  * Deletion finds one core. Recursing without each of its requirements
  * finds the rest. The caller sorts them into the same order as a
@@ -786,8 +825,11 @@ function outputIndexes(spec: Spec): number[] {
  * situations can collapse to one of those cores.
  */
 function coresByDeletion(spec: Spec): ConflictGroup[] {
+  return coresByDeletionOn(spec, driverIndexes(spec));
+}
+
+function coresByDeletionOn(spec: Spec, drivers: number[]): ConflictGroup[] {
   const cores: ConflictGroup[] = [];
-  const drivers = driverIndexes(spec);
   const env = new Binding(spec.symbols.length);
   const all: number[] = [];
   for (let i = 0; i < spec.requirements.length; i++) all.push(i);

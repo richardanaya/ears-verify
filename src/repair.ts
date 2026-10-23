@@ -7,9 +7,9 @@
  */
 
 import { parseProperty } from "./ears.ts";
-import { firstUnsatDrivers, satisfiable } from "./decide.ts";
-import { isDriver, findEnum, type Requirement, type Spec, type SymbolDecl, type Term } from "./spec.ts";
-import { conflictingSets } from "./solver.ts";
+import { firstUnsatDrivers, independentGroups, satisfiable } from "./decide.ts";
+import { isDriver, findEnum, requirementMentions, termMentions, type Requirement, type Spec, type SymbolDecl, type Term } from "./spec.ts";
+import { conflictKeysMatched, conflictingSets } from "./solver.ts";
 import { englishList, formatInt } from "./text.ts";
 import { termsEqual } from "./term.ts";
 
@@ -35,21 +35,72 @@ export function conflictKey(spec: Spec, indexes: number[]): string {
   return key;
 }
 
-export function findRepairs(spec: Spec, indexes: number[], originalKeys: string[]): Repair[] {
+export function findRepairs(spec: Spec, indexes: number[], originalKeys: string[], cores: GroupCores): Repair[] {
   const found: Repair[] = [];
   if (indexes.length === 0) return found;
   const target = conflictKey(spec, indexes);
   const ids: string[] = [];
   for (let i = 0; i < indexes.length; i++) ids.push(spec.requirements[indexes[i]].id);
   for (let i = 0; i < indexes.length; i++) {
-    const dropped = dropRepair(spec, indexes, i, ids, originalKeys, target);
+    const dropped = dropRepair(spec, indexes, i, ids, originalKeys, target, cores);
     if (dropped !== null) found.push(dropped);
   }
   for (let i = 0; i < indexes.length; i++) {
-    const strengthened = strengthenRepairs(spec, indexes, i, ids, originalKeys, target);
+    const strengthened = strengthenRepairs(spec, indexes, i, ids, originalKeys, target, cores);
     for (let s = 0; s < strengthened.length; s++) found.push(strengthened[s]);
   }
   return found;
+}
+
+/**
+ * Cores of output groups on the original spec. A repair recomputes only the
+ * groups whose requirements changed. Null parts means the spec does not split,
+ * and each repair runs the full core search.
+ */
+export class GroupCores {
+  spec: Spec;
+  parts: Requirement[][] | null;
+  saved: string[][];
+
+  constructor(spec: Spec) {
+    this.spec = spec;
+    this.parts = null;
+    this.saved = [];
+    if (spec.requirements.length <= 12) return;
+    const parts = independentGroups(spec, spec.requirements);
+    if (parts === null || parts.length <= 1) return;
+    this.parts = parts;
+    for (let i = 0; i < parts.length; i++) this.saved.push(conflictKeysMatched(spec, parts[i]));
+  }
+
+  keysFor(patched: Spec): string[] | null {
+    if (this.parts === null) return null;
+    if (patched.requirements.length <= 12) return null;
+    const now = independentGroups(patched, patched.requirements);
+    if (now === null) return null;
+    const keys: string[] = [];
+    for (let g = 0; g < now.length; g++) {
+      const hit = matchPart(this.parts, now[g]);
+      const found = hit >= 0 ? this.saved[hit] : conflictKeysMatched(patched, now[g]);
+      for (let k = 0; k < found.length; k++) keys.push(found[k]);
+    }
+    return keys;
+  }
+}
+
+function matchPart(parts: Requirement[][], holds: Requirement[]): number {
+  for (let i = 0; i < parts.length; i++) {
+    if (sameHolds(parts[i], holds)) return i;
+  }
+  return -1;
+}
+
+function sameHolds(left: Requirement[], right: Requirement[]): boolean {
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i++) {
+    if (left[i] !== right[i]) return false;
+  }
+  return true;
 }
 
 function dropRepair(
@@ -59,9 +110,10 @@ function dropRepair(
   ids: string[],
   originalKeys: string[],
   target: string,
+  cores: GroupCores,
 ): Repair | null {
   const at = indexes[pos];
-  if (!verified(spec, indexes, at, null, true, originalKeys, target)) return null;
+  if (!verified(spec, indexes, at, null, true, originalKeys, target, cores)) return null;
   const keptIds: string[] = [];
   const keptSentences: string[] = [];
   for (let i = 0; i < indexes.length; i++) {
@@ -90,6 +142,7 @@ function strengthenRepairs(
   ids: string[],
   originalKeys: string[],
   target: string,
+  cores: GroupCores,
 ): Repair[] {
   const at = indexes[pos];
   const req = spec.requirements[at];
@@ -129,7 +182,7 @@ function strengthenRepairs(
   const found: Repair[] = [];
   for (let i = 0; i < raw.length; i++) {
     if (!keep[i]) continue;
-    if (!verified(spec, indexes, at, raw[i].requirement, false, originalKeys, target)) continue;
+    if (!verified(spec, indexes, at, raw[i].requirement, false, originalKeys, target, cores)) continue;
     found.push({
       kind: "strengthen",
       id: req.id,
@@ -149,20 +202,33 @@ function consider(
   words: string,
   raw: Attempt[],
 ): void {
+  if (!literalRelevant(spec, indexes, literal)) return;
+  const antecedent = andTerm(req.antecedent, literal);
+  if (!conditionPossible(spec, antecedent)) return;
   const sentence = rewriteSentence(req.sentence, words);
+  const built: Requirement = {
+    id: req.id,
+    line: req.line,
+    sentence: sentence,
+    system: req.system,
+    antecedent: antecedent,
+    consequent: req.consequent,
+    hasWhen: req.hasWhen,
+    hasIf: req.hasIf,
+    whenTerm: req.whenTerm,
+  };
+  const holds: Requirement[] = [];
+  for (let i = 0; i < indexes.length; i++) {
+    if (indexes[i] === at) holds.push(built);
+    else holds.push(spec.requirements[indexes[i]]);
+  }
+  if (firstUnsatDrivers(spec, holds) !== null) return;
   const parsed = parseProperty(req.id + " " + sentence, spec);
   if (!parsed.ok || parsed.requirements.length !== 1) return;
   const got = parsed.requirements[0];
   if (!termsEqual(got.consequent, req.consequent)) return;
   if (got.antecedent === null) return;
-  if (!equivalent(spec, got.antecedent, andTerm(req.antecedent, literal))) return;
-  if (!conditionPossible(spec, got.antecedent)) return;
-  const holds: Requirement[] = [];
-  for (let i = 0; i < indexes.length; i++) {
-    if (indexes[i] === at) holds.push(withLine(got, req));
-    else holds.push(spec.requirements[indexes[i]]);
-  }
-  if (firstUnsatDrivers(spec, holds) !== null) return;
+  if (!equivalent(spec, got.antecedent, antecedent)) return;
   raw.push({ literal: literal, words: words, requirement: withLine(got, req) });
 }
 
@@ -178,6 +244,23 @@ function withLine(parsed: Requirement, original: Requirement): Requirement {
     hasIf: parsed.hasIf,
     whenTerm: parsed.whenTerm,
   };
+}
+
+/**
+ * A driver literal outside this conflict cannot remove it. The old bad
+ * situation still works after that driver is set to satisfy the literal.
+ */
+function literalRelevant(spec: Spec, indexes: number[], literal: Term): boolean {
+  let saw = false;
+  for (let s = 0; s < spec.symbols.length; s++) {
+    if (!termMentions(literal, s)) continue;
+    saw = true;
+    for (let i = 0; i < indexes.length; i++) {
+      if (requirementMentions(spec.requirements[indexes[i]], s)) return true;
+    }
+  }
+  if (!saw) return true;
+  return false;
 }
 
 function pareto(spec: Spec, antecedent: Term | null, raw: Attempt[]): boolean[] {
@@ -207,6 +290,7 @@ function verified(
   drop: boolean,
   originalKeys: string[],
   target: string,
+  cores: GroupCores,
 ): boolean {
   const requirements: Requirement[] = [];
   for (let i = 0; i < spec.requirements.length; i++) {
@@ -223,7 +307,7 @@ function verified(
     else targetReqs.push(spec.requirements[idx]);
   }
   if (targetReqs.length > 0 && firstUnsatDrivers(patched, targetReqs) !== null) return false;
-  const keys = patchedKeys(patched);
+  const keys = patchedKeys(patched, cores);
   for (let i = 0; i < keys.length; i++) {
     if (keys[i] === target) return false;
     let known = false;
@@ -257,8 +341,10 @@ function alreadyUnsat(spec: Spec, key: string): boolean {
   return firstUnsatDrivers(spec, holds) !== null;
 }
 
-function patchedKeys(spec: Spec): string[] {
+function patchedKeys(spec: Spec, cores: GroupCores): string[] {
   if (spec.requirements.length > 12) {
+    const reused = cores.keysFor(spec);
+    if (reused !== null) return reused;
     const groups = conflictingSets(spec);
     const keys: string[] = [];
     for (let i = 0; i < groups.length; i++) keys.push(conflictKey(spec, groups[i].indexes));
@@ -565,3 +651,4 @@ function conditionPossible(spec: Spec, term: Term): boolean {
   holds.push(probe);
   return satisfiable(spec, holds);
 }
+
