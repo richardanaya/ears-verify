@@ -11,6 +11,16 @@ https://github.com/user-attachments/assets/2653ac92-2f97-4aec-9852-73baa3745d2f
 
 *Watch the 2-minute demo.*
 
+## EARS and SMT
+
+EARS (Easy Approach to Requirements Syntax) is a handful of sentence patterns: always, While, When, If...then, and Where. Each requirement is one testable condition and one response.
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+```
+
+SMT (satisfiability modulo theories) is the kind of math engine that decides whether a set of logical rules can all be true at once. plan-verify turns each EARS line into an SMT implication and solves it with its own solver written in TypeScript (no Z3).
+
 ## What it does
 
 You write a plan. You, or an AI agent, turn that plan into EARS requirements. plan-verify finds contradictions, gaps, rules that can never fire, and repeats, explains them in plain English, and never picks a winner.
@@ -110,4 +120,17 @@ The specs in [examples](examples) cover each kind of finding. [A plan to the pro
 - [Reference](docs/reference.md): grammar, the solver, the build, and the other commands
 - [Lint](docs/lint.md): each finding, with the command output
 - [JSON](docs/json.md): the `--json` objects and their fields
-- Performance: see [docs/performance.md](docs/performance.md).
+
+## Performance
+
+The native ScriptC binary and the same code under Node 24 are timed with `npm run bench`, one run each on a 4 vCPU VM.
+
+| workload | native ms | Node ms |
+| --- | ---: | ---: |
+| help | 2 | 100 |
+| plan-to-problems | 22 | 126 |
+| gen-25 | 34 | 156 |
+| gen-50 | 114 | 243 |
+| gen-100 | 466 | 538 |
+
+The full history is in [the performance notes](docs/performance.md).
