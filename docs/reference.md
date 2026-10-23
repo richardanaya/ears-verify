@@ -18,6 +18,23 @@ npm run build
 
 The lint report for that file is in [lint.md](lint.md). `scriptc coverage --fail-on=blockers` stays fully static for `src/main.ts`, `test/unit.ts`, and `test/run-all.ts`.
 
+## Platforms
+
+Push to `main` and pull requests build a release binary for each target below and upload it as a workflow artifact named `plan-verify-<target>`. Every build uses `--optimization=speed` and `--strip`. The committed profile is passed with `--profile-use` only for the two Linux x64 targets. Zig 0.16.0 supplies the linker for cross builds and for Windows.
+
+| target | where it is built | goldens |
+| --- | --- | --- |
+| linux-x64-gnu | native clang on `ubuntu-24.04` | Node and this binary, byte for byte |
+| linux-x64-musl | zig `x86_64-linux-musl` on `ubuntu-24.04`, fully static | the static binary runs on that runner, byte for byte with Node |
+| linux-arm64-gnu | zig `aarch64-linux-gnu.2.36` on `ubuntu-24.04` | cross-built only |
+| macos-arm64 | native on `macos-14` | Node and this binary, byte for byte |
+| macos-x64 | native on `macos-15-intel` | Node and this binary, byte for byte |
+| x86_64-windows-gnu | zig on `windows-2025`, runtime pack `@scriptc/runtime-win32-x64-msvc@0.4.2` | Node and this binary, byte for byte |
+
+`macos-13` is no longer a GitHub-hosted runner, so the x64 Mac build uses `macos-15-intel`. The Windows triple is `x86_64-windows-gnu`. ScriptC publishes the runtime for that build as `@scriptc/runtime-win32-x64-msvc@0.4.2`.
+
+On Windows, the golden files, saved reports, and fenced samples are compared after CR is removed. The runner checkout and the console use CRLF, and the checked-in goldens use LF. Node and the native binary are compared with those CR bytes left in place, so the two programs still have to print the same bytes.
+
 ## Check one scenario
 
 `examples/order.ears.md` is a single rule: when an order is submitted and inventory is available, the order is fulfilled. A scenario is a JSON object with one value for every declared name.

@@ -8,6 +8,7 @@
  * and must match the fenced bytes.
  *
  * Write or refresh goldens with: node --experimental-strip-types test/run-all.ts --write-golden
+ * Compare an already-built binary with: node --experimental-strip-types test/run-all.ts --golden-bin build/plan-verify
  */
 
 import { spawnSync } from "node:child_process";
@@ -26,12 +27,23 @@ interface Case {
 
 const WRITE = hasFlag("--write-golden");
 let failed = 0;
+let nativeBin = "build/plan-verify";
 
 function hasFlag(flag: string): boolean {
   for (let i = 2; i < process.argv.length; i++) {
     if (process.argv[i] === flag) return true;
   }
   return false;
+}
+
+function flagValue(flag: string): string {
+  for (let i = 2; i < process.argv.length; i++) {
+    if (process.argv[i] === flag) {
+      if (i + 1 >= process.argv.length) return "";
+      return process.argv[i + 1];
+    }
+  }
+  return "";
 }
 
 function run(command: string, args: string[]): RunResult {
@@ -84,6 +96,17 @@ function nodeRun(entry: string, args: string[]): RunResult {
   return run(process.execPath, full);
 }
 
+// Windows checkouts and consoles use CRLF. Goldens are LF.
+// Node and the native binary are compared with CR left in place.
+function goldenText(text: string): string {
+  if (process.platform !== "win32" || text.indexOf("\r") < 0) return text;
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) !== 13) out += text.charAt(i);
+  }
+  return out;
+}
+
 function comparePair(name: string, nodeResult: RunResult, binResult: RunResult): void {
   if (
     nodeResult.status !== binResult.status ||
@@ -112,7 +135,11 @@ function comparePair(name: string, nodeResult: RunResult, binResult: RunResult):
   const expectedOut = readFileSync(stdoutPath, "utf8");
   const expectedErr = readFileSync(stderrPath, "utf8");
   const expectedExit = readFileSync(exitPath, "utf8");
-  if (nodeResult.stdout !== expectedOut || nodeResult.stderr !== expectedErr || exitText !== expectedExit) {
+  if (
+    goldenText(nodeResult.stdout) !== goldenText(expectedOut) ||
+    goldenText(nodeResult.stderr) !== goldenText(expectedErr) ||
+    goldenText(exitText) !== goldenText(expectedExit)
+  ) {
     fail(name + " golden mismatch");
     console.error("--- actual stdout ---\n" + nodeResult.stdout);
     console.error("--- golden stdout ---\n" + expectedOut);
@@ -126,8 +153,20 @@ function comparePair(name: string, nodeResult: RunResult, binResult: RunResult):
 }
 
 function main(): void {
+  if (hasFlag("--golden-bin")) {
+    nativeBin = flagValue("--golden-bin");
+    if (nativeBin.length === 0) {
+      fail("--golden-bin needs a path");
+      process.exit(1);
+    }
+  }
   mkdirSync("build", { recursive: true });
   mkdirSync("test/golden", { recursive: true });
+
+  if (hasFlag("--golden-bin")) {
+    runGoldenCli();
+    return;
+  }
 
   const version = run("node_modules/.bin/scriptc", ["--version"]);
   const versionText = version.stdout.trim();
@@ -153,6 +192,10 @@ function main(): void {
   const unitBin = run("build/unit-tests", []);
   comparePair("unit", unitNode, unitBin);
 
+  runGoldenCli();
+}
+
+function runGoldenCli(): void {
   const cases: Case[] = [
     { name: "check-fail", args: ["check", "examples/order.ears.md", "--input", "examples/order-fail.json"] },
     { name: "check-pass", args: ["check", "examples/order.ears.md", "--input", "examples/order-pass.json"] },
@@ -227,7 +270,7 @@ function main(): void {
   for (let i = 0; i < cases.length; i++) {
     const item = cases[i];
     const nodeResult = nodeRun("src/main.ts", item.args);
-    const binResult = run("build/plan-verify", item.args);
+    const binResult = run(nativeBin, item.args);
     comparePair(item.name, nodeResult, binResult);
   }
 
@@ -249,10 +292,10 @@ function checkPlanToProblems(): void {
   const dir = "examples/plan-to-problems/";
   const spec = dir + "generated.ears.md";
   const lintNode = nodeRun("src/main.ts", ["lint", "--json", spec]);
-  const lintBin = run("build/plan-verify", ["lint", "--json", spec]);
+  const lintBin = run(nativeBin, ["lint", "--json", spec]);
   const lintOk = sameSaved("plan-to-problems lint", lintNode, lintBin, dir + "lint.json", 1);
   const reportNode = nodeRun("src/main.ts", ["report", spec]);
-  const reportBin = run("build/plan-verify", ["report", spec]);
+  const reportBin = run(nativeBin, ["report", spec]);
   const reportOk = sameSaved("plan-to-problems report", reportNode, reportBin, dir + "problems.md", 1);
   if (!lintOk || !reportOk) return;
   const planted = readFileSync(dir + "planted.txt", "utf8");
@@ -276,7 +319,11 @@ function sameSaved(name: string, nodeResult: RunResult, binResult: RunResult, sa
     return false;
   }
   const saved = readFileSync(savedPath, "utf8");
-  if (nodeResult.stdout !== saved || nodeResult.stderr.length !== 0 || nodeResult.status !== exitCode) {
+  if (
+    goldenText(nodeResult.stdout) !== goldenText(saved) ||
+    goldenText(nodeResult.stderr).length !== 0 ||
+    nodeResult.status !== exitCode
+  ) {
     fail(name + " saved output mismatch");
     console.error("expected exit " + String(exitCode) + ", got " + String(nodeResult.status));
     console.error("--- actual stdout ---\n" + nodeResult.stdout);
@@ -393,7 +440,7 @@ function countText(text: string, needle: string): number {
 }
 
 function checkDocSamples(label: string, path: string, strictText: boolean): void {
-  const text = readFileSync(path, "utf8");
+  const text = goldenText(readFileSync(path, "utf8"));
   const startMark = "<!-- verify ";
   const fences: number[] = [];
   let cursor = 0;
@@ -437,7 +484,7 @@ function checkDocSamples(label: string, path: string, strictText: boolean): void
     }
     fences.push(fenceAt);
     const body = text.slice(fenceLineEnd + 1, closeAt + 1);
-    const native = run(args[0], args.slice(1));
+    const native = run(nativeBin, args.slice(1));
     const nodeArgs: string[] = ["--experimental-strip-types", "src/main.ts"];
     for (let i = 1; i < args.length; i++) nodeArgs.push(args[i]);
     const nodeResult = run(process.execPath, nodeArgs);
@@ -448,9 +495,10 @@ function checkDocSamples(label: string, path: string, strictText: boolean): void
       console.error("--- native stdout ---\n" + native.stdout);
       return;
     }
-    const actual = stream === "stdout" ? native.stdout : native.stderr;
-    const other = stream === "stdout" ? native.stderr : native.stdout;
-    if (native.status !== exitCode || actual !== body || other.length !== 0) {
+    const actual = goldenText(stream === "stdout" ? native.stdout : native.stderr);
+    const other = goldenText(stream === "stdout" ? native.stderr : native.stdout);
+    const sample = goldenText(body);
+    if (native.status !== exitCode || actual !== sample || other.length !== 0) {
       fail(label + " sample " + command);
       console.error("expected exit " + String(exitCode) + ", got " + String(native.status));
       console.error("--- cli ---");

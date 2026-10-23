@@ -1,0 +1,104 @@
+name: platforms
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: platforms-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  binary:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64-gnu
+            runner: ubuntu-24.04
+            zig: false
+            golden: true
+            runtime: none
+            bin: build/plan-verify
+          - target: linux-x64-musl
+            runner: ubuntu-24.04
+            zig: true
+            golden: true
+            runtime: "@scriptc/runtime-linux-x64-musl@0.4.2"
+            bin: build/plan-verify
+          - target: linux-arm64-gnu
+            runner: ubuntu-24.04
+            zig: true
+            golden: false
+            runtime: "@scriptc/runtime-linux-arm64-gnu@0.4.2"
+            bin: build/plan-verify
+          - target: macos-arm64
+            runner: macos-14
+            zig: false
+            golden: true
+            runtime: none
+            bin: build/plan-verify
+          - target: macos-x64
+            runner: macos-15-intel
+            zig: false
+            golden: true
+            runtime: none
+            bin: build/plan-verify
+          - target: x86_64-windows-gnu
+            runner: windows-2025
+            zig: true
+            golden: true
+            runtime: "@scriptc/runtime-win32-x64-msvc@0.4.2"
+            bin: build/plan-verify.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install clang
+        if: matrix.target == 'linux-x64-gnu'
+        run: |
+          command -v clang >/dev/null || (sudo apt-get update && sudo apt-get install -y clang)
+          clang --version
+      - name: Install Zig 0.16.0
+        if: matrix.zig
+        uses: vercel-labs/setup-zig@v1
+        with:
+          version: "0.16.0"
+      - name: Install dependencies
+        run: npm ci
+      - name: Require ScriptC 0.4.2
+        run: test "$(node_modules/scriptc/bin/scriptc.exe --version)" = "0.4.2"
+      - name: Install runtime pack
+        if: matrix.runtime != 'none'
+        run: npm install --no-save --save-exact "${{ matrix.runtime }}"
+      - name: Release build
+        run: node scripts/build-target.mjs "${{ matrix.target }}"
+      - name: Musl binary is static
+        if: matrix.target == 'linux-x64-musl'
+        run: |
+          ldd build/plan-verify > /tmp/ldd-out.txt 2>&1 || true
+          if ! grep -q "not a dynamic executable" /tmp/ldd-out.txt; then
+            echo "linux-x64-musl binary is not fully static" >&2
+            cat /tmp/ldd-out.txt >&2
+            exit 1
+          fi
+      - name: Arm64 binary is aarch64
+        if: matrix.target == 'linux-arm64-gnu'
+        run: file build/plan-verify | grep -q "ARM aarch64"
+      - name: Golden tests
+        if: matrix.golden
+        run: node --experimental-strip-types test/run-all.ts --golden-bin "${{ matrix.bin }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plan-verify-${{ matrix.target }}
+          path: ${{ matrix.bin }}
+          if-no-files-found: error
