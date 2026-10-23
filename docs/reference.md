@@ -4,13 +4,15 @@ How to build plan-verify, the EARS grammar, the solver, and the commands other t
 
 ## Build
 
-You need Node 24 and clang. `npm install` installs ScriptC 0.4.1.
+You need Node 24 and clang. `npm install` installs ScriptC 0.4.2.
 
 ```bash
 npm install
 npm run build
 ./build/plan-verify lint examples/order-conflict.ears.md
 ```
+
+`npm run build` uses ScriptC's default optimization. `npm run build:release` builds the same program with `--optimization=speed` and `--strip`. On Linux that script also passes `--profile-use=bench/plan-verify.profdata`. Other platforms build with speed and strip, because profile-guided optimization is Linux-only. `npm run profile` rewrites the profile from the bench specs and the examples. That step is Linux-only and needs Clang 19 or newer.
 
 `node --experimental-strip-types src/main.ts` runs the same program and prints the same bytes. The tests fail if the two ever drift.
 
@@ -405,7 +407,7 @@ The skill at [`skills/plan-verify/SKILL.md`](../skills/plan-verify/SKILL.md) tel
 
 **Why our own solver?** The decision procedure is in this repository: DPLL for the boolean structure, and bounds for linear integer arithmetic. There is no Z3, cvc5, or yices to install, and the Node run and the native binary are tested to print the same bytes.
 
-**Why ScriptC?** One TypeScript program is the product. ScriptC 0.4.1 compiles that program to a native binary, and `scriptc coverage` stays fully static. Node 24 runs the same files for day-to-day edits.
+**Why ScriptC?** One TypeScript program is the product. ScriptC 0.4.2 compiles that program to a native binary, and `scriptc coverage` stays fully static. Node 24 runs the same files for day-to-day edits.
 
 **Why do integers need a range?** The arithmetic is bounded. A declared range, inside `-1000000..1000000`, keeps every integer finite. The solver does not walk that range one value at a time.
 

@@ -19,6 +19,24 @@ const OP_GE = 1;
 const OP_EQ = 2;
 const OP_NE = 3;
 
+/**
+ * One linear comparison. Number fields stay raw in the native imply loop.
+ * A number[] read is number | undefined, and ScriptC boxes that on the heap.
+ */
+class TheoryRow {
+  si: number;
+  coeff: number;
+  op: number;
+  constant: number;
+
+  constructor(si: number, coeff: number, op: number, constant: number) {
+    this.si = si;
+    this.coeff = coeff;
+    this.op = op;
+    this.constant = constant;
+  }
+}
+
 class AtomInfo {
   kind: number;
   sym: number;
@@ -146,11 +164,8 @@ class Engine {
   boolHot: number[];
   /** Parallel to symbols. Index in boolHot, or -1. */
   boolHotPos: number[];
-  /** Symbol index for a one-variable comparison, or -1 when the atom is not unary. */
-  thVar: number[];
-  thCoeff: number[];
-  thOp: number[];
-  thConst: number[];
+  /** One-variable comparison data. si is -1 when the atom is not unary. */
+  thRow: TheoryRow[];
   boolAtom: number[];
   clauses: number[][];
   holds: Requirement[];
@@ -199,10 +214,7 @@ class Engine {
     this.thWatch = [];
     this.boolHot = [];
     this.boolHotPos = [];
-    this.thVar = [];
-    this.thCoeff = [];
-    this.thOp = [];
-    this.thConst = [];
+    this.thRow = [];
     this.boolAtom = [];
     this.clauses = [];
     this.holds = [];
@@ -899,12 +911,13 @@ class Engine {
         this.retireTheory(slot);
         continue;
       }
-      const si = this.thVar[slot];
+      const row = this.thRow[slot];
+      const si = row.si;
       let forced = -1;
       if (si >= 0) {
-        const coeff = this.thCoeff[slot];
-        const constant = this.thConst[slot];
-        const op = this.thOp[slot];
+        const coeff = row.coeff;
+        const constant = row.constant;
+        const op = row.op;
         const boundLo = this.lo[si];
         const boundHi = this.hi[si];
         let low = constant;
@@ -1453,16 +1466,12 @@ class Engine {
       this.thPos.push(-1);
       this.thHotPos.push(-1);
       if (info.vars.length === 1) {
-        this.thVar.push(info.vars[0]);
-        this.thCoeff.push(info.coeffs[0]);
+        this.thRow.push(new TheoryRow(info.vars[0], info.coeffs[0], info.op, info.constant));
         this.thWatch[info.vars[0]].push(slot);
       } else {
-        this.thVar.push(-1);
-        this.thCoeff.push(0);
+        this.thRow.push(new TheoryRow(-1, 0, info.op, info.constant));
         for (let v = 0; v < info.vars.length; v++) this.thWatch[info.vars[v]].push(slot);
       }
-      this.thOp.push(info.op);
-      this.thConst.push(info.constant);
     } else this.atomSlot.push(-1);
     return id;
   }

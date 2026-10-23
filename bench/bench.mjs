@@ -7,7 +7,9 @@ import { existsSync } from "node:fs";
 const nodeCmd = process.execPath;
 const nodeArgs = ["--experimental-strip-types", "src/main.ts"];
 const nativeCmd = "build/plan-verify";
+const releaseCmd = "build/plan-verify-release";
 const haveNative = existsSync(nativeCmd);
+const haveRelease = existsSync(releaseCmd);
 
 const cases = [
   ["help", ["help"]],
@@ -38,9 +40,11 @@ console.log("plan-verify bench");
 console.log("node " + process.version);
 if (haveNative) console.log("native " + nativeCmd);
 else console.log("native binary missing; run npm run build");
+if (haveRelease) console.log("release " + releaseCmd);
 console.log("");
 let header = "workload".padEnd(16) + "node";
 if (haveNative) header += " ".repeat(22) + "native";
+if (haveRelease) header += " ".repeat(22) + "release";
 console.log(header);
 
 for (let i = 0; i < cases.length; i++) {
@@ -50,7 +54,11 @@ for (let i = 0; i < cases.length; i++) {
   let line = name.padEnd(16) + cell(nodeRow).padEnd(28);
   if (haveNative) {
     const nativeRow = timeRun(nativeCmd, args);
-    line += cell(nativeRow);
+    line += cell(nativeRow).padEnd(28);
+  }
+  if (haveRelease) {
+    const releaseRow = timeRun(releaseCmd, args);
+    line += cell(releaseRow);
   }
   console.log(line);
 }
