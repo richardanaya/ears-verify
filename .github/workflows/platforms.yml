@@ -85,9 +85,10 @@ jobs:
       - name: Musl binary is static
         if: matrix.target == 'linux-x64-musl'
         run: |
-          if ! ldd build/plan-verify 2>&1 | grep -q "not a dynamic executable"; then
+          ldd build/plan-verify > /tmp/ldd-out.txt 2>&1 || true
+          if ! grep -q "not a dynamic executable" /tmp/ldd-out.txt; then
             echo "linux-x64-musl binary is not fully static" >&2
-            ldd build/plan-verify >&2 || true
+            cat /tmp/ldd-out.txt >&2
             exit 1
           fi
       - name: Arm64 binary is aarch64

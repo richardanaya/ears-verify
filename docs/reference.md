@@ -33,6 +33,8 @@ Push to `main` and pull requests build a release binary for each target below an
 
 `macos-13` is no longer a GitHub-hosted runner, so the x64 Mac build uses `macos-15-intel`. The Windows triple is `x86_64-windows-gnu`. ScriptC publishes the runtime for that build as `@scriptc/runtime-win32-x64-msvc@0.4.2`.
 
+On Windows, the golden files, saved reports, and fenced samples are compared after CR is removed. The runner checkout and the console use CRLF, and the checked-in goldens use LF. Node and the native binary are compared with those CR bytes left in place, so the two programs still have to print the same bytes.
+
 ## Check one scenario
 
 `examples/order.ears.md` is a single rule: when an order is submitted and inventory is available, the order is fulfilled. A scenario is a JSON object with one value for every declared name.

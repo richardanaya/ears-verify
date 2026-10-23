@@ -96,6 +96,17 @@ function nodeRun(entry: string, args: string[]): RunResult {
   return run(process.execPath, full);
 }
 
+// Windows checkouts and consoles use CRLF. Goldens are LF.
+// Node and the native binary are compared with CR left in place.
+function goldenText(text: string): string {
+  if (process.platform !== "win32" || text.indexOf("\r") < 0) return text;
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) !== 13) out += text.charAt(i);
+  }
+  return out;
+}
+
 function comparePair(name: string, nodeResult: RunResult, binResult: RunResult): void {
   if (
     nodeResult.status !== binResult.status ||
@@ -124,7 +135,11 @@ function comparePair(name: string, nodeResult: RunResult, binResult: RunResult):
   const expectedOut = readFileSync(stdoutPath, "utf8");
   const expectedErr = readFileSync(stderrPath, "utf8");
   const expectedExit = readFileSync(exitPath, "utf8");
-  if (nodeResult.stdout !== expectedOut || nodeResult.stderr !== expectedErr || exitText !== expectedExit) {
+  if (
+    goldenText(nodeResult.stdout) !== goldenText(expectedOut) ||
+    goldenText(nodeResult.stderr) !== goldenText(expectedErr) ||
+    goldenText(exitText) !== goldenText(expectedExit)
+  ) {
     fail(name + " golden mismatch");
     console.error("--- actual stdout ---\n" + nodeResult.stdout);
     console.error("--- golden stdout ---\n" + expectedOut);
@@ -304,7 +319,11 @@ function sameSaved(name: string, nodeResult: RunResult, binResult: RunResult, sa
     return false;
   }
   const saved = readFileSync(savedPath, "utf8");
-  if (nodeResult.stdout !== saved || nodeResult.stderr.length !== 0 || nodeResult.status !== exitCode) {
+  if (
+    goldenText(nodeResult.stdout) !== goldenText(saved) ||
+    goldenText(nodeResult.stderr).length !== 0 ||
+    nodeResult.status !== exitCode
+  ) {
     fail(name + " saved output mismatch");
     console.error("expected exit " + String(exitCode) + ", got " + String(nodeResult.status));
     console.error("--- actual stdout ---\n" + nodeResult.stdout);
@@ -476,9 +495,10 @@ function checkDocSamples(label: string, path: string, strictText: boolean): void
       console.error("--- native stdout ---\n" + native.stdout);
       return;
     }
-    const actual = stream === "stdout" ? native.stdout : native.stderr;
-    const other = stream === "stdout" ? native.stderr : native.stdout;
-    if (native.status !== exitCode || actual !== body || other.length !== 0) {
+    const actual = goldenText(stream === "stdout" ? native.stdout : native.stderr);
+    const other = goldenText(stream === "stdout" ? native.stderr : native.stdout);
+    const sample = goldenText(body);
+    if (native.status !== exitCode || actual !== sample || other.length !== 0) {
       fail(label + " sample " + command);
       console.error("expected exit " + String(exitCode) + ", got " + String(native.status));
       console.error("--- cli ---");
