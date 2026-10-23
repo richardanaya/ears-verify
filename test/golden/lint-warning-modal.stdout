@@ -1,0 +1,15 @@
+spec: examples/order-should.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 1
+
+warning R1 line 6
+R1 uses "should" instead of "shall".
+When an order is submitted, the Order System should fulfill the order.
+Suggested fix: write "shall" so the response is required.

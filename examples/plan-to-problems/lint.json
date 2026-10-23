@@ -572,5 +572,6 @@
       "fix": "Suggested fix: rewrite the condition in R9 so a real situation can make it true, or remove the requirement. Do not invent a response."
     }
   ],
-  "unused": []
+  "unused": [],
+  "warnings": []
 }

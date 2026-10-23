@@ -7,6 +7,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 redundant R2 line 8
 R2 adds nothing. Whenever the other requirements hold, R2 holds too.

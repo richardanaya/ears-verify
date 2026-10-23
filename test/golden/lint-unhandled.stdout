@@ -7,6 +7,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 gap order_cancelled
 No requirement handles "an order is cancelled". Suggested fix: add a requirement that says what the system shall do, or remove the event.

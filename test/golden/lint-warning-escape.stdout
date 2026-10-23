@@ -1,0 +1,20 @@
+spec: examples/order-escape.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 2
+
+warning R1 line 6
+R1 uses "where possible", which lets the response slip.
+When an order is submitted, the Order System shall fulfill the order where possible.
+Suggested fix: delete "where possible" and keep "shall".
+
+warning R2 line 7
+R2 uses "if possible", which lets the response slip.
+When an order is not submitted, the Order System shall not fulfill the order if possible.
+Suggested fix: delete "if possible" and keep "shall".

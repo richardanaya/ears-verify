@@ -7,6 +7,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 gap order_fulfilled
 Nothing says whether the order was fulfilled when an order was submitted and inventory was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.

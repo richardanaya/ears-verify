@@ -200,6 +200,8 @@ function commandLint(args: string[]): void {
     outcome.report.duplicate.length +
     outcome.report.vacuous.length +
     outcome.report.unused.length;
+  // Warnings stay exit 0. Conflicts, gaps, misuse, wording, redundant,
+  // duplicate, vacuous, and unused schema still exit 1. Parse errors exit 2.
   if (flags.json) console.log(formatLintJson(specPath, outcome.report));
   else console.log(formatLintText(specPath, outcome.report));
   if (findings === 0) process.exit(EXIT_OK);

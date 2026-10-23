@@ -76,5 +76,6 @@
   "redundant": [],
   "duplicate": [],
   "vacuous": [],
-  "unused": []
+  "unused": [],
+  "warnings": []
 }

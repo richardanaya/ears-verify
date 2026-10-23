@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "spec": "examples/order-timely.ears.md",
+  "conflicts": [],
+  "gaps": [],
+  "misuse": [],
+  "wording": [],
+  "redundant": [],
+  "duplicate": [],
+  "vacuous": [],
+  "unused": [],
+  "warnings": [
+    {
+      "id": "R1",
+      "line": 6,
+      "sentence": "When an order is submitted, the Order System shall timely fulfill the order.",
+      "kind": "vague",
+      "word": "timely",
+      "text": "\"timely\" is too vague to test. Replace it with a value a scenario can check.",
+      "fix": "Suggested fix: replace \"timely\" with a declared bound."
+    }
+  ]
+}

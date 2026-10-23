@@ -34,6 +34,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 conflict {R2, R3}
 R2 and R3 cannot both hold.
@@ -94,6 +95,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 ```
 
 ## A condition that separates the clash
@@ -115,6 +117,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 conflict {R1, R2}
 R1 and R2 cannot both hold.
@@ -181,6 +184,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 gap order_fulfilled
 Nothing says whether the order was fulfilled when an order was submitted and inventory was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
@@ -203,6 +207,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 ```
 
 ## A wide integer range
@@ -224,11 +229,12 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 ```
 
 There are no strings in the logic. Descriptions and phrases stay next to the names. Vague words (`as needed`, `quickly`, `appropriate`, `user-friendly`, `fast`, `slow`, `large`, `small`, `easy`, `robust`, `flexible`, `efficient`) and solution words (`database`, `api`, `algorithm`, `microservice`, `server`, `class`, `function`) are caught in descriptions and in requirement sentences. A word that sits inside a declared phrase or action is already bound to a schema item, so that use is not a wording finding.
 
-Lint also reports an event no requirement handles, an error condition with no response, an unwanted event written with `when`, and vague words. An integer cap can clash with a larger accepted quantity, and an enum can be pinned to two variants at once. The fix still asks which requirement should win. A condition that can never be true, a state or input no requirement mentions, an enum variant no requirement mentions, and an output no response sets are reported on their own. An output no requirement mentions at all stays a gap. An event nobody handles stays a gap. A free input that some requirement already mentions is not a finding: the environment is allowed to choose it.
+Lint also reports an event no requirement handles, an error condition with no response, an unwanted event written with `when`, and vague words. A testability warning, below, leaves the exit status at 0 when it is the only finding. An integer cap can clash with a larger accepted quantity, and an enum can be pinned to two variants at once. The fix still asks which requirement should win. A condition that can never be true, a state or input no requirement mentions, an enum variant no requirement mentions, and an output no response sets are reported on their own. An output no requirement mentions at all stays a gap. An event nobody handles stays a gap. A free input that some requirement already mentions is not a finding: the environment is allowed to choose it.
 
 <!-- verify stdout 1
 build/plan-verify
@@ -245,6 +251,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 gap order_cancelled
 No requirement handles "an order is cancelled". Suggested fix: add a requirement that says what the system shall do, or remove the event.
@@ -265,6 +272,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 gap payment_declined
 No requirement states a response when "payment fails". Suggested fix: add an if ... then requirement, and ask what the system shall do. Do not choose the response.
@@ -285,6 +293,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 misuse R4 line 6
 "payment fails" is an unwanted event. Write if ... then, not when.
@@ -311,6 +320,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 wording line 4
 "fast" is too vague to test. Replace it with something a scenario can check.
@@ -323,6 +333,256 @@ output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friend
 wording line 4
 "user-friendly" is too vague to test. Replace it with something a scenario can check.
 output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friendly." phrase "fulfill the order" outcome "the order was fulfilled" / "the order was not fulfilled"
+```
+
+## Testability warnings
+
+A warning names the requirement id, the line, the sentence, and a short fix. The count is `warnings`. `--json` puts the same findings in `warnings`, and `ok` stays true when warnings are the only findings. A conflict, a gap, misuse, a wording finding, a redundant requirement, a duplicate, a vacuous requirement, or unused schema still exits 1. A word the schema does not declare is a parse error and exits 2.
+
+These words are already wording findings, so a warning does not repeat them: `as needed`, `fast`, `slow`, `large`, `small`, `appropriate`, `quickly`, `easy`, `robust`, `flexible`, `user-friendly`, `efficient`. The warning list, scanned in requirement sentences only, is `appropriately`, `reasonable`, `etc`, `adequate`, `sufficient`, `timely`, `normally`, `usually`, `some`, `several`, `many`, `few`, `minimal`, `optimal`. A word inside a declared phrase or action is skipped. `if possible` and `where possible` are escape warnings. `should`, `may`, `might`, `could`, `can`, and `will try` are weak modals. `must` and a bare `will` still fail to parse.
+
+### A vague word
+
+`examples/order-timely.ears.md` says the system shall timely fulfill the order.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-timely.ears.md
+-->
+```text
+spec: examples/order-timely.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 1
+
+warning R1 line 6
+"timely" is too vague to test. Replace it with a value a scenario can check.
+When an order is submitted, the Order System shall timely fulfill the order.
+Suggested fix: replace "timely" with a declared bound.
+```
+
+The fixed sentence drops the vague word and names the output:
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+```
+
+### A weak modal
+
+`examples/order-should.ears.md` uses `should` where the response needs `shall`. `may`, `might`, `could`, `can`, and `will try` are the same warning.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-should.ears.md
+-->
+```text
+spec: examples/order-should.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 1
+
+warning R1 line 6
+R1 uses "should" instead of "shall".
+When an order is submitted, the Order System should fulfill the order.
+Suggested fix: write "shall" so the response is required.
+```
+
+The fixed sentence:
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+```
+
+### An escape clause
+
+`examples/order-escape.ears.md` lets the response slip with `where possible` and `if possible`.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-escape.ears.md
+-->
+```text
+spec: examples/order-escape.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 2
+
+warning R1 line 6
+R1 uses "where possible", which lets the response slip.
+When an order is submitted, the Order System shall fulfill the order where possible.
+Suggested fix: delete "where possible" and keep "shall".
+
+warning R2 line 7
+R2 uses "if possible", which lets the response slip.
+When an order is not submitted, the Order System shall not fulfill the order if possible.
+Suggested fix: delete "if possible" and keep "shall".
+```
+
+The fixed sentences:
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+When an order is not submitted, the Order System shall not fulfill the order.
+```
+
+### Two outputs in one response
+
+`examples/order-split.ears.md` joins two outputs with `and`. The same warning is raised for `or`. One output joined to an input bound stays quiet, and `not` of a single output stays quiet.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-split.ears.md
+-->
+```text
+spec: examples/order-split.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 2
+
+warning R1 line 7
+R1 joins "fulfill the order" and "send a receipt" with "and" in one response.
+When an order is submitted, the Order System shall fulfill the order and send a receipt.
+Suggested fix: split this into one requirement per output.
+
+warning R2 line 8
+R2 joins "fulfill the order" and "send a receipt" with "and" in one response.
+When an order is not submitted, the Order System shall not fulfill the order and not send a receipt.
+Suggested fix: split this into one requirement per output.
+```
+
+The fixed sentences give each output its own requirement:
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+When an order is submitted, the Order System shall send a receipt.
+When an order is not submitted, the Order System shall not fulfill the order.
+When an order is not submitted, the Order System shall not send a receipt.
+```
+
+### A result no scenario can fail
+
+`examples/order-untestable.ears.md` says the system shall not fail, and no output is constrained. `shall always work` and `shall always works` are the same warning. `examples/order-always-work.ears.md` is the `always work` case.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-untestable.ears.md
+-->
+```text
+spec: examples/order-untestable.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 1
+
+warning R1 line 5
+R1 says "not fail", and no output is constrained.
+When an order is submitted, the Order System shall not fail.
+Suggested fix: name the output the response sets.
+```
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-always-work.ears.md
+-->
+```text
+spec: examples/order-always-work.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 1
+
+warning R1 line 5
+R1 says "always work", and no output is constrained.
+When a shipment is requested, the Order System shall always work.
+Suggested fix: name the output the response sets.
+```
+
+The fixed sentences name an output:
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+When a shipment is requested, the Order System shall send a receipt.
+```
+
+### A word the schema does not declare
+
+Lint already reports this as a parse error, so there is no second warning. `test/fixtures/unknown-phrase.ears.md` says "an order was submitted", and the declared phrase is "an order is submitted".
+
+<!-- verify stderr 2
+build/plan-verify
+lint
+test/fixtures/unknown-phrase.ears.md
+-->
+```text
+error: test/fixtures/unknown-phrase.ears.md:5: unknown phrase "an order was submitted". Closest: "an order is submitted", "inventory is available", "fulfill the order".
+```
+
+The fixed sentence uses the declared phrase:
+
+```ears
+When an order is submitted, the Order System shall fulfill the order.
+```
+
+### The same rules, written so a scenario can check them
+
+`examples/order-testable.ears.md` is those sentences after the fixes. Lint is quiet, including warnings:
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-testable.ears.md
+-->
+```text
+spec: examples/order-testable.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 0
 ```
 
 ## A word that is not bound
@@ -344,6 +604,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 wording line 4
 "as needed" is too vague to test. Replace it with something a scenario can check.
@@ -365,6 +626,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 conflict {R4, R5}
 R4 and R5 cannot both hold.
@@ -418,6 +680,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 1
+warnings: 0
 
 conflict {R6, R7}
 R6 and R7 cannot both hold.
@@ -474,6 +737,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 conflict {R1, R2, R3}
 R1, R2, and R3 cannot all hold.
@@ -542,6 +806,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 redundant R2 line 8
 R2 adds nothing. Whenever the other requirements hold, R2 holds too.
@@ -568,6 +833,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 conflict {R1, R2}
 R1 and R2 cannot both hold.
@@ -628,6 +894,7 @@ redundant: 0
 duplicate: 1
 vacuous: 0
 unused: 0
+warnings: 0
 
 duplicate R2 line 7
 R2 duplicates R1. The condition and the response are the same.
@@ -679,6 +946,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+warnings: 0
 
 wording line 6
 The trigger is a bare negation. Write a positive condition, such as "When a non-member asks", or declare a positive event.
@@ -704,6 +972,7 @@ redundant: 0
 duplicate: 0
 vacuous: 2
 unused: 0
+warnings: 0
 
 vacuous R1 line 7
 R1 can never trigger. Its condition is impossible for every allowed value.
@@ -735,6 +1004,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 4
+warnings: 0
 
 unused loyalty
 loyalty ("the customer is loyal") is a state and no requirement mentions it.

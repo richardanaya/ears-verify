@@ -23,5 +23,6 @@
       "fix": "Suggested fix: rewrite the condition in R2 so a real situation can make it true, or remove the requirement. Do not invent a response."
     }
   ],
-  "unused": []
+  "unused": [],
+  "warnings": []
 }

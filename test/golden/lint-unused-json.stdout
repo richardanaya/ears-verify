@@ -33,5 +33,6 @@
       "text": "Lane.refund is never mentioned.",
       "fix": "Suggested fix: use refund in a requirement, or remove it from Lane."
     }
-  ]
+  ],
+  "warnings": []
 }

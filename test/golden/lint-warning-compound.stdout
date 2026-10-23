@@ -1,0 +1,20 @@
+spec: examples/order-split.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+warnings: 2
+
+warning R1 line 7
+R1 joins "fulfill the order" and "send a receipt" with "and" in one response.
+When an order is submitted, the Order System shall fulfill the order and send a receipt.
+Suggested fix: split this into one requirement per output.
+
+warning R2 line 8
+R2 joins "fulfill the order" and "send a receipt" with "and" in one response.
+When an order is not submitted, the Order System shall not fulfill the order and not send a receipt.
+Suggested fix: split this into one requirement per output.

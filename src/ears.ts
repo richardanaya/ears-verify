@@ -5,6 +5,8 @@
  * symbols declared above it. Clauses, when present, go in this order:
  * while, when, if, where. `then` is required exactly when an if clause
  * is present. The response is `the <system> shall <boolean>`.
+ * `should`, `may`, `might`, `could`, `can`, and `will try` are accepted
+ * in place of `shall` so lint can warn. `must` and a bare `will` are rejected.
  *
  * A declaration may bind a symbol to a phrase. Matching is the exact
  * word sequence, case-insensitive, and the longest match wins.
@@ -629,20 +631,136 @@ function parseResponse(text: string, spec: Spec, hasIf: boolean): ResponseOk | {
       return { ok: false, message: "expected \"shall\"" };
     }
     const lower = word.toLowerCase();
-    if (lower === "shall") break;
-    if (lower === "should" || lower === "must" || lower === "will") {
+    if (
+      lower === "shall" ||
+      lower === "should" ||
+      lower === "may" ||
+      lower === "might" ||
+      lower === "could" ||
+      lower === "can"
+    ) {
+      break;
+    }
+    if (lower === "will") {
+      const trySave = body.i;
+      const next = readIdent(body);
+      if (next !== null && next.toLowerCase() === "try") break;
+      body.i = trySave;
       return { ok: false, message: "expected \"shall\"" };
     }
+    if (lower === "must") return { ok: false, message: "expected \"shall\"" };
     if (system.length === 0) system = word;
     else system += " " + word;
   }
   if (system.length === 0) return { ok: false, message: "expected a system name before shall" };
   const predText = body.text.slice(body.i);
   if (predText.trim().length === 0) return { ok: false, message: "expected a response" };
+  const accepted = acceptResponse(predText, spec);
+  if (accepted.ok) return { ok: true, system: system, consequent: accepted.term };
+  return accepted;
+}
+
+/** Words skipped only when a response fails to parse, longest match first. */
+const SOFTEN_WORDS: string[] = [
+  "where possible",
+  "if possible",
+  "user-friendly",
+  "as needed",
+  "appropriately",
+  "appropriate",
+  "reasonable",
+  "sufficient",
+  "efficient",
+  "normally",
+  "usually",
+  "flexible",
+  "adequate",
+  "optimal",
+  "minimal",
+  "several",
+  "quickly",
+  "timely",
+  "robust",
+  "large",
+  "small",
+  "easy",
+  "fast",
+  "slow",
+  "some",
+  "many",
+  "few",
+  "etc",
+];
+
+function acceptResponse(predText: string, spec: Spec): { ok: true; term: Term } | { ok: false; message: string } {
   const pred = parsePredicate(predText, spec, "response");
-  if (!pred.ok) return pred;
-  if (pred.sort.kind !== "bool") return { ok: false, message: "expected a boolean" };
-  return { ok: true, system: system, consequent: pred.term };
+  if (pred.ok) {
+    if (pred.sort.kind !== "bool") return { ok: false, message: "expected a boolean" };
+    return { ok: true, term: pred.term };
+  }
+  const plain = untestableResponse(predText);
+  if (plain !== null) return { ok: true, term: plain };
+  const softened = softenResponse(predText);
+  if (softened !== null) {
+    const plainSoft = untestableResponse(softened);
+    if (plainSoft !== null) return { ok: true, term: plainSoft };
+    const again = parsePredicate(softened, spec, "response");
+    if (again.ok) {
+      if (again.sort.kind !== "bool") return { ok: false, message: "expected a boolean" };
+      return { ok: true, term: again.term };
+    }
+  }
+  return pred;
+}
+
+function untestableResponse(text: string): Term | null {
+  const lower = lowerAscii(normalizeSpaces(text));
+  if (lower === "not fail" || lower === "always work" || lower === "always works") {
+    return { kind: "bool", value: true };
+  }
+  return null;
+}
+
+function softenResponse(text: string): string | null {
+  const lower = lowerAscii(text);
+  let out = "";
+  let i = 0;
+  let removed = false;
+  while (i < lower.length) {
+    if (softenBoundaryBefore(lower, i)) {
+      let matched = -1;
+      for (let w = 0; w < SOFTEN_WORDS.length; w++) {
+        const word = SOFTEN_WORDS[w];
+        if (i + word.length > lower.length) continue;
+        if (lower.slice(i, i + word.length) !== word) continue;
+        if (!softenBoundaryAfter(lower, i + word.length)) continue;
+        if (matched < 0 || word.length > SOFTEN_WORDS[matched].length) matched = w;
+      }
+      if (matched >= 0) {
+        i += SOFTEN_WORDS[matched].length;
+        removed = true;
+        continue;
+      }
+    }
+    out += text.slice(i, i + 1);
+    i++;
+  }
+  if (!removed) return null;
+  return normalizeSpaces(out);
+}
+
+function softenBoundaryBefore(text: string, index: number): boolean {
+  if (index === 0) return true;
+  return !softenWordChar(text.charCodeAt(index - 1));
+}
+
+function softenBoundaryAfter(text: string, index: number): boolean {
+  if (index >= text.length) return true;
+  return !softenWordChar(text.charCodeAt(index));
+}
+
+function softenWordChar(code: number): boolean {
+  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95;
 }
 
 function parsePredicate(text: string, spec: Spec, slot: string): Parsed {
