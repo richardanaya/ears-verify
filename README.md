@@ -120,6 +120,7 @@ The specs in [examples](examples) cover each kind of finding. [A plan to the pro
 - [Reference](docs/reference.md): grammar, the solver, the build, and the other commands
 - [Lint](docs/lint.md): each finding, with the command output
 - [JSON](docs/json.md): the `--json` objects and their fields
+- CI uploads release binaries for Linux, macOS, and Windows as workflow artifacts. The target list is in the reference.
 
 ## Performance
 
