@@ -46,3 +46,17 @@ jobs:
           node_modules/.bin/scriptc build test/unit.ts -o build/unit-tests
       - name: Test on Node and native
         run: npm test
+      - name: Lint gen-25 bound
+        run: |
+          set +e
+          timeout 20 ./build/plan-verify lint bench/specs/gen-25.ears.md >/dev/null
+          code=$?
+          set -e
+          if [ "$code" -eq 124 ]; then
+            echo "gen-25 lint exceeded 20s" >&2
+            exit 1
+          fi
+          if [ "$code" -gt 1 ]; then
+            echo "gen-25 lint failed to run ($code)" >&2
+            exit 1
+          fi
