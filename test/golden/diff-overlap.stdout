@@ -1,0 +1,34 @@
+old: test/fixtures/diff-overlap-old.ears.md
+new: test/fixtures/diff-overlap-new.ears.md
+added:
+none
+removed:
+none
+reworded:
+R1
+old line 3
+The Order System shall accept at most 12 units.
+new line 3
+The Order System shall accept at most 6 units.
+schema:
+quantity was 0..12 and is 0..10. Compared over 0..10.
+behavior:
+The old spec accepts this scenario and the new spec rejects it.
+{
+  "quantity": 7
+}
+
+R1 line 3
+The Order System shall accept at most 6 units.
+7 units were accepted.
+
+No scenario is accepted by the new spec and rejected by the old spec.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+none
+gaps new:
+none

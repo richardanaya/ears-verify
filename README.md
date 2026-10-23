@@ -69,6 +69,7 @@ The rest of the report lists repairs and does not choose one. The full output is
 | Command | What it answers |
 | --- | --- |
 | `check` | Does this scenario fit the requirements? |
+| `diff` | How does a revised spec change what is accepted? |
 | `lint` | Do any requirements clash, leave a hole, never fire, or repeat? |
 | `report` | What are the logical problems, in plain English? |
 | `emit-smt` | What is the SMT-LIB for these requirements? |

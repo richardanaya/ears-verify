@@ -1,0 +1,24 @@
+old: test/fixtures/diff-names-old.ears.md
+new: test/fixtures/diff-names-new.ears.md
+added:
+none
+removed:
+R2 line 6
+When an order is submitted, the Order System shall issue a refund.
+reworded:
+none
+schema:
+only in the old spec: refund_issued
+only in the new spec: priority
+behavior:
+No scenario changes acceptance.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+refund_issued
+Nothing says whether a refund was issued when an order was not submitted. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
+gaps new:
+none

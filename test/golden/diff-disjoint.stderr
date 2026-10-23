@@ -1,0 +1,1 @@
+error: status variants do not overlap: placed and cancelled in test/fixtures/diff-disjoint-old.ears.md and shipped and returned in test/fixtures/diff-disjoint-new.ears.md.

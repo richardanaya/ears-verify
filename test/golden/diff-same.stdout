@@ -1,0 +1,21 @@
+old: examples/order-v1.ears.md
+new: examples/order-v1.ears.md
+added:
+none
+removed:
+none
+reworded:
+none
+schema:
+none
+behavior:
+No scenario changes acceptance.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+none
+gaps new:
+none

@@ -79,6 +79,7 @@ examples/order.ears.md
 | Command | Question it answers | Status |
 | --- | --- | --- |
 | `check [--json] <spec> --input <scenario>` | Does this scenario fit the requirements? | Implemented |
+| `diff [--json] <old-spec> <new-spec>` | How does a revised spec change what is accepted? | Implemented |
 | `lint [--json] <spec>` | Do any requirements clash, leave a hole, never trigger, leave schema unused, repeat each other, or use a word a test cannot pin down? | Implemented |
 | `report <spec>` | What are the logical problems, in plain language? | Implemented |
 | `scenarios [--json] <spec>` | What accepted and rejected examples show each requirement's trigger? | Implemented |
@@ -93,6 +94,7 @@ help
 ```text
 usage:
   plan-verify check [--json] <spec> --input <scenario>
+  plan-verify diff [--json] <old-spec> <new-spec>
   plan-verify emit-smt [--json] <spec>
   plan-verify lint [--json] <spec>
   plan-verify report <spec>
@@ -130,7 +132,7 @@ WHEN an order is submitted AND inventory is available, THE Order System SHALL fu
 An order was submitted and inventory was available, but the order was not fulfilled.
 ```
 
-Exit status is `0` when the command is clean, `1` when a scenario violates a requirement, lint finds something, or a property has a counterexample, and `2` when the spec, the scenario, the property, or the arguments are wrong. `--json` is for the agent. The text report is for the product manager.
+Exit status is `0` when the command is clean, `1` when a scenario violates a requirement, lint finds something, a property has a counterexample, or a revised spec changes what is accepted, and `2` when the spec, the scenario, the property, or the arguments are wrong. `--json` is for the agent. The text report is for the product manager.
 
 ## What EARS is
 
@@ -242,6 +244,108 @@ property: examples/status-placed.ears.md
 No scenario satisfies every requirement, so none violates the property.
 ```
 
+## Diff
+
+`diff` compares an older spec with a revised one. Requirements match by id. Added, removed, and reworded requirements are listed with their line numbers and sentences. An unchanged sentence is not reworded.
+
+Names declared in only one file are reported and left out of the scenario search. A requirement that mentions one of those names is still listed, and that id is left out of the search on both sides. An Int range or an enum's variants are compared on the overlap, and the report says what changed. The command exits 2 when a declaration's type changed, when two Int ranges do not overlap, when two enum variant lists do not overlap, or when a requirement uses a variant outside that overlap.
+
+The behavior section asks the solver for one scenario the old spec accepts and the new spec rejects, and one the other way. Each is the first assignment, false before true. The lines under a scenario are the requirements that fail, in plain English. When neither search finds a scenario, the report says `No scenario changes acceptance.` Exit 0 means acceptance did not change, even if the wording, the schema, or the lint findings did. Exit 1 means a scenario changed acceptance.
+
+Conflicts and gaps that are new in the revised spec are listed, and so are ones the revision fixed. A conflict still present is matched by its set of requirement ids and is not listed again. A gap still present is matched by its output name and is not listed again.
+
+`examples/order-v1.ears.md` fulfills an order only when it was submitted and inventory is available. `examples/order-v2.ears.md` keeps that rule and adds the two missing responses. The smallest scenario the old spec still allows is an order that was never submitted and was fulfilled anyway:
+
+<!-- verify stdout 1
+build/plan-verify
+diff
+examples/order-v1.ears.md
+examples/order-v2.ears.md
+-->
+```text
+old: examples/order-v1.ears.md
+new: examples/order-v2.ears.md
+added:
+R2 line 8
+WHEN an order is submitted AND inventory is not available, THE Order System SHALL not fulfill the order.
+
+R3 line 9
+WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
+removed:
+none
+reworded:
+none
+schema:
+none
+behavior:
+The old spec accepts this scenario and the new spec rejects it.
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": true
+}
+
+R3 line 9
+WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
+An order was not submitted, but the order was fulfilled.
+
+No scenario is accepted by the new spec and rejected by the old spec.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+order_fulfilled
+Nothing says whether the order was fulfilled when an order was submitted and inventory was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
+gaps new:
+none
+```
+
+Diffing a spec with itself changes nothing:
+
+<!-- verify stdout 0
+build/plan-verify
+diff
+examples/order-v1.ears.md
+examples/order-v1.ears.md
+-->
+```text
+old: examples/order-v1.ears.md
+new: examples/order-v1.ears.md
+added:
+none
+removed:
+none
+reworded:
+none
+schema:
+none
+behavior:
+No scenario changes acceptance.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+none
+gaps new:
+none
+```
+
+A declaration whose type changed cannot be compared:
+
+<!-- verify stderr 2
+build/plan-verify
+diff
+test/fixtures/diff-type-old.ears.md
+test/fixtures/diff-type-new.ears.md
+-->
+```text
+error: order_fulfilled is Bool in test/fixtures/diff-type-old.ears.md and Int in test/fixtures/diff-type-new.ears.md.
+```
+
 ## Scenarios
 
 `scenarios` lists a small set of examples so a product manager can check that a requirement means what they think. For each requirement it looks for an accepted scenario with the trigger true, an accepted scenario with the trigger false, and a rejected scenario with the trigger true. Each one is the first assignment the search finds, false before true. A requirement with no trigger says so, instead of inventing a trigger-false case. The same assignment is printed once.
@@ -295,7 +399,7 @@ The shape of the analysis follows Kiro's requirements analysis: separate behavio
 
 ## For the agent in the conversation
 
-The skill at [`skills/plan-verify/SKILL.md`](../skills/plan-verify/SKILL.md) tells an agent how to sit with a product manager. It lists the grammar the parser accepts, shows real `check`, `lint`, `report`, `scenarios`, `emit-smt`, `policy`, and `help` output, including the sentences a product manager would read, and says to ask which requirement should win.
+The skill at [`skills/plan-verify/SKILL.md`](../skills/plan-verify/SKILL.md) tells an agent how to sit with a product manager. It lists the grammar the parser accepts, shows real `check`, `lint`, `report`, `scenarios`, `emit-smt`, `policy`, `diff`, and `help` output, including the sentences a product manager would read, and says to ask which requirement should win.
 
 ## Questions
 
