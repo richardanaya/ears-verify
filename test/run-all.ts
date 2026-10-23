@@ -440,7 +440,7 @@ function countText(text: string, needle: string): number {
 }
 
 function checkDocSamples(label: string, path: string, strictText: boolean): void {
-  const text = readFileSync(path, "utf8");
+  const text = goldenText(readFileSync(path, "utf8"));
   const startMark = "<!-- verify ";
   const fences: number[] = [];
   let cursor = 0;
