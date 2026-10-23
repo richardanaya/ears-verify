@@ -123,14 +123,14 @@ The specs in [examples](examples) cover each kind of finding. [A plan to the pro
 
 ## Performance
 
-The native ScriptC binary and the same code under Node 24 are timed with `npm run bench`, one run each on a 4 vCPU VM.
+The native ScriptC binary and the same code under Node 24 are timed with `npm run bench`, one run each on a 4 vCPU VM. Release is `npm run build:release` (speed, the committed profile, and strip).
 
-| workload | native ms | Node ms |
-| --- | ---: | ---: |
-| help | 2 | 100 |
-| plan-to-problems | 22 | 126 |
-| gen-25 | 34 | 156 |
-| gen-50 | 114 | 243 |
-| gen-100 | 466 | 538 |
+| workload | native ms | release ms | Node ms |
+| --- | ---: | ---: | ---: |
+| help | 1 | 2 | 97 |
+| plan-to-problems | 23 | 18 | 122 |
+| gen-25 | 28 | 22 | 144 |
+| gen-50 | 100 | 76 | 210 |
+| gen-100 | 398 | 290 | 499 |
 
 The full history is in [the performance notes](docs/performance.md).

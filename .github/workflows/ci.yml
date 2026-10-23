@@ -25,8 +25,8 @@ jobs:
           clang --version
       - name: Install dependencies
         run: npm ci
-      - name: Require ScriptC 0.4.1
-        run: test "$(node_modules/.bin/scriptc --version)" = "0.4.1"
+      - name: Require ScriptC 0.4.2
+        run: test "$(node_modules/.bin/scriptc --version)" = "0.4.2"
       - name: Coverage gate
         run: |
           set -eu

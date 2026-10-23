@@ -4,4 +4,5 @@ build/
 agent-tools/
 *.profraw
 *.profdata
+!bench/plan-verify.profdata
 .env*

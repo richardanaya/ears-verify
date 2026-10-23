@@ -131,7 +131,7 @@ function main(): void {
 
   const version = run("node_modules/.bin/scriptc", ["--version"]);
   const versionText = version.stdout.trim();
-  step("scriptc version 0.4.1", version, version.status === 0 && versionText === "0.4.1");
+  step("scriptc version 0.4.2", version, version.status === 0 && versionText === "0.4.2");
   console.log(version.stdout);
 
   const tsc = run(process.execPath, ["node_modules/typescript/bin/tsc", "--noEmit", "-p", "tsconfig.json"]);
