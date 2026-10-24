@@ -2,6 +2,13 @@
   "ok": false,
   "old": "examples/order-v1.ears.md",
   "new": "examples/order-v2.ears.md",
+  "out": "",
+  "schema": {
+    "onlyOld": [],
+    "onlyNew": [],
+    "changed": [],
+    "skipped": []
+  },
   "added": [
     {
       "id": "R2",
@@ -15,10 +22,14 @@
     }
   ],
   "removed": [],
+  "renamed": [],
   "reworded": [],
-  "onlyOld": [],
-  "onlyNew": [],
-  "changed": [],
+  "files": [
+    {
+      "file": "old-accepts-new-rejects.json",
+      "kind": "old-accepts-new-rejects"
+    }
+  ],
   "oldAcceptsNewRejectsFound": true,
   "oldAcceptsNewRejects": [
     {
@@ -42,9 +53,20 @@
       "because": "An order was not submitted, but the order was fulfilled."
     }
   ],
+  "oldAcceptsOldSides": [
+    {
+      "id": "R3",
+      "line": 0,
+      "present": false,
+      "sentence": "",
+      "holds": false,
+      "because": ""
+    }
+  ],
   "newAcceptsOldRejectsFound": false,
   "newAcceptsOldRejects": [],
   "newAcceptsBreaks": [],
+  "newAcceptsNewSides": [],
   "note": "",
   "conflictsFixed": [],
   "conflictsNew": [],

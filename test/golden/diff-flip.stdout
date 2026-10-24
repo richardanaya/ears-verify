@@ -1,8 +1,12 @@
 old: test/fixtures/diff-flip-old.ears.md
 new: test/fixtures/diff-flip-new.ears.md
+schema:
+none
 added:
 none
 removed:
+none
+renamed:
 none
 reworded:
 R1
@@ -10,15 +14,17 @@ old line 4
 When an order is submitted, the Order System shall fulfill the order.
 new line 4
 When an order is submitted, the Order System shall not fulfill the order.
-schema:
-none
 behavior:
 The old spec accepts this scenario and the new spec rejects it.
 {
   "order_submitted": true,
   "order_fulfilled": true
 }
-
+old:
+R1 line 4
+When an order is submitted, the Order System shall fulfill the order.
+The requirement holds.
+new:
 R1 line 4
 When an order is submitted, the Order System shall not fulfill the order.
 An order was submitted, but the order was fulfilled.
@@ -28,10 +34,14 @@ The new spec accepts this scenario and the old spec rejects it.
   "order_submitted": true,
   "order_fulfilled": false
 }
-
+old:
 R1 line 4
 When an order is submitted, the Order System shall fulfill the order.
 An order was submitted, but the order was not fulfilled.
+new:
+R1 line 4
+When an order is submitted, the Order System shall not fulfill the order.
+The requirement holds.
 lint:
 conflicts fixed:
 none

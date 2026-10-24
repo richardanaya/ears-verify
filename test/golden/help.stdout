@@ -1,6 +1,6 @@
 usage:
   plan-verify check [--json] <spec> --input <scenario>
-  plan-verify diff [--json] <old-spec> <new-spec>
+  plan-verify diff [--json] <old-spec> <new-spec> [--out <dir>]
   plan-verify emit-smt [--json] <spec>
   plan-verify lint [--json] <spec>
   plan-verify report <spec>

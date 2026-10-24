@@ -1,16 +1,18 @@
 /**
  * Diff two EARS specs for a product manager.
- * Requirements match by id. Behavior is one scenario each way, found by
- * the same least-assignment search as policy: false before true.
- * Comparison uses names declared in both specs. An Int range or an enum
- * variant list is narrowed to the overlap. A type with no overlap is an error.
+ * Requirements match by id, then by identical text. Behavior is one scenario
+ * each way, the least assignment: false before true. A formula that already
+ * has to hold is already satisfied, so the search ignores it. Those scenarios
+ * are the JSON files `check --input` reads. A shared Int range or enum variant
+ * list is the overlap. A name whose types, ranges, or variants do not meet is
+ * left out, and the rest of the spec is compared.
  */
 
 import { evaluateRequirements, type Violation } from "./check.ts";
 import { lintSpec, type Conflict, type Gap } from "./lint.ts";
 import { findEnum, findSymbol, displayCode, type EnumDecl, type Requirement, type Sort, type Spec, type SymbolDecl, type Term } from "./spec.ts";
 import { firstMatching } from "./solver.ts";
-import { formatScenario, type Binding } from "./term.ts";
+import { formatScenario, termsEqual, type Binding } from "./term.ts";
 import { englishList, formatInt } from "./text.ts";
 
 export interface ReqLine {
@@ -25,6 +27,29 @@ export interface RewordLine {
   oldSentence: string;
   newLine: number;
   newSentence: string;
+  sameMeaning: boolean;
+}
+
+export interface RenamedLine {
+  oldId: string;
+  oldLine: number;
+  newId: string;
+  newLine: number;
+  sentence: string;
+}
+
+export interface WitnessSide {
+  id: string;
+  line: number;
+  present: boolean;
+  sentence: string;
+  holds: boolean;
+  because: string;
+}
+
+export interface DiffFile {
+  file: string;
+  body: string;
 }
 
 export interface SchemaNote {
@@ -50,18 +75,23 @@ export interface GapDelta {
 export interface DiffReport {
   added: ReqLine[];
   removed: ReqLine[];
+  renamed: RenamedLine[];
   reworded: RewordLine[];
   onlyOld: string[];
   onlyNew: string[];
   changed: SchemaNote[];
+  skipped: SchemaNote[];
   oldAcceptsNewRejectsFound: boolean;
   oldAcceptsNewRejectsText: string;
   oldAcceptsNewRejects: AssignmentRow[];
   oldAcceptsBreaks: Violation[];
+  oldAcceptsOldSides: WitnessSide[];
   newAcceptsOldRejectsFound: boolean;
   newAcceptsOldRejectsText: string;
   newAcceptsOldRejects: AssignmentRow[];
   newAcceptsBreaks: Violation[];
+  newAcceptsNewSides: WitnessSide[];
+  files: DiffFile[];
   note: string;
   conflictsFixed: ConflictDelta[];
   conflictsNew: ConflictDelta[];
@@ -78,16 +108,27 @@ interface Aligned {
   onlyOld: string[];
   onlyNew: string[];
   changed: SchemaNote[];
+  skipped: SchemaNote[];
 }
 
 type Fail = { kind: "error"; message: string };
 type AlignOutcome = { kind: "ok"; aligned: Aligned } | Fail;
-type SortDecision = { kind: "ok"; sort: Sort; note: string } | Fail;
+type SortDecision = { kind: "ok"; sort: Sort; note: string } | { kind: "skip"; note: string } | Fail;
 type RemapOutcome = { kind: "ok"; term: Term } | Fail;
 type ReqOutcome = { kind: "ok"; req: Requirement } | Fail;
-type ReqsOutcome = { kind: "ok"; reqs: Requirement[] } | Fail;
+type ReqsOutcome = { kind: "ok"; reqs: Requirement[]; skipped: SchemaNote[] } | Fail;
+
+interface MatchPair {
+  oldReq: Requirement;
+  newReq: Requirement;
+  byText: boolean;
+}
 
 const SAME = "No scenario changes acceptance.";
+
+export function diffMeaningChanged(report: DiffReport): boolean {
+  return report.oldAcceptsNewRejectsFound || report.newAcceptsOldRejectsFound || report.skipped.length > 0;
+}
 
 export function diffSpecs(oldPath: string, oldSpec: Spec, newPath: string, newSpec: Spec): DiffOutcome {
   const lintOld = lintSpec(oldSpec);
@@ -106,27 +147,42 @@ export function diffSpecs(oldPath: string, oldSpec: Spec, newPath: string, newSp
 
   const shared = aligned.aligned.spec;
   const voiced = overlayVoice(shared, newSpec);
-  const oldAccepts = newReqs.reqs.length === 0 ? null : firstMatching(shared, oldReqs.reqs, newReqs.reqs, null, 0);
-  const newAccepts = oldReqs.reqs.length === 0 ? null : firstMatching(shared, newReqs.reqs, oldReqs.reqs, null, 0);
+  const matched = pairRequirements(oldSpec, newSpec);
+  const reworded = rewordedFrom(shared, matched.pairs, oldReqs.reqs, newReqs.reqs);
+  const oldAccepts = acceptanceWitness(shared, oldReqs.reqs, newReqs.reqs);
+  const newAccepts = acceptanceWitness(shared, newReqs.reqs, oldReqs.reqs);
   const oldBreaks = oldAccepts === null ? [] : evaluateRequirements(voiced, newReqs.reqs, oldAccepts);
   const newBreaks = newAccepts === null ? [] : evaluateRequirements(shared, oldReqs.reqs, newAccepts);
   const changedAcceptance = oldAccepts !== null || newAccepts !== null;
+  const skipped = mergeNotes(aligned.aligned.skipped, oldReqs.skipped, newReqs.skipped);
+  const files: DiffFile[] = [];
+  if (oldAccepts !== null) {
+    files.push({ file: "old-accepts-new-rejects.json", body: formatScenario(shared, oldAccepts) + "\n" });
+  }
+  if (newAccepts !== null) {
+    files.push({ file: "new-accepts-old-rejects.json", body: formatScenario(shared, newAccepts) + "\n" });
+  }
 
   const report: DiffReport = {
-    added: addedLines(oldSpec, newSpec),
-    removed: removedLines(oldSpec, newSpec),
-    reworded: rewordedLines(oldSpec, newSpec),
+    added: linesOf(matched.added),
+    removed: linesOf(matched.removed),
+    renamed: renamedFrom(matched.pairs),
+    reworded: reworded,
     onlyOld: aligned.aligned.onlyOld,
     onlyNew: aligned.aligned.onlyNew,
     changed: aligned.aligned.changed,
+    skipped: skipped,
     oldAcceptsNewRejectsFound: oldAccepts !== null,
     oldAcceptsNewRejectsText: oldAccepts === null ? "" : formatScenario(shared, oldAccepts),
     oldAcceptsNewRejects: rowsOf(shared, oldAccepts),
     oldAcceptsBreaks: oldBreaks,
+    oldAcceptsOldSides: oldAccepts === null ? [] : counterpartSides(oldBreaks, matched.pairs, true, oldReqs.reqs, shared, oldAccepts),
     newAcceptsOldRejectsFound: newAccepts !== null,
     newAcceptsOldRejectsText: newAccepts === null ? "" : formatScenario(shared, newAccepts),
     newAcceptsOldRejects: rowsOf(shared, newAccepts),
     newAcceptsBreaks: newBreaks,
+    newAcceptsNewSides: newAccepts === null ? [] : counterpartSides(newBreaks, matched.pairs, false, newReqs.reqs, voiced, newAccepts),
+    files: files,
     note: changedAcceptance ? "" : SAME,
     conflictsFixed: conflictDelta(lintOld.report.conflicts, lintNew.report.conflicts),
     conflictsNew: conflictDelta(lintNew.report.conflicts, lintOld.report.conflicts),
@@ -136,20 +192,23 @@ export function diffSpecs(oldPath: string, oldSpec: Spec, newPath: string, newSp
   return { kind: "report", report: report };
 }
 
-export function formatDiffText(oldPath: string, newPath: string, report: DiffReport): string {
+export function formatDiffText(oldPath: string, newPath: string, report: DiffReport, outDir: string): string {
   const lines: string[] = [];
   lines.push("old: " + oldPath);
   lines.push("new: " + newPath);
+  if (outDir.length > 0) lines.push("out: " + outDir);
+  lines.push("schema:");
+  pushSchema(lines, report);
   lines.push("added:");
   pushReqs(lines, report.added);
   lines.push("removed:");
   pushReqs(lines, report.removed);
+  lines.push("renamed:");
+  pushRenamed(lines, report.renamed);
   lines.push("reworded:");
   pushReworded(lines, report.reworded);
-  lines.push("schema:");
-  pushSchema(lines, report);
   lines.push("behavior:");
-  pushBehavior(lines, report);
+  pushBehavior(lines, report, outDir);
   lines.push("lint:");
   lines.push("conflicts fixed:");
   pushConflicts(lines, report.conflictsFixed);
@@ -162,25 +221,38 @@ export function formatDiffText(oldPath: string, newPath: string, report: DiffRep
   return lines.join("\n");
 }
 
-export function formatDiffJson(oldPath: string, newPath: string, report: DiffReport): string {
-  const changed = report.oldAcceptsNewRejectsFound || report.newAcceptsOldRejectsFound;
+export function formatDiffJson(oldPath: string, newPath: string, report: DiffReport, outDir: string): string {
+  const fileRows: { file: string; kind: string }[] = [];
+  for (let i = 0; i < report.files.length; i++) {
+    const file = report.files[i];
+    const kind = file.file.length > 5 ? file.file.slice(0, file.file.length - 5) : file.file;
+    fileRows.push({ file: file.file, kind: kind });
+  }
   return JSON.stringify(
     {
-      ok: !changed,
+      ok: !diffMeaningChanged(report),
       old: oldPath,
       new: newPath,
+      out: outDir,
+      schema: {
+        onlyOld: report.onlyOld,
+        onlyNew: report.onlyNew,
+        changed: report.changed,
+        skipped: report.skipped,
+      },
       added: report.added,
       removed: report.removed,
+      renamed: report.renamed,
       reworded: report.reworded,
-      onlyOld: report.onlyOld,
-      onlyNew: report.onlyNew,
-      changed: report.changed,
+      files: fileRows,
       oldAcceptsNewRejectsFound: report.oldAcceptsNewRejectsFound,
       oldAcceptsNewRejects: report.oldAcceptsNewRejects,
       oldAcceptsBreaks: breakRows(report.oldAcceptsBreaks),
+      oldAcceptsOldSides: report.oldAcceptsOldSides,
       newAcceptsOldRejectsFound: report.newAcceptsOldRejectsFound,
       newAcceptsOldRejects: report.newAcceptsOldRejects,
       newAcceptsBreaks: breakRows(report.newAcceptsBreaks),
+      newAcceptsNewSides: report.newAcceptsNewSides,
       note: report.note,
       conflictsFixed: report.conflictsFixed,
       conflictsNew: report.conflictsNew,
@@ -213,6 +285,19 @@ function pushReqs(lines: string[], reqs: ReqLine[]): void {
   }
 }
 
+function pushRenamed(lines: string[], items: RenamedLine[]): void {
+  if (items.length === 0) {
+    lines.push("none");
+    return;
+  }
+  for (let i = 0; i < items.length; i++) {
+    if (i > 0) lines.push("");
+    const item = items[i];
+    lines.push(item.oldId + " line " + formatInt(item.oldLine) + " is " + item.newId + " line " + formatInt(item.newLine));
+    lines.push(item.sentence);
+  }
+}
+
 function pushReworded(lines: string[], items: RewordLine[]): void {
   if (items.length === 0) {
     lines.push("none");
@@ -226,27 +311,33 @@ function pushReworded(lines: string[], items: RewordLine[]): void {
     lines.push(item.oldSentence);
     lines.push("new line " + formatInt(item.newLine));
     lines.push(item.newSentence);
+    if (item.sameMeaning) lines.push("reworded, same meaning");
   }
 }
 
 function pushSchema(lines: string[], report: DiffReport): void {
-  if (report.onlyOld.length === 0 && report.onlyNew.length === 0 && report.changed.length === 0) {
+  if (report.onlyOld.length === 0 && report.onlyNew.length === 0 && report.changed.length === 0 && report.skipped.length === 0) {
     lines.push("none");
     return;
   }
   if (report.onlyOld.length > 0) lines.push("only in the old spec: " + joinWords(report.onlyOld));
   if (report.onlyNew.length > 0) lines.push("only in the new spec: " + joinWords(report.onlyNew));
   for (let i = 0; i < report.changed.length; i++) lines.push(report.changed[i].text);
+  for (let i = 0; i < report.skipped.length; i++) lines.push(report.skipped[i].text);
 }
 
-function pushBehavior(lines: string[], report: DiffReport): void {
+function pushBehavior(lines: string[], report: DiffReport, outDir: string): void {
   if (!report.oldAcceptsNewRejectsFound && !report.newAcceptsOldRejectsFound) {
     lines.push(report.note);
     return;
   }
   if (report.oldAcceptsNewRejectsFound) {
     lines.push("The old spec accepts this scenario and the new spec rejects it.");
+    if (outDir.length > 0) lines.push("old-accepts-new-rejects.json");
     lines.push(report.oldAcceptsNewRejectsText);
+    lines.push("old:");
+    pushSides(lines, report.oldAcceptsOldSides, "old");
+    lines.push("new:");
     pushBreaks(lines, report.oldAcceptsBreaks);
   } else {
     lines.push("No scenario is accepted by the old spec and rejected by the new spec.");
@@ -254,17 +345,44 @@ function pushBehavior(lines: string[], report: DiffReport): void {
   lines.push("");
   if (report.newAcceptsOldRejectsFound) {
     lines.push("The new spec accepts this scenario and the old spec rejects it.");
+    if (outDir.length > 0) lines.push("new-accepts-old-rejects.json");
     lines.push(report.newAcceptsOldRejectsText);
+    lines.push("old:");
     pushBreaks(lines, report.newAcceptsBreaks);
+    lines.push("new:");
+    pushSides(lines, report.newAcceptsNewSides, "new");
   } else {
     lines.push("No scenario is accepted by the new spec and rejected by the old spec.");
   }
 }
 
-function pushBreaks(lines: string[], items: Violation[]): void {
+function pushSides(lines: string[], items: WitnessSide[], which: string): void {
+  if (items.length === 0) {
+    lines.push("none");
+    return;
+  }
   for (let i = 0; i < items.length; i++) {
+    if (i > 0) lines.push("");
     const item = items[i];
-    lines.push("");
+    if (!item.present) {
+      lines.push(item.id + " is not in the " + which + " spec.");
+      continue;
+    }
+    lines.push(item.id + " line " + formatInt(item.line));
+    lines.push(item.sentence);
+    if (item.holds) lines.push("The requirement holds.");
+    else if (item.because.length > 0) lines.push(item.because);
+  }
+}
+
+function pushBreaks(lines: string[], items: Violation[]): void {
+  if (items.length === 0) {
+    lines.push("none");
+    return;
+  }
+  for (let i = 0; i < items.length; i++) {
+    if (i > 0) lines.push("");
+    const item = items[i];
     lines.push(item.id + " line " + formatInt(item.line));
     lines.push(item.sentence);
     lines.push(item.because);
@@ -295,51 +413,207 @@ function pushGaps(lines: string[], items: GapDelta[]): void {
   }
 }
 
-function addedLines(oldSpec: Spec, newSpec: Spec): ReqLine[] {
+function linesOf(reqs: Requirement[]): ReqLine[] {
   const out: ReqLine[] = [];
-  for (let i = 0; i < newSpec.requirements.length; i++) {
-    const req = newSpec.requirements[i];
-    if (findReq(oldSpec, req.id) === null) out.push(lineOf(req));
-  }
+  for (let i = 0; i < reqs.length; i++) out.push(lineOf(reqs[i]));
   return out;
 }
 
-function removedLines(oldSpec: Spec, newSpec: Spec): ReqLine[] {
-  const out: ReqLine[] = [];
+function pairRequirements(oldSpec: Spec, newSpec: Spec): { pairs: MatchPair[]; added: Requirement[]; removed: Requirement[] } {
+  const usedNew: boolean[] = [];
+  for (let i = 0; i < newSpec.requirements.length; i++) usedNew.push(false);
+  const usedOld: boolean[] = [];
+  for (let i = 0; i < oldSpec.requirements.length; i++) usedOld.push(false);
+  const pairs: MatchPair[] = [];
   for (let i = 0; i < oldSpec.requirements.length; i++) {
     const req = oldSpec.requirements[i];
-    if (findReq(newSpec, req.id) === null) out.push(lineOf(req));
+    const at = findReqIndex(newSpec, req.id);
+    if (at < 0 || usedNew[at]) continue;
+    usedNew[at] = true;
+    usedOld[i] = true;
+    pairs.push({ oldReq: req, newReq: newSpec.requirements[at], byText: false });
   }
-  return out;
+  for (let i = 0; i < oldSpec.requirements.length; i++) {
+    if (usedOld[i]) continue;
+    const req = oldSpec.requirements[i];
+    let at = -1;
+    for (let j = 0; j < newSpec.requirements.length; j++) {
+      if (usedNew[j]) continue;
+      if (newSpec.requirements[j].sentence !== req.sentence) continue;
+      at = j;
+      break;
+    }
+    if (at < 0) continue;
+    usedNew[at] = true;
+    usedOld[i] = true;
+    pairs.push({ oldReq: req, newReq: newSpec.requirements[at], byText: true });
+  }
+  const removed: Requirement[] = [];
+  for (let i = 0; i < oldSpec.requirements.length; i++) {
+    if (!usedOld[i]) removed.push(oldSpec.requirements[i]);
+  }
+  const added: Requirement[] = [];
+  for (let j = 0; j < newSpec.requirements.length; j++) {
+    if (!usedNew[j]) added.push(newSpec.requirements[j]);
+  }
+  return { pairs: pairs, added: added, removed: removed };
 }
 
-function rewordedLines(oldSpec: Spec, newSpec: Spec): RewordLine[] {
-  const out: RewordLine[] = [];
-  for (let i = 0; i < oldSpec.requirements.length; i++) {
-    const req = oldSpec.requirements[i];
-    const other = findReq(newSpec, req.id);
-    if (other === null) continue;
-    if (other.sentence === req.sentence) continue;
+function renamedFrom(pairs: MatchPair[]): RenamedLine[] {
+  const out: RenamedLine[] = [];
+  for (let i = 0; i < pairs.length; i++) {
+    const pair = pairs[i];
+    if (!pair.byText) continue;
     out.push({
-      id: req.id,
-      oldLine: req.line,
-      oldSentence: req.sentence,
-      newLine: other.line,
-      newSentence: other.sentence,
+      oldId: pair.oldReq.id,
+      oldLine: pair.oldReq.line,
+      newId: pair.newReq.id,
+      newLine: pair.newReq.line,
+      sentence: pair.oldReq.sentence,
     });
   }
   return out;
 }
 
-function lineOf(req: Requirement): ReqLine {
-  return { id: req.id, line: req.line, sentence: req.sentence };
+function rewordedFrom(shared: Spec, pairs: MatchPair[], oldReqs: Requirement[], newReqs: Requirement[]): RewordLine[] {
+  const out: RewordLine[] = [];
+  for (let i = 0; i < pairs.length; i++) {
+    const pair = pairs[i];
+    if (pair.oldReq.sentence === pair.newReq.sentence) continue;
+    const oldMapped = findReqIn(oldReqs, pair.oldReq.id);
+    const newMapped = findReqIn(newReqs, pair.newReq.id);
+    const same = oldMapped !== null && newMapped !== null && formulasMatch(shared, oldMapped, newMapped);
+    out.push({
+      id: pair.oldReq.id,
+      oldLine: pair.oldReq.line,
+      oldSentence: pair.oldReq.sentence,
+      newLine: pair.newReq.line,
+      newSentence: pair.newReq.sentence,
+      sameMeaning: same,
+    });
+  }
+  return out;
 }
 
-function findReq(spec: Spec, id: string): Requirement | null {
-  for (let i = 0; i < spec.requirements.length; i++) {
-    if (spec.requirements[i].id === id) return spec.requirements[i];
+function acceptanceWitness(shared: Spec, holds: Requirement[], fails: Requirement[]): Binding | null {
+  const pending: Requirement[] = [];
+  for (let i = 0; i < fails.length; i++) {
+    if (!formulaCopied(holds, fails[i])) pending.push(fails[i]);
+  }
+  if (pending.length === 0) return null;
+  return firstMatching(shared, holds, pending, null, 0);
+}
+
+function formulaCopied(holds: Requirement[], fail: Requirement): boolean {
+  for (let i = 0; i < holds.length; i++) {
+    if (sameFormula(holds[i], fail)) return true;
+  }
+  return false;
+}
+
+function sameFormula(left: Requirement, right: Requirement): boolean {
+  if (!termsSame(left.antecedent, right.antecedent)) return false;
+  return termsEqual(left.consequent, right.consequent);
+}
+
+function termsSame(left: Term | null, right: Term | null): boolean {
+  if (left === null || right === null) return left === null && right === null;
+  return termsEqual(left, right);
+}
+
+function formulasMatch(shared: Spec, left: Requirement, right: Requirement): boolean {
+  const leftHolds: Requirement[] = [];
+  leftHolds.push(left);
+  const rightHolds: Requirement[] = [];
+  rightHolds.push(right);
+  const rightFails: Requirement[] = [];
+  rightFails.push(right);
+  const leftFails: Requirement[] = [];
+  leftFails.push(left);
+  if (firstMatching(shared, leftHolds, rightFails, null, 0) !== null) return false;
+  return firstMatching(shared, rightHolds, leftFails, null, 0) === null;
+}
+
+function counterpartSides(
+  breaks: Violation[],
+  pairs: MatchPair[],
+  breakIsNew: boolean,
+  accepting: Requirement[],
+  narrateSpec: Spec,
+  env: Binding,
+): WitnessSide[] {
+  const sides: WitnessSide[] = [];
+  for (let i = 0; i < breaks.length; i++) {
+    const item = breaks[i];
+    const other = findCounterpart(pairs, item.id, breakIsNew);
+    if (other === null) {
+      sides.push({ id: item.id, line: 0, present: false, sentence: "", holds: false, because: "" });
+      continue;
+    }
+    const mapped = findReqIn(accepting, other.id);
+    if (mapped === null) {
+      sides.push({
+        id: other.id,
+        line: other.line,
+        present: true,
+        sentence: other.sentence,
+        holds: false,
+        because: "Left out of the comparison.",
+      });
+      continue;
+    }
+    const one: Requirement[] = [];
+    one.push(mapped);
+    const found = evaluateRequirements(narrateSpec, one, env);
+    sides.push({
+      id: other.id,
+      line: other.line,
+      present: true,
+      sentence: other.sentence,
+      holds: found.length === 0,
+      because: found.length === 0 ? "" : found[0].because,
+    });
+  }
+  return sides;
+}
+
+function findCounterpart(pairs: MatchPair[], id: string, breakIsNew: boolean): Requirement | null {
+  for (let i = 0; i < pairs.length; i++) {
+    const pair = pairs[i];
+    if (breakIsNew && pair.newReq.id === id) return pair.oldReq;
+    if (!breakIsNew && pair.oldReq.id === id) return pair.newReq;
   }
   return null;
+}
+
+function findReqIn(reqs: Requirement[], id: string): Requirement | null {
+  for (let i = 0; i < reqs.length; i++) {
+    if (reqs[i].id === id) return reqs[i];
+  }
+  return null;
+}
+
+function findReqIndex(spec: Spec, id: string): number {
+  for (let i = 0; i < spec.requirements.length; i++) {
+    if (spec.requirements[i].id === id) return i;
+  }
+  return -1;
+}
+
+function mergeNotes(first: SchemaNote[], second: SchemaNote[], third: SchemaNote[]): SchemaNote[] {
+  const out: SchemaNote[] = [];
+  copyNotes(out, first);
+  copyNotes(out, second);
+  copyNotes(out, third);
+  return out;
+}
+
+function copyNotes(out: SchemaNote[], notes: SchemaNote[]): void {
+  for (let i = 0; i < notes.length; i++) out.push(notes[i]);
+}
+
+function lineOf(req: Requirement): ReqLine {
+  return { id: req.id, line: req.line, sentence: req.sentence };
 }
 
 function alignSchema(oldPath: string, oldSpec: Spec, newPath: string, newSpec: Spec): AlignOutcome {
@@ -362,12 +636,17 @@ function alignSchema(oldPath: string, oldSpec: Spec, newPath: string, newSpec: S
   const symbols: SymbolDecl[] = [];
   const enums: EnumDecl[] = [];
   const changed: SchemaNote[] = [];
+  const skipped: SchemaNote[] = [];
   for (let s = 0; s < sharedOld.length; s++) {
     const oi = sharedOld[s];
     const name = oldSpec.symbols[oi].name;
     const ni = findSymbol(newSpec, name);
     const decided = decideSort(oldPath, oldSpec, newPath, newSpec, oi, ni, enums);
     if (decided.kind === "error") return decided;
+    if (decided.kind === "skip") {
+      skipped.push({ name: name, text: decided.note });
+      continue;
+    }
     if (decided.note.length > 0) changed.push({ name: name, text: decided.note });
     const sharedIndex = symbols.length;
     symbols.push(withSort(oldSpec.symbols[oi], decided.sort));
@@ -383,6 +662,7 @@ function alignSchema(oldPath: string, oldSpec: Spec, newPath: string, newSpec: S
       onlyOld: onlyOld,
       onlyNew: onlyNew,
       changed: changed,
+      skipped: skipped,
     },
   };
 }
@@ -399,16 +679,16 @@ function decideSort(
   const name = oldSpec.symbols[oi].name;
   const left = oldSpec.symbols[oi].sort;
   const right = newSpec.symbols[ni].sort;
-  if (left.kind !== right.kind) return typeError(name, left, oldPath, right, newPath);
+  if (left.kind !== right.kind) return skipType(name, left, oldPath, right, newPath);
   if (left.kind === "bool") return { kind: "ok", sort: { kind: "bool" }, note: "" };
   if (left.kind === "int") {
-    if (right.kind !== "int") return typeError(name, left, oldPath, right, newPath);
+    if (right.kind !== "int") return skipType(name, left, oldPath, right, newPath);
     const lo = left.min > right.min ? left.min : right.min;
     const hi = left.max < right.max ? left.max : right.max;
     if (lo > hi) {
       return {
-        kind: "error",
-        message:
+        kind: "skip",
+        note:
           name +
           " ranges do not overlap: " +
           formatInt(left.min) +
@@ -422,7 +702,7 @@ function decideSort(
           formatInt(right.max) +
           " in " +
           newPath +
-          ".",
+          ". Left out of the comparison.",
       };
     }
     let note = "";
@@ -445,8 +725,8 @@ function decideSort(
     }
     return { kind: "ok", sort: { kind: "int", min: lo, max: hi }, note: note };
   }
-  if (right.kind !== "enum") return typeError(name, left, oldPath, right, newPath);
-  if (left.enumName !== right.enumName) return typeError(name, left, oldPath, right, newPath);
+  if (right.kind !== "enum") return skipType(name, left, oldPath, right, newPath);
+  if (left.enumName !== right.enumName) return skipType(name, left, oldPath, right, newPath);
   const oldEnum = findEnum(oldSpec, left.enumName);
   const newEnum = findEnum(newSpec, right.enumName);
   if (oldEnum === null) {
@@ -458,8 +738,8 @@ function decideSort(
   const sharedVars = overlap(oldEnum.variants, newEnum.variants);
   if (sharedVars.length === 0) {
     return {
-      kind: "error",
-      message:
+      kind: "skip",
+      note:
         name +
         " variants do not overlap: " +
         englishList(oldEnum.variants) +
@@ -469,7 +749,7 @@ function decideSort(
         englishList(newEnum.variants) +
         " in " +
         newPath +
-        ".",
+        ". Left out of the comparison.",
     };
   }
   ensureEnum(enums, left.enumName, sharedVars, oldEnum.line);
@@ -488,10 +768,20 @@ function decideSort(
   return { kind: "ok", sort: { kind: "enum", enumName: left.enumName }, note: note };
 }
 
-function typeError(name: string, left: Sort, oldPath: string, right: Sort, newPath: string): Fail {
+function skipType(name: string, left: Sort, oldPath: string, right: Sort, newPath: string): SortDecision {
   return {
-    kind: "error",
-    message: name + " is " + sortLabel(left) + " in " + oldPath + " and " + sortLabel(right) + " in " + newPath + ".",
+    kind: "skip",
+    note:
+      name +
+      " is " +
+      sortLabel(left) +
+      " in " +
+      oldPath +
+      " and " +
+      sortLabel(right) +
+      " in " +
+      newPath +
+      ". Left out of the comparison.",
   };
 }
 
@@ -615,14 +905,18 @@ function termOutside(term: Term | null, map: number[]): boolean {
 
 function collectReqs(path: string, spec: Spec, map: number[], shared: Spec, excluded: string[]): ReqsOutcome {
   const reqs: Requirement[] = [];
+  const skipped: SchemaNote[] = [];
   for (let i = 0; i < spec.requirements.length; i++) {
     const req = spec.requirements[i];
     if (hasWord(excluded, req.id)) continue;
     const mapped = remapReq(path, req, map, shared);
-    if (mapped.kind === "error") return mapped;
+    if (mapped.kind === "error") {
+      skipped.push({ name: req.id, text: mapped.message + " Left out of the comparison." });
+      continue;
+    }
     reqs.push(mapped.req);
   }
-  return { kind: "ok", reqs: reqs };
+  return { kind: "ok", reqs: reqs, skipped: skipped };
 }
 
 function remapReq(path: string, req: Requirement, map: number[], shared: Spec): ReqOutcome {

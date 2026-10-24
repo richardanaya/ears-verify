@@ -1,8 +1,12 @@
 old: test/fixtures/diff-reword-old.ears.md
 new: test/fixtures/diff-reword-new.ears.md
+schema:
+none
 added:
 none
 removed:
+none
+renamed:
 none
 reworded:
 R1
@@ -10,8 +14,7 @@ old line 5
 WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
 new line 5
 When an order is submitted and inventory is available, the Order System shall fulfill the order.
-schema:
-none
+reworded, same meaning
 behavior:
 No scenario changes acceptance.
 lint:

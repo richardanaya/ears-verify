@@ -1,5 +1,7 @@
 old: examples/order-v1.ears.md
 new: examples/order-v2.ears.md
+schema:
+none
 added:
 R2 line 8
 WHEN an order is submitted AND inventory is not available, THE Order System SHALL not fulfill the order.
@@ -8,9 +10,9 @@ R3 line 9
 WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
 removed:
 none
-reworded:
+renamed:
 none
-schema:
+reworded:
 none
 behavior:
 The old spec accepts this scenario and the new spec rejects it.
@@ -19,7 +21,9 @@ The old spec accepts this scenario and the new spec rejects it.
   "inventory_available": false,
   "order_fulfilled": true
 }
-
+old:
+R3 is not in the old spec.
+new:
 R3 line 9
 WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
 An order was not submitted, but the order was fulfilled.

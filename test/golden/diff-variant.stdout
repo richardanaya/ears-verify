@@ -1,0 +1,41 @@
+old: test/fixtures/diff-variant-old.ears.md
+new: test/fixtures/diff-variant-new.ears.md
+schema:
+status variants changed from placed, shipped, and cancelled to placed and shipped. Compared over placed and shipped.
+cannot compare R1 in test/fixtures/diff-variant-old.ears.md because it uses cancelled, which is outside the shared variants of Status. Left out of the comparison.
+added:
+none
+removed:
+none
+renamed:
+none
+reworded:
+R1
+old line 4
+The Order System shall mark the order cancelled.
+new line 4
+The Order System shall mark the order placed.
+behavior:
+The old spec accepts this scenario and the new spec rejects it.
+{
+  "status": "shipped"
+}
+old:
+R1 line 4
+The Order System shall mark the order cancelled.
+Left out of the comparison.
+new:
+R1 line 4
+The Order System shall mark the order placed.
+The order was shipped.
+
+No scenario is accepted by the new spec and rejected by the old spec.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+none
+gaps new:
+none

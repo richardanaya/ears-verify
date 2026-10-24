@@ -1,0 +1,27 @@
+old: test/fixtures/diff-disjoint-old.ears.md
+new: test/fixtures/diff-disjoint-new.ears.md
+schema:
+status variants do not overlap: placed and cancelled in test/fixtures/diff-disjoint-old.ears.md and shipped and returned in test/fixtures/diff-disjoint-new.ears.md. Left out of the comparison.
+added:
+none
+removed:
+none
+renamed:
+none
+reworded:
+R1
+old line 4
+The Order System shall mark the order cancelled.
+new line 4
+The Order System shall mark the order shipped.
+behavior:
+No scenario changes acceptance.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+none
+gaps new:
+none

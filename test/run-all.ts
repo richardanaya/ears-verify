@@ -3,7 +3,7 @@
  * and golden CLI tests. Unit tests and each CLI case run once under Node
  * and once as the native binary; stdout, stderr, and exit status must match
  * each other and the checked-in golden files. Samples in docs/reference.md,
- * docs/lint.md, docs/json.md, docs/scenarios.md, and skills/plan-verify/SKILL.md marked with
+ * docs/lint.md, docs/json.md, docs/scenarios.md, docs/diff.md, and skills/plan-verify/SKILL.md marked with
  * `<!-- verify stdout|stderr <exit>` are run under Node and build/plan-verify
  * and must match the fenced bytes.
  *
@@ -269,6 +269,8 @@ function runGoldenCli(): void {
     { name: "diff-conflict", args: ["diff", "test/fixtures/diff-conflict-old.ears.md", "test/fixtures/diff-conflict-new.ears.md"] },
     { name: "diff-conflict-fixed", args: ["diff", "test/fixtures/diff-conflict-new.ears.md", "test/fixtures/diff-conflict-old.ears.md"] },
     { name: "diff-reword", args: ["diff", "test/fixtures/diff-reword-old.ears.md", "test/fixtures/diff-reword-new.ears.md"] },
+    { name: "diff-rename", args: ["diff", "test/fixtures/diff-rename-old.ears.md", "test/fixtures/diff-rename-new.ears.md"] },
+    { name: "diff-plain", args: ["diff", "test/fixtures/diff-plain-old.ears.md", "test/fixtures/diff-plain-new.ears.md"] },
     { name: "diff-names", args: ["diff", "test/fixtures/diff-names-old.ears.md", "test/fixtures/diff-names-new.ears.md"] },
     { name: "diff-overlap", args: ["diff", "test/fixtures/diff-overlap-old.ears.md", "test/fixtures/diff-overlap-new.ears.md"] },
     { name: "diff-enum", args: ["diff", "test/fixtures/diff-enum-old.ears.md", "test/fixtures/diff-enum-new.ears.md"] },
@@ -291,11 +293,13 @@ function runGoldenCli(): void {
   }
 
   checkGenerated();
+  checkDiffOut();
 
   checkDocSamples("docs-reference", "docs/reference.md", false);
   checkDocSamples("docs-lint", "docs/lint.md", false);
   checkDocSamples("docs-json", "docs/json.md", false);
   checkDocSamples("docs-scenarios", "docs/scenarios.md", false);
+  checkDocSamples("docs-diff", "docs/diff.md", false);
   checkDocSamples("skill", "skills/plan-verify/SKILL.md", true);
   checkPlanToProblems();
 
@@ -438,6 +442,53 @@ function checkOneScenario(spec: string, dir: string, file: string): void {
   }
   if (nodeResult.status !== 0 || nodeResult.stdout.indexOf("violations: 0\n") < 0) {
     fail("check " + file + " expected acceptance");
+    console.error(nodeResult.stdout);
+  }
+}
+
+function checkDiffOut(): void {
+  const jobs: { name: string; args: string[]; file: string; rejectSpec: string; acceptSpec: string }[] = [
+    {
+      name: "diff-order-out",
+      args: ["diff", "examples/order-v1.ears.md", "examples/order-v2.ears.md", "--out", "build/sc-diff"],
+      file: "old-accepts-new-rejects.json",
+      rejectSpec: "examples/order-v2.ears.md",
+      acceptSpec: "examples/order-v1.ears.md",
+    },
+    {
+      name: "diff-order-back-out",
+      args: ["diff", "examples/order-v2.ears.md", "examples/order-v1.ears.md", "--out", "build/sc-diff-back"],
+      file: "new-accepts-old-rejects.json",
+      rejectSpec: "examples/order-v2.ears.md",
+      acceptSpec: "examples/order-v1.ears.md",
+    },
+  ];
+  for (let i = 0; i < jobs.length; i++) {
+    const job = jobs[i];
+    const dir = outDirOf(job.args);
+    const nodeResult = nodeRun("src/main.ts", job.args);
+    const nodeBody = readFileSync(dir + "/" + job.file, "utf8");
+    const binResult = run(nativeBin, job.args);
+    comparePair(job.name, nodeResult, binResult);
+    const binBody = readFileSync(dir + "/" + job.file, "utf8");
+    if (nodeBody !== binBody) fail(job.name + " file bytes");
+    checkScenarioExit(job.rejectSpec, dir + "/" + job.file, 1);
+    checkScenarioExit(job.acceptSpec, dir + "/" + job.file, 0);
+  }
+}
+
+function checkScenarioExit(spec: string, file: string, exitCode: number): void {
+  const args = ["check", spec, "--input", file];
+  const nodeResult = nodeRun("src/main.ts", args);
+  const binResult = run(nativeBin, args);
+  if (
+    nodeResult.status !== binResult.status ||
+    nodeResult.stdout !== binResult.stdout ||
+    nodeResult.stderr !== binResult.stderr ||
+    nodeResult.status !== exitCode
+  ) {
+    fail("check " + file + " against " + spec);
+    console.error("status " + String(nodeResult.status) + " expected " + String(exitCode));
     console.error(nodeResult.stdout);
   }
 }

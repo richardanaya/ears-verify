@@ -5,7 +5,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { bindScenario, evaluate, formatCheckJson, formatCheckText, formatErrorJson } from "./check.ts";
-import { diffSpecs, formatDiffJson, formatDiffText } from "./diff.ts";
+import { diffMeaningChanged, diffSpecs, formatDiffJson, formatDiffText, type DiffReport } from "./diff.ts";
 import { parseProperty, parseSpec } from "./ears.ts";
 import { parseScenarioJson } from "./jsonvalue.ts";
 import { formatLintJson, formatLintText, lintSpec } from "./lint.ts";
@@ -161,9 +161,9 @@ function commandCheck(args: string[]): void {
 }
 
 function commandDiff(args: string[]): void {
-  const flags = parseFlags(args, false, false, false);
+  const flags = parseFlags(args, false, false, true);
   if (flags.error.length > 0) fail(flags.json, flags.error);
-  if (flags.positionals.length !== 2) fail(flags.json, "usage: plan-verify diff [--json] <old-spec> <new-spec>");
+  if (flags.positionals.length !== 2) fail(flags.json, "usage: plan-verify diff [--json] <old-spec> <new-spec> [--out <dir>]");
   const oldPath = flags.positionals[0];
   const newPath = flags.positionals[1];
   const oldText = readText(oldPath);
@@ -176,10 +176,27 @@ function commandDiff(args: string[]): void {
   if (!newParsed.ok) fail(flags.json, newPath + ":" + String(newParsed.line) + ": " + newParsed.message);
   const outcome = diffSpecs(oldPath, oldParsed.spec, newPath, newParsed.spec);
   if (outcome.kind === "error") fail(flags.json, outcome.message);
-  if (flags.json) console.log(formatDiffJson(oldPath, newPath, outcome.report));
-  else console.log(formatDiffText(oldPath, newPath, outcome.report));
-  if (outcome.report.oldAcceptsNewRejectsFound || outcome.report.newAcceptsOldRejectsFound) process.exit(EXIT_VIOLATIONS);
+  if (flags.out.length > 0) {
+    const wrote = writeDiffFiles(flags.out, outcome.report);
+    if (wrote.length > 0) fail(flags.json, wrote);
+  }
+  if (flags.json) console.log(formatDiffJson(oldPath, newPath, outcome.report, flags.out));
+  else console.log(formatDiffText(oldPath, newPath, outcome.report, flags.out));
+  if (diffMeaningChanged(outcome.report)) process.exit(EXIT_VIOLATIONS);
   process.exit(EXIT_OK);
+}
+
+function writeDiffFiles(dir: string, report: DiffReport): string {
+  try {
+    mkdirSync(dir, { recursive: true });
+    for (let i = 0; i < report.files.length; i++) {
+      const file = report.files[i];
+      writeFileSync(dir + "/" + file.file, file.body, "utf8");
+    }
+  } catch {
+    return "cannot write " + dir;
+  }
+  return "";
 }
 
 function commandEmit(args: string[]): void {
@@ -329,7 +346,7 @@ function usage(toStderr: boolean): void {
   const text =
     "usage:\n" +
     "  plan-verify check [--json] <spec> --input <scenario>\n" +
-    "  plan-verify diff [--json] <old-spec> <new-spec>\n" +
+    "  plan-verify diff [--json] <old-spec> <new-spec> [--out <dir>]\n" +
     "  plan-verify emit-smt [--json] <spec>\n" +
     "  plan-verify lint [--json] <spec>\n" +
     "  plan-verify report <spec>\n" +
