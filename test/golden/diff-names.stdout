@@ -1,15 +1,17 @@
 old: test/fixtures/diff-names-old.ears.md
 new: test/fixtures/diff-names-new.ears.md
+schema:
+only in the old spec: refund_issued
+only in the new spec: priority
 added:
 none
 removed:
 R2 line 6
 When an order is submitted, the Order System shall issue a refund.
+renamed:
+none
 reworded:
 none
-schema:
-only in the old spec: refund_issued
-only in the new spec: priority
 behavior:
 No scenario changes acceptance.
 lint:

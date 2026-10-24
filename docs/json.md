@@ -180,7 +180,7 @@ examples/order-always.ears.md
 }
 ```
 
-`diff` is `ok`, `old`, `new`, `added`, `removed`, `reworded`, `onlyOld`, `onlyNew`, `changed`, `oldAcceptsNewRejectsFound`, `oldAcceptsNewRejects`, `oldAcceptsBreaks`, `newAcceptsOldRejectsFound`, `newAcceptsOldRejects`, `newAcceptsBreaks`, `note`, `conflictsFixed`, `conflictsNew`, `gapsFixed`, and `gapsNew`. `ok` is true when neither scenario exists. `note` is then `No scenario changes acceptance.`, and otherwise it is empty. An added or removed requirement is `id`, `line`, and `sentence`. A reworded requirement is `id`, `oldLine`, `oldSentence`, `newLine`, and `newSentence`. `onlyOld` and `onlyNew` are names declared in one spec. `changed` is `name` and `text` for a range or a variant list that was narrowed to the overlap. A scenario is a list of `name` and `value`, empty when the matching `Found` flag is false. A break is `id`, `line`, `sentence`, and `because`. A conflict delta is `ids` and `summary`. A gap delta is `output` and `text`. A type, range, or variant that cannot be compared is the usual error object and exit 2.
+`diff` is `ok`, `old`, `new`, `out`, `schema`, `added`, `removed`, `renamed`, `reworded`, `files`, the two witness groups, `note`, `conflictsFixed`, `conflictsNew`, `gapsFixed`, and `gapsNew`. `schema` holds `onlyOld`, `onlyNew`, `changed`, and `skipped`. `ok` is true when no witness exists and `skipped` is empty. `note` is `No scenario changes acceptance.` in that case, and empty when a witness exists. An added or removed requirement is `id`, `line`, and `sentence`. A renamed row is `oldId`, `oldLine`, `newId`, `newLine`, and `sentence`. A reworded row adds `sameMeaning`. `files` names the witness files `--out` writes. A scenario row is `name` and `value`. A break is `id`, `line`, `sentence`, and `because`. A side row is `id`, `line`, `present`, `sentence`, `holds`, and `because`. `present` is false when that id is absent from that version. A conflict delta is `ids` and `summary`. A gap delta is `output` and `text`. A file that cannot be parsed is the usual error object and exit 2.
 
 <!-- verify stdout 1
 build/plan-verify
@@ -194,6 +194,13 @@ examples/order-v2.ears.md
   "ok": false,
   "old": "examples/order-v1.ears.md",
   "new": "examples/order-v2.ears.md",
+  "out": "",
+  "schema": {
+    "onlyOld": [],
+    "onlyNew": [],
+    "changed": [],
+    "skipped": []
+  },
   "added": [
     {
       "id": "R2",
@@ -207,10 +214,14 @@ examples/order-v2.ears.md
     }
   ],
   "removed": [],
+  "renamed": [],
   "reworded": [],
-  "onlyOld": [],
-  "onlyNew": [],
-  "changed": [],
+  "files": [
+    {
+      "file": "old-accepts-new-rejects.json",
+      "kind": "old-accepts-new-rejects"
+    }
+  ],
   "oldAcceptsNewRejectsFound": true,
   "oldAcceptsNewRejects": [
     {
@@ -234,9 +245,20 @@ examples/order-v2.ears.md
       "because": "An order was not submitted, but the order was fulfilled."
     }
   ],
+  "oldAcceptsOldSides": [
+    {
+      "id": "R3",
+      "line": 0,
+      "present": false,
+      "sentence": "",
+      "holds": false,
+      "because": ""
+    }
+  ],
   "newAcceptsOldRejectsFound": false,
   "newAcceptsOldRejects": [],
   "newAcceptsBreaks": [],
+  "newAcceptsNewSides": [],
   "note": "",
   "conflictsFixed": [],
   "conflictsNew": [],
@@ -250,7 +272,7 @@ examples/order-v2.ears.md
 }
 ```
 
-<!-- verify stdout 2
+<!-- verify stdout 1
 build/plan-verify
 diff
 --json
@@ -260,7 +282,61 @@ test/fixtures/diff-type-new.ears.md
 ```text
 {
   "ok": false,
-  "error": "order_fulfilled is Bool in test/fixtures/diff-type-old.ears.md and Int in test/fixtures/diff-type-new.ears.md."
+  "old": "test/fixtures/diff-type-old.ears.md",
+  "new": "test/fixtures/diff-type-new.ears.md",
+  "out": "",
+  "schema": {
+    "onlyOld": [],
+    "onlyNew": [],
+    "changed": [],
+    "skipped": [
+      {
+        "name": "order_fulfilled",
+        "text": "order_fulfilled is Bool in test/fixtures/diff-type-old.ears.md and Int in test/fixtures/diff-type-new.ears.md. Left out of the comparison."
+      }
+    ]
+  },
+  "added": [],
+  "removed": [],
+  "renamed": [],
+  "reworded": [
+    {
+      "id": "R1",
+      "oldLine": 3,
+      "oldSentence": "The Order System shall fulfill the order.",
+      "newLine": 3,
+      "newSentence": "The Order System shall fulfill 1 orders.",
+      "sameMeaning": false
+    }
+  ],
+  "files": [],
+  "oldAcceptsNewRejectsFound": false,
+  "oldAcceptsNewRejects": [],
+  "oldAcceptsBreaks": [],
+  "oldAcceptsOldSides": [],
+  "newAcceptsOldRejectsFound": false,
+  "newAcceptsOldRejects": [],
+  "newAcceptsBreaks": [],
+  "newAcceptsNewSides": [],
+  "note": "No scenario changes acceptance.",
+  "conflictsFixed": [],
+  "conflictsNew": [],
+  "gapsFixed": [],
+  "gapsNew": []
+}
+```
+
+<!-- verify stdout 2
+build/plan-verify
+diff
+--json
+test/fixtures/malformed.ears.md
+examples/order-v1.ears.md
+-->
+```text
+{
+  "ok": false,
+  "error": "test/fixtures/malformed.ears.md:3: expected \"shall\""
 }
 ```
 

@@ -1,0 +1,27 @@
+old: test/fixtures/diff-range-old.ears.md
+new: test/fixtures/diff-range-new.ears.md
+schema:
+quantity ranges do not overlap: 1..3 in test/fixtures/diff-range-old.ears.md and 4..6 in test/fixtures/diff-range-new.ears.md. Left out of the comparison.
+added:
+none
+removed:
+none
+renamed:
+none
+reworded:
+R1
+old line 3
+The Order System shall accept at most 3 units.
+new line 3
+The Order System shall accept at least 4 units.
+behavior:
+No scenario changes acceptance.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+none
+gaps new:
+none

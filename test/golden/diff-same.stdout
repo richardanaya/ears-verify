@@ -1,12 +1,14 @@
 old: examples/order-v1.ears.md
 new: examples/order-v1.ears.md
+schema:
+none
 added:
 none
 removed:
 none
-reworded:
+renamed:
 none
-schema:
+reworded:
 none
 behavior:
 No scenario changes acceptance.

@@ -1,1 +1,0 @@
-error: cannot compare R1 in test/fixtures/diff-variant-old.ears.md because it uses cancelled, which is outside the shared variants of Status.

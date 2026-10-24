@@ -1,0 +1,27 @@
+old: test/fixtures/diff-type-old.ears.md
+new: test/fixtures/diff-type-new.ears.md
+schema:
+order_fulfilled is Bool in test/fixtures/diff-type-old.ears.md and Int in test/fixtures/diff-type-new.ears.md. Left out of the comparison.
+added:
+none
+removed:
+none
+renamed:
+none
+reworded:
+R1
+old line 3
+The Order System shall fulfill the order.
+new line 3
+The Order System shall fulfill 1 orders.
+behavior:
+No scenario changes acceptance.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+none
+gaps new:
+none

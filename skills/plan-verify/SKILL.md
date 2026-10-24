@@ -18,7 +18,7 @@ help
 ```text
 usage:
   plan-verify check [--json] <spec> --input <scenario>
-  plan-verify diff [--json] <old-spec> <new-spec>
+  plan-verify diff [--json] <old-spec> <new-spec> [--out <dir>]
   plan-verify emit-smt [--json] <spec>
   plan-verify lint [--json] <spec>
   plan-verify report <spec>
@@ -37,7 +37,7 @@ When the product manager changes a requirement, keep the previous spec and write
 
 `build/plan-verify diff <old-spec> <new-spec>`
 
-The report names what was added, removed, or reworded. It searches for one scenario the old spec accepts and the new spec rejects, and one the other way. Each is the first assignment, false before true, with the plain-English reason and the requirement that fails. If neither exists, the report says `No scenario changes acceptance.` Conflicts and gaps that appeared or went away are listed after that. Exit 0 means acceptance did not change. Exit 1 means it did. Ask the product manager about a scenario that changed acceptance before anyone builds it.
+The report lists schema changes first, then what was added, removed, renamed, or reworded. A reword that means the same thing says `reworded, same meaning`. It searches for one scenario the old spec accepts and the new spec rejects, and one the other way. Each is the first assignment, false before true, with the requirement that fails and the requirement on the other side. `--out <dir>` writes that scenario for `check`. If neither exists, the report says `No scenario changes acceptance.` Exit 0 means the compared meaning did not change. Exit 1 means it did, or a name was left out of the comparison. Ask the product manager about a scenario that changed acceptance before anyone builds it.
 
 `examples/order-v1.ears.md` fulfills an order only when it was submitted and inventory is available. `examples/order-v2.ears.md` keeps that rule and says what happens in the other situations. The smallest scenario the old spec still allows is an order that was never submitted and was fulfilled anyway:
 
@@ -50,6 +50,8 @@ examples/order-v2.ears.md
 ```text
 old: examples/order-v1.ears.md
 new: examples/order-v2.ears.md
+schema:
+none
 added:
 R2 line 8
 WHEN an order is submitted AND inventory is not available, THE Order System SHALL not fulfill the order.
@@ -58,9 +60,9 @@ R3 line 9
 WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
 removed:
 none
-reworded:
+renamed:
 none
-schema:
+reworded:
 none
 behavior:
 The old spec accepts this scenario and the new spec rejects it.
@@ -69,7 +71,9 @@ The old spec accepts this scenario and the new spec rejects it.
   "inventory_available": false,
   "order_fulfilled": true
 }
-
+old:
+R3 is not in the old spec.
+new:
 R3 line 9
 WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
 An order was not submitted, but the order was fulfilled.
@@ -88,6 +92,120 @@ none
 ```
 
 The samples below are the built CLI. `node --experimental-strip-types src/main.ts` prints the same bytes when `build/plan-verify` is not there yet. The same spec always produces the same SMT-LIB.
+
+## Confirm the edit
+
+After you edit requirements, diff the previous file against the file you just wrote. If the report says `reworded, same meaning` and `No scenario changes acceptance.`, the wording changed and the behavior did not. That is the result you want from a wording pass.
+
+<!-- verify stdout 0
+build/plan-verify
+diff
+test/fixtures/diff-reword-old.ears.md
+test/fixtures/diff-reword-new.ears.md
+-->
+```text
+old: test/fixtures/diff-reword-old.ears.md
+new: test/fixtures/diff-reword-new.ears.md
+schema:
+none
+added:
+none
+removed:
+none
+renamed:
+none
+reworded:
+R1
+old line 5
+WHEN an order is submitted AND inventory is available, THE Order System SHALL fulfill the order.
+new line 5
+When an order is submitted and inventory is available, the Order System shall fulfill the order.
+reworded, same meaning
+behavior:
+No scenario changes acceptance.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+none
+gaps new:
+none
+```
+
+When the edit is meant to change behavior, read the witness and confirm it is the change you intended. `--out` writes that witness. `check` on the new spec reports the requirement that now forbids it.
+
+<!-- verify stdout 1
+build/plan-verify
+diff
+examples/order-v1.ears.md
+examples/order-v2.ears.md
+--out
+build/skill-diff
+-->
+```text
+old: examples/order-v1.ears.md
+new: examples/order-v2.ears.md
+out: build/skill-diff
+schema:
+none
+added:
+R2 line 8
+WHEN an order is submitted AND inventory is not available, THE Order System SHALL not fulfill the order.
+
+R3 line 9
+WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
+removed:
+none
+renamed:
+none
+reworded:
+none
+behavior:
+The old spec accepts this scenario and the new spec rejects it.
+old-accepts-new-rejects.json
+{
+  "order_submitted": false,
+  "inventory_available": false,
+  "order_fulfilled": true
+}
+old:
+R3 is not in the old spec.
+new:
+R3 line 9
+WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
+An order was not submitted, but the order was fulfilled.
+
+No scenario is accepted by the new spec and rejected by the old spec.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+order_fulfilled
+Nothing says whether the order was fulfilled when an order was submitted and inventory was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
+gaps new:
+none
+```
+
+<!-- verify stdout 1
+build/plan-verify
+check
+examples/order-v2.ears.md
+--input
+build/skill-diff/old-accepts-new-rejects.json
+-->
+```text
+spec: examples/order-v2.ears.md
+scenario: build/skill-diff/old-accepts-new-rejects.json
+violations: 1
+
+R3 line 9
+WHEN an order is not submitted, THE Order System SHALL not fulfill the order.
+An order was not submitted, but the order was fulfilled.
+```
 
 ## Vocabulary
 

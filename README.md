@@ -41,7 +41,10 @@ npm install
 npm run build
 ./build/plan-verify lint examples/order-conflict.ears.md
 ./build/plan-verify report examples/order-conflict.ears.md
+./build/plan-verify scenarios examples/order.ears.md
 ```
+
+`scenarios` prints an accepted case and a rejected case for the fulfillment requirement in `examples/order.ears.md`.
 
 ## Example
 

@@ -1,0 +1,24 @@
+old: test/fixtures/diff-rename-old.ears.md
+new: test/fixtures/diff-rename-new.ears.md
+schema:
+none
+added:
+none
+removed:
+none
+renamed:
+R1 line 4 is R4 line 4
+When it is ready, the Desk shall send it.
+reworded:
+none
+behavior:
+No scenario changes acceptance.
+lint:
+conflicts fixed:
+none
+conflicts new:
+none
+gaps fixed:
+none
+gaps new:
+none
