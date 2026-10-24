@@ -40,7 +40,7 @@ examples/order-fail.json
 }
 ```
 
-`lint` is `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `duplicate`, `vacuous`, `unused`, and `warnings`. A conflict is `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements` (`id`, `line`, `sentence`), `situation` and `example` (`name`, `value`), `requires` (`id`, `text`), `keeps`, `breaks`, and `fix`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. `kind` is `vague`, `solution`, `form`, or `negation`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. An exact duplicate is `id`, `line`, `sameAs`, `sentence`, `text`, and `fix`. A vacuous requirement has the same fields as a redundant requirement. An unused entry is `name`, `kind` (`state`, `input`, `output`, or `variant`), `text`, and `fix`. A warning is `id`, `line`, `sentence`, `kind` (`vague`, `modal`, `compound`, or `untestable`), `word`, `text`, and `fix`. `ok` stays true when warnings are the only findings, and the exit status stays 0. The other lint arrays still make `ok` false and exit 1.
+`lint` is `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `duplicate`, `vacuous`, `unused`, `uncovered`, and `warnings`. A conflict is `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements` (`id`, `line`, `sentence`), `situation` and `example` (`name`, `value`), `requires` (`id`, `text`), `keeps`, `breaks`, and `fix`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. `kind` is `vague`, `solution`, `form`, or `negation`. A redundant requirement is `id`, `line`, `sentence`, `text`, `fix`, and `impliedBy` (the requirement ids that already require it). An exact duplicate is `id`, `line`, `sameAs`, `sentence`, `text`, and `fix`. A vacuous requirement is `id`, `line`, `sentence`, `text`, `fix`, and `because` (the requirement ids or schema facts that make the trigger impossible). An unused entry is `name`, `kind` (`input` or `variant`), `text`, and `fix`. An uncovered entry is `name`, `kind` (`state`, `output`, or `variant`), `text`, and `fix`. A warning is `id`, `line`, `sentence`, `kind` (`vague`, `modal`, `compound`, or `untestable`), `word`, `text`, and `fix`. `ok` stays true when the only findings are warnings, redundant requirements, or uncovered names, and the exit status stays 0. Conflicts, gaps, misuse, wording, duplicates, vacuous requirements, and unused names make `ok` false and exit 1.
 
 <!-- verify stdout 1
 build/plan-verify
@@ -128,6 +128,7 @@ examples/order-conflict.ears.md
   "duplicate": [],
   "vacuous": [],
   "unused": [],
+  "uncovered": [],
   "warnings": []
 }
 ```
@@ -300,28 +301,145 @@ examples/order-unused.ears.md
   "vacuous": [],
   "unused": [
     {
-      "name": "loyalty",
-      "kind": "state",
-      "text": "loyalty (\"the customer is loyal\") is a state and no requirement mentions it.",
-      "fix": "Suggested fix: use loyalty in a requirement, or remove it from the schema."
-    },
-    {
       "name": "region",
       "kind": "input",
       "text": "region (\"the region\") is an input and no requirement mentions it.",
       "fix": "Suggested fix: use region in a requirement, or remove it from the schema."
+    }
+  ],
+  "uncovered": [
+    {
+      "name": "loyalty",
+      "kind": "state",
+      "text": "No requirement constrains loyalty (\"the customer is loyal\").",
+      "fix": "Suggested fix: use loyalty in a requirement, or remove it from the schema."
     },
     {
       "name": "receipt_sent",
       "kind": "output",
-      "text": "Nothing sets receipt_sent (\"a receipt is sent\"). Requirements mention it, but no response says what it shall be.",
-      "fix": "Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value."
+      "text": "No requirement constrains receipt_sent (\"a receipt is sent\").",
+      "fix": "Suggested fix: add a shall requirement that sets receipt_sent, or remove it from the schema. Do not choose the value."
     },
     {
       "name": "Lane.refund",
       "kind": "variant",
-      "text": "Lane.refund is never mentioned.",
-      "fix": "Suggested fix: use refund in a requirement, or remove it from Lane."
+      "text": "No requirement can set \"the lane\" to refund.",
+      "fix": "Suggested fix: add a requirement that produces refund, or remove it from Lane."
+    }
+  ],
+  "warnings": []
+}
+```
+
+## Unreachable, redundant, and uncovered
+
+A vacuous object carries `because`. A redundant object carries `impliedBy`. Uncovered names sit in `uncovered`. `ok` is false for an unreachable requirement. `ok` stays true when the only findings are redundant requirements or uncovered names.
+
+<!-- verify stdout 1
+build/plan-verify
+lint
+--json
+examples/order-blocked.ears.md
+-->
+```text
+{
+  "ok": false,
+  "spec": "examples/order-blocked.ears.md",
+  "conflicts": [],
+  "gaps": [],
+  "misuse": [],
+  "wording": [],
+  "redundant": [],
+  "duplicate": [],
+  "vacuous": [
+    {
+      "id": "R3",
+      "line": 9,
+      "sentence": "When the gate is open or the shift is open, the Desk shall finish the job.",
+      "text": "R3 can never trigger. Its condition is impossible for every allowed value.",
+      "fix": "Suggested fix: rewrite the condition in R3 so a real situation can make it true, or remove the requirement. Do not invent a response.",
+      "because": [
+        "R1",
+        "R2"
+      ]
+    }
+  ],
+  "unused": [],
+  "uncovered": [],
+  "warnings": []
+}
+```
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+--json
+examples/order-redundant.ears.md
+-->
+```text
+{
+  "ok": true,
+  "spec": "examples/order-redundant.ears.md",
+  "conflicts": [],
+  "gaps": [],
+  "misuse": [],
+  "wording": [],
+  "redundant": [
+    {
+      "id": "R2",
+      "line": 8,
+      "sentence": "When an order is submitted and inventory is available, the Order System shall fulfill the order.",
+      "text": "R2 adds nothing. R1 implies it. Whenever the other requirements hold, R2 holds too.",
+      "fix": "Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.",
+      "impliedBy": [
+        "R1"
+      ]
+    }
+  ],
+  "duplicate": [],
+  "vacuous": [],
+  "unused": [],
+  "uncovered": [],
+  "warnings": []
+}
+```
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+--json
+examples/order-uncovered.ears.md
+-->
+```text
+{
+  "ok": true,
+  "spec": "examples/order-uncovered.ears.md",
+  "conflicts": [],
+  "gaps": [],
+  "misuse": [],
+  "wording": [],
+  "redundant": [],
+  "duplicate": [],
+  "vacuous": [],
+  "unused": [],
+  "uncovered": [
+    {
+      "name": "loyalty",
+      "kind": "state",
+      "text": "No requirement constrains loyalty (\"the customer is loyal\").",
+      "fix": "Suggested fix: use loyalty in a requirement, or remove it from the schema."
+    },
+    {
+      "name": "receipt_sent",
+      "kind": "output",
+      "text": "No requirement constrains receipt_sent (\"a receipt is sent\").",
+      "fix": "Suggested fix: add a shall requirement that sets receipt_sent, or remove it from the schema. Do not choose the value."
+    },
+    {
+      "name": "Lane.refund",
+      "kind": "variant",
+      "text": "No requirement can set \"the lane\" to refund.",
+      "fix": "Suggested fix: add a requirement that produces refund, or remove it from Lane."
     }
   ],
   "warnings": []
@@ -350,6 +468,7 @@ examples/order-timely.ears.md
   "duplicate": [],
   "vacuous": [],
   "unused": [],
+  "uncovered": [],
   "warnings": [
     {
       "id": "R1",

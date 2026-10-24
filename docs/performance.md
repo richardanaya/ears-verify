@@ -65,6 +65,10 @@ npm run bench
 
 `bench/gen-spec.mjs` writes a spec with N requirements (`node bench/gen-spec.mjs 25 > bench/specs/gen-25.ears.md`). The checked-in specs under `bench/specs/` are the ones timed above. CI fails the native `gen-25` lint if it is still running after 20 seconds.
 
+## Vacuity and coverage
+
+The unreachable check, the minimal set of requirements that imply another, and enum values a constrained output can never produce use the same solver. `gen-100` has no always-true requirements, no redundant requirements, and no enums, so those extra solves do not run there. On this VM the pre-change default binary, commit `8257b0b`, linted `gen-100` in 421 ms, `gen-25` in 29 ms, and checkout in 1168 ms. After the change, three `gen-100` runs were 405 ms, 482 ms, and 451 ms native, and 543 ms, 630 ms, and 537 ms on Node. `gen-25` native was 30 ms. Checkout native was 1169 ms. The slowest `gen-100` native run, 482 ms, is about 14% above the 421 ms pre-change run on this machine. Node and the default binary printed the same bytes for `gen-100`, checkout, and `examples/order-blocked.ears.md`.
+
 ## Next
 
 Specs that do not split into output groups search every repair against the whole core set. Checkout is one of those. On this VM that lint is 1156 ms default, 869 ms release, and 881 ms on Node.

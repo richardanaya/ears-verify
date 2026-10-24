@@ -34,6 +34,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 conflict {R2, R3}
@@ -95,6 +96,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 ```
 
@@ -117,6 +119,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 conflict {R1, R2}
@@ -184,6 +187,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 gap order_fulfilled
@@ -207,6 +211,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 ```
 
@@ -229,6 +234,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 ```
 
@@ -251,6 +257,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 gap order_cancelled
@@ -272,6 +279,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 gap payment_declined
@@ -293,6 +301,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 misuse R4 line 6
@@ -300,7 +309,7 @@ misuse R4 line 6
 When payment fails, the Order System shall reject the order.
 
 redundant R4 line 6
-R4 adds nothing. Whenever the other requirements hold, R4 holds too.
+R4 adds nothing. R5 implies it. Whenever the other requirements hold, R4 holds too.
 When payment fails, the Order System shall reject the order.
 Suggested fix: remove R4, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 ```
@@ -320,6 +329,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 wording line 4
@@ -337,7 +347,7 @@ output order_fulfilled: Bool "The checkout is fast, appropriate, and user-friend
 
 ## Testability warnings
 
-A warning names the requirement id, the line, the sentence, and a short fix. The count is `warnings`. `--json` puts the same findings in `warnings`, and `ok` stays true when warnings are the only findings. A conflict, a gap, misuse, a wording finding, a redundant requirement, a duplicate, a vacuous requirement, or unused schema still exits 1. A word the schema does not declare is a parse error and exits 2.
+A warning names the requirement id, the line, the sentence, and a short fix. The count is `warnings`. `--json` puts the same findings in `warnings`, and `ok` stays true when warnings are the only findings. A redundant requirement and an uncovered output, state, or enum value are separate counts. They also leave `ok` true and exit 0 when nothing else is wrong. A conflict, a gap, misuse, a wording finding, a duplicate, a vacuous requirement, or an unused input or variant still exits 1. A word the schema does not declare is a parse error and exits 2.
 
 These words are already wording findings, so a warning does not repeat them: `as needed`, `fast`, `slow`, `large`, `small`, `appropriate`, `quickly`, `easy`, `robust`, `flexible`, `user-friendly`, `efficient`. The warning list, scanned in requirement sentences only, is `appropriately`, `reasonable`, `etc`, `adequate`, `sufficient`, `timely`, `normally`, `usually`, `some`, `several`, `many`, `few`, `minimal`, `optimal`. A word inside a declared phrase or action is skipped. `if possible` and `where possible` are escape warnings. `should`, `may`, `might`, `could`, `can`, and `will try` are weak modals. `must` and a bare `will` still fail to parse.
 
@@ -360,6 +370,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 1
 
 warning R1 line 6
@@ -393,6 +404,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 1
 
 warning R1 line 6
@@ -426,6 +438,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 2
 
 warning R1 line 6
@@ -465,6 +478,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 2
 
 warning R1 line 7
@@ -506,6 +520,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 1
 
 warning R1 line 5
@@ -529,6 +544,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 1
 
 warning R1 line 5
@@ -582,6 +598,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 ```
 
@@ -604,6 +621,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 wording line 4
@@ -626,6 +644,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 conflict {R4, R5}
@@ -680,6 +699,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 1
+uncovered: 0
 warnings: 0
 
 conflict {R6, R7}
@@ -737,6 +757,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 conflict {R1, R2, R3}
@@ -789,9 +810,9 @@ When the order is accepted and an order is not submitted, the Order System shall
 
 ## A requirement that adds nothing
 
-`examples/order-redundant.ears.md` says a submitted order is fulfilled, and also that a submitted order with inventory is fulfilled. The second one is already required by the first. Lint names it and asks. It does not delete it. A conflict does not hide a repeat that sits outside that conflict. Lint checks redundancy on the requirements that are not part of any conflict.
+`examples/order-redundant.ears.md` says a submitted order is fulfilled, and also that a submitted order with inventory is fulfilled. The second one is already required by the first. Lint names R2, says R1 implies it, and asks. It does not delete it. That finding is a warning: this spec exits 0. A conflict does not hide a repeat that sits outside that conflict. Lint checks redundancy on the requirements that are not part of any conflict.
 
-<!-- verify stdout 1
+<!-- verify stdout 0
 build/plan-verify
 lint
 examples/order-redundant.ears.md
@@ -806,10 +827,11 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 redundant R2 line 8
-R2 adds nothing. Whenever the other requirements hold, R2 holds too.
+R2 adds nothing. R1 implies it. Whenever the other requirements hold, R2 holds too.
 When an order is submitted and inventory is available, the Order System shall fulfill the order.
 Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 ```
@@ -833,6 +855,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 conflict {R1, R2}
@@ -870,7 +893,7 @@ One repair is to drop R2 and keep R1 as written.
 When an order is submitted, the Order System shall fulfill the order.
 
 redundant R5 line 12
-R5 adds nothing. Whenever the requirements outside a conflict hold, R5 holds too.
+R5 adds nothing. R4 implies it. Whenever the requirements outside a conflict hold, R5 holds too.
 When an order is submitted and inventory is available, the Order System shall close the order.
 Suggested fix: remove R5, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 ```
@@ -894,6 +917,7 @@ redundant: 0
 duplicate: 1
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 duplicate R2 line 7
@@ -946,6 +970,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 wording line 6
@@ -955,7 +980,7 @@ When not a member asks to take a copy home, the Desk shall not allow the loan.
 
 ## A condition that can never be true
 
-`examples/order-vacuous.ears.md` has a condition that contradicts itself, and a quantity comparison outside the declared range. The response is never demanded. Lint names each one as vacuous. It does not also call that requirement redundant or a duplicate, because a condition that can never be true is implied by anything. The vacuous line says to rewrite the condition. It does not pick a response.
+`examples/order-vacuous.ears.md` has a condition that contradicts itself, and a quantity comparison outside the declared range. The response is never demanded. Lint names each one as vacuous and lists the smallest reason under `Blocked by`. A self-contradiction says the condition contradicts itself. A comparison outside a declared range names that range. It does not also call that requirement redundant or a duplicate, because a condition that can never be true is implied by anything. The vacuous line says to rewrite the condition. It does not pick a response. This finding exits 1.
 
 <!-- verify stdout 1
 build/plan-verify
@@ -972,22 +997,132 @@ redundant: 0
 duplicate: 0
 vacuous: 2
 unused: 0
+uncovered: 0
 warnings: 0
 
 vacuous R1 line 7
 R1 can never trigger. Its condition is impossible for every allowed value.
 When the cart is open and the cart is not open, the Checkout shall accept the order.
+Blocked by the condition contradicts itself.
 Suggested fix: rewrite the condition in R1 so a real situation can make it true, or remove the requirement. Do not invent a response.
 
 vacuous R2 line 8
 R2 can never trigger. Its condition is impossible for every allowed value.
 When the quantity is at least 9, the Checkout shall accept the order.
+Blocked by the quantity is 1..5.
 Suggested fix: rewrite the condition in R2 so a real situation can make it true, or remove the requirement. Do not invent a response.
+```
+
+## Always-true requirements that block a trigger
+
+`examples/order-blocked.ears.md` always keeps the gate closed and the shift closed. R3 fires only when one of them is open, so it can never fire. `Blocked by` names the smallest set of always-true requirements that make the trigger impossible. R1 alone is not enough, and R2 alone is not enough. This finding exits 1.
+
+<!-- verify stdout 1
+build/plan-verify
+lint
+examples/order-blocked.ears.md
+-->
+```text
+spec: examples/order-blocked.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 1
+unused: 0
+uncovered: 0
+warnings: 0
+
+vacuous R3 line 9
+R3 can never trigger. Its condition is impossible for every allowed value.
+When the gate is open or the shift is open, the Desk shall finish the job.
+Blocked by R1.
+Blocked by R2.
+Suggested fix: rewrite the condition in R3 so a real situation can make it true, or remove the requirement. Do not invent a response.
+```
+
+`examples/order-reachable.ears.md` is the same shape of desk with a trigger that can happen. Lint is quiet.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-reachable.ears.md
+-->
+```text
+spec: examples/order-reachable.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+uncovered: 0
+warnings: 0
+```
+
+## Outputs, states, and enum values nothing produces
+
+`examples/order-uncovered.ears.md` declares a loyalty state no requirement mentions, a receipt output that requirements only read, and a refund lane that no requirement can produce. Hold and fulfill are produced, so the lane itself is constrained. Uncovered findings are warnings. This spec exits 0.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-uncovered.ears.md
+-->
+```text
+spec: examples/order-uncovered.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+uncovered: 3
+warnings: 0
+
+uncovered loyalty
+No requirement constrains loyalty ("the customer is loyal").
+Suggested fix: use loyalty in a requirement, or remove it from the schema.
+
+uncovered receipt_sent
+No requirement constrains receipt_sent ("a receipt is sent").
+Suggested fix: add a shall requirement that sets receipt_sent, or remove it from the schema. Do not choose the value.
+
+uncovered Lane.refund
+No requirement can set "the lane" to refund.
+Suggested fix: add a requirement that produces refund, or remove it from Lane.
+```
+
+`examples/order-lane.ears.md` produces both declared lane values. Lint is quiet.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-lane.ears.md
+-->
+```text
+spec: examples/order-lane.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+uncovered: 0
+warnings: 0
 ```
 
 ## Schema the requirements never use
 
-`examples/order-unused.ears.md` declares a state and an input that no sentence mentions, an enum variant that no sentence mentions, and an output that requirements only read. An output that no requirement mentions at all is still a gap, not a second finding. An event that nobody handles stays a gap.
+`examples/order-unused.ears.md` declares an input that no sentence mentions. That stays an error. A state no requirement mentions, an output no response sets, and an enum value a constrained output can never produce are uncovered warnings on the same spec. An output that no requirement mentions at all is still a gap. An event that nobody handles stays a gap. When the spec already conflicts, lint does not also list every enum value as unreachable.
 
 <!-- verify stdout 1
 build/plan-verify
@@ -1003,24 +1138,25 @@ wording: 0
 redundant: 0
 duplicate: 0
 vacuous: 0
-unused: 4
+unused: 1
+uncovered: 3
 warnings: 0
-
-unused loyalty
-loyalty ("the customer is loyal") is a state and no requirement mentions it.
-Suggested fix: use loyalty in a requirement, or remove it from the schema.
 
 unused region
 region ("the region") is an input and no requirement mentions it.
 Suggested fix: use region in a requirement, or remove it from the schema.
 
-unused receipt_sent
-Nothing sets receipt_sent ("a receipt is sent"). Requirements mention it, but no response says what it shall be.
-Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value.
+uncovered loyalty
+No requirement constrains loyalty ("the customer is loyal").
+Suggested fix: use loyalty in a requirement, or remove it from the schema.
 
-unused Lane.refund
-Lane.refund is never mentioned.
-Suggested fix: use refund in a requirement, or remove it from Lane.
+uncovered receipt_sent
+No requirement constrains receipt_sent ("a receipt is sent").
+Suggested fix: add a shall requirement that sets receipt_sent, or remove it from the schema. Do not choose the value.
+
+uncovered Lane.refund
+No requirement can set "the lane" to refund.
+Suggested fix: add a requirement that produces refund, or remove it from Lane.
 ```
 
 The `--json` object for this spec is in [json.md](json.md).

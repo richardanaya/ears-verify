@@ -7,6 +7,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 conflict {R1, R2}
@@ -44,6 +45,6 @@ One repair is to drop R2 and keep R1 as written.
 When an order is submitted, the Order System shall fulfill the order.
 
 redundant R5 line 12
-R5 adds nothing. Whenever the requirements outside a conflict hold, R5 holds too.
+R5 adds nothing. R4 implies it. Whenever the requirements outside a conflict hold, R5 holds too.
 When an order is submitted and inventory is available, the Order System shall close the order.
 Suggested fix: remove R5, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.

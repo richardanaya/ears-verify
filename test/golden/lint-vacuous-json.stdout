@@ -13,16 +13,23 @@
       "line": 7,
       "sentence": "When the cart is open and the cart is not open, the Checkout shall accept the order.",
       "text": "R1 can never trigger. Its condition is impossible for every allowed value.",
-      "fix": "Suggested fix: rewrite the condition in R1 so a real situation can make it true, or remove the requirement. Do not invent a response."
+      "fix": "Suggested fix: rewrite the condition in R1 so a real situation can make it true, or remove the requirement. Do not invent a response.",
+      "because": [
+        "the condition contradicts itself"
+      ]
     },
     {
       "id": "R2",
       "line": 8,
       "sentence": "When the quantity is at least 9, the Checkout shall accept the order.",
       "text": "R2 can never trigger. Its condition is impossible for every allowed value.",
-      "fix": "Suggested fix: rewrite the condition in R2 so a real situation can make it true, or remove the requirement. Do not invent a response."
+      "fix": "Suggested fix: rewrite the condition in R2 so a real situation can make it true, or remove the requirement. Do not invent a response.",
+      "because": [
+        "the quantity is 1..5"
+      ]
     }
   ],
   "unused": [],
+  "uncovered": [],
   "warnings": []
 }

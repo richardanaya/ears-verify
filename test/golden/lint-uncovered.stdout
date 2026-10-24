@@ -1,0 +1,23 @@
+spec: examples/order-uncovered.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+uncovered: 3
+warnings: 0
+
+uncovered loyalty
+No requirement constrains loyalty ("the customer is loyal").
+Suggested fix: use loyalty in a requirement, or remove it from the schema.
+
+uncovered receipt_sent
+No requirement constrains receipt_sent ("a receipt is sent").
+Suggested fix: add a shall requirement that sets receipt_sent, or remove it from the schema. Do not choose the value.
+
+uncovered Lane.refund
+No requirement can set "the lane" to refund.
+Suggested fix: add a requirement that produces refund, or remove it from Lane.

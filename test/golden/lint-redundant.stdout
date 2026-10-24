@@ -7,9 +7,10 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 redundant R2 line 8
-R2 adds nothing. Whenever the other requirements hold, R2 holds too.
+R2 adds nothing. R1 implies it. Whenever the other requirements hold, R2 holds too.
 When an order is submitted and inventory is available, the Order System shall fulfill the order.
 Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.

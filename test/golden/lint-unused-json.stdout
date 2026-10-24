@@ -10,28 +10,30 @@
   "vacuous": [],
   "unused": [
     {
-      "name": "loyalty",
-      "kind": "state",
-      "text": "loyalty (\"the customer is loyal\") is a state and no requirement mentions it.",
-      "fix": "Suggested fix: use loyalty in a requirement, or remove it from the schema."
-    },
-    {
       "name": "region",
       "kind": "input",
       "text": "region (\"the region\") is an input and no requirement mentions it.",
       "fix": "Suggested fix: use region in a requirement, or remove it from the schema."
+    }
+  ],
+  "uncovered": [
+    {
+      "name": "loyalty",
+      "kind": "state",
+      "text": "No requirement constrains loyalty (\"the customer is loyal\").",
+      "fix": "Suggested fix: use loyalty in a requirement, or remove it from the schema."
     },
     {
       "name": "receipt_sent",
       "kind": "output",
-      "text": "Nothing sets receipt_sent (\"a receipt is sent\"). Requirements mention it, but no response says what it shall be.",
-      "fix": "Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value."
+      "text": "No requirement constrains receipt_sent (\"a receipt is sent\").",
+      "fix": "Suggested fix: add a shall requirement that sets receipt_sent, or remove it from the schema. Do not choose the value."
     },
     {
       "name": "Lane.refund",
       "kind": "variant",
-      "text": "Lane.refund is never mentioned.",
-      "fix": "Suggested fix: use refund in a requirement, or remove it from Lane."
+      "text": "No requirement can set \"the lane\" to refund.",
+      "fix": "Suggested fix: add a requirement that produces refund, or remove it from Lane."
     }
   ],
   "warnings": []

@@ -7,6 +7,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 misuse R4 line 6
@@ -14,6 +15,6 @@ misuse R4 line 6
 When payment fails, the Order System shall reject the order.
 
 redundant R4 line 6
-R4 adds nothing. Whenever the other requirements hold, R4 holds too.
+R4 adds nothing. R5 implies it. Whenever the other requirements hold, R4 holds too.
 When payment fails, the Order System shall reject the order.
 Suggested fix: remove R4, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.

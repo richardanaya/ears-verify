@@ -124,5 +124,6 @@
   "duplicate": [],
   "vacuous": [],
   "unused": [],
+  "uncovered": [],
   "warnings": []
 }
