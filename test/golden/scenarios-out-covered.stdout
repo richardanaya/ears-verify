@@ -1,0 +1,56 @@
+spec: examples/order-covered.ears.md
+out: build/sc-covered
+scenarios: 13
+uncovered: 0
+
+R1-accepted.json
+accepted R1 line 7
+An order was submitted and inventory was available, and the order was fulfilled.
+
+R1-rejected-cond1.json
+rejected R1 line 7, condition 1
+An order was submitted and inventory was available, but the order was not fulfilled.
+
+R1-accepted-cond1.json
+accepted R1 line 7, condition 1
+Flipping condition 1 ("an order is submitted") makes the trigger false. An order was not submitted and inventory was available, and the order was not fulfilled.
+
+R1-rejected-cond2.json
+rejected R1 line 7, condition 2
+An order was submitted and inventory was available, but the order was not fulfilled.
+
+R1-accepted-cond2.json
+accepted R1 line 7, condition 2
+Flipping condition 2 ("inventory is available") makes the trigger false. An order was submitted and inventory was not available, and the order was not fulfilled.
+
+R2-accepted.json
+accepted R2 line 8
+An order was submitted and inventory was not available, and the order was not fulfilled.
+
+R2-rejected-cond1.json
+rejected R2 line 8, condition 1
+An order was submitted and inventory was not available, but the order was fulfilled.
+
+R2-accepted-cond1.json
+accepted R2 line 8, condition 1
+Flipping condition 1 ("an order is submitted") makes the trigger false. An order was not submitted and inventory was not available, and the order was not fulfilled.
+
+R2-rejected-cond2.json
+rejected R2 line 8, condition 2
+An order was submitted and inventory was not available, but the order was fulfilled.
+
+R2-accepted-cond2.json
+accepted R2 line 8, condition 2
+Flipping condition 2 ("not inventory is available") makes the trigger false. An order was submitted and inventory was available, and the order was fulfilled.
+
+R3-accepted.json
+accepted R3 line 9
+An order was not submitted, and the order was not fulfilled.
+
+R3-rejected-cond1.json
+rejected R3 line 9, condition 1
+An order was not submitted, but the order was fulfilled.
+
+R3-accepted-cond1.json
+accepted R3 line 9, condition 1
+Flipping condition 1 ("not an order is submitted") makes the trigger false. An order was submitted, and the order was not fulfilled.

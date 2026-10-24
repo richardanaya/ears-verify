@@ -84,7 +84,7 @@ The rest of the report lists repairs and does not choose one. The full output is
 | `report` | What are the logical problems, in plain English? |
 | `emit-smt` | What is the SMT-LIB for these requirements? |
 | `policy` | Which scenarios do the requirements allow, and does any of them break a property? |
-| `scenarios` | What accepted and rejected examples show each requirement? |
+| `scenarios` | What accepted and rejected scenario files show each requirement? |
 | `help` | What commands are available? |
 
 Exit status is `0` when the command is clean, `1` when something is wrong in the requirements, and `2` when the files or the arguments are wrong. A lint warning for a vague word, a weak modal, an escape clause, two outputs in one response, or a result that constrains no output stays exit 0. A requirement implied by the others, and an output, state, or enum value that no requirement can produce, stay exit 0 as well. A requirement that can never fire still exits 1.

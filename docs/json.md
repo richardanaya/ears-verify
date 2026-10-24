@@ -487,6 +487,8 @@ examples/order-timely.ears.md
 
 `--json` is `ok`, `spec`, and `scenarios`. Each row is `id`, `line`, `kind` (`accepted` or `rejected`), `trigger` (`true` or `false`), `found`, `sameAs`, `scenario` (`name` and `value`), and `text`. `scenario` is empty when `found` is false. `sameAs` names an earlier row when the assignment was already listed.
 
+`scenarios --out <dir> --json` writes those scenario files and prints a different object: `ok`, `spec`, `out`, `scenarios`, and `uncovered`. Each scenario row is `file`, `id`, `line`, `kind`, `condition`, `conditionText`, and `text`. `ok` is true when `uncovered` is empty. That manifest is in [scenarios.md](scenarios.md).
+
 <!-- verify stdout 0
 build/plan-verify
 scenarios

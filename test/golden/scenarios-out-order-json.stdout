@@ -1,0 +1,53 @@
+{
+  "ok": true,
+  "spec": "examples/order.ears.md",
+  "out": "build/sc-order-json",
+  "scenarios": [
+    {
+      "file": "R1-accepted.json",
+      "id": "R1",
+      "line": 7,
+      "kind": "accepted",
+      "condition": 0,
+      "conditionText": "",
+      "text": "An order was submitted and inventory was available, and the order was fulfilled."
+    },
+    {
+      "file": "R1-rejected-cond1.json",
+      "id": "R1",
+      "line": 7,
+      "kind": "rejected",
+      "condition": 1,
+      "conditionText": "an order is submitted",
+      "text": "An order was submitted and inventory was available, but the order was not fulfilled."
+    },
+    {
+      "file": "R1-accepted-cond1.json",
+      "id": "R1",
+      "line": 7,
+      "kind": "accepted",
+      "condition": 1,
+      "conditionText": "an order is submitted",
+      "text": "Flipping condition 1 (\"an order is submitted\") makes the trigger false. An order was not submitted and inventory was available, and the order was not fulfilled."
+    },
+    {
+      "file": "R1-rejected-cond2.json",
+      "id": "R1",
+      "line": 7,
+      "kind": "rejected",
+      "condition": 2,
+      "conditionText": "inventory is available",
+      "text": "An order was submitted and inventory was available, but the order was not fulfilled."
+    },
+    {
+      "file": "R1-accepted-cond2.json",
+      "id": "R1",
+      "line": 7,
+      "kind": "accepted",
+      "condition": 2,
+      "conditionText": "inventory is available",
+      "text": "Flipping condition 2 (\"inventory is available\") makes the trigger false. An order was submitted and inventory was not available, and the order was not fulfilled."
+    }
+  ],
+  "uncovered": []
+}

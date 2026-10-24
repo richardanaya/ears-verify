@@ -101,7 +101,7 @@ examples/order.ears.md
 | `diff [--json] <old-spec> <new-spec>` | How does a revised spec change what is accepted? | Implemented |
 | `lint [--json] <spec>` | Do any requirements clash, leave a hole, never trigger, leave schema unused, repeat each other, or use a word a test cannot pin down? | Implemented |
 | `report <spec>` | What are the logical problems, in plain language? | Implemented |
-| `scenarios [--json] <spec>` | What accepted and rejected examples show each requirement's trigger? | Implemented |
+| `scenarios [--json] <spec> [--out <dir>]` | What accepted and rejected examples show each requirement's trigger? | Implemented |
 | `emit-smt [--json] <spec>` | What is the SMT-LIB for these requirements? | Implemented |
 | `policy [--json] <spec> [--property <file>]` | Which scenarios do the requirements allow and forbid? Does any allowed scenario break a property? | Implemented |
 | `help` | What commands are available? | Implemented |
@@ -117,7 +117,7 @@ usage:
   plan-verify emit-smt [--json] <spec>
   plan-verify lint [--json] <spec>
   plan-verify report <spec>
-  plan-verify scenarios [--json] <spec>
+  plan-verify scenarios [--json] <spec> [--out <dir>]
   plan-verify policy [--json] <spec> [--property <file>]
   plan-verify help
 ```
@@ -403,7 +403,9 @@ R1 rejected, trigger true
 An order was submitted and inventory was available, but the order was not fulfilled.
 ```
 
-The `--json` form of `scenarios` is in [json.md](json.md).
+`scenarios --out <dir>` writes one JSON file per case, in the shape `check --input` reads. Each requirement gets a file where the trigger is true and the response holds, and a rejected file for each atomic condition that can break that requirement alone. A second file flips that condition so the trigger is false and every requirement holds. A condition the solver cannot show changing the outcome is listed, with the reason. The names, the manifest, and those reasons are in [scenarios.md](scenarios.md).
+
+The `--json` form of the listing, without `--out`, is in [json.md](json.md).
 
 ## From a plan to the problems
 

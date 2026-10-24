@@ -1,0 +1,24 @@
+spec: examples/order-or.ears.md
+out: build/sc-or
+scenarios: 5
+uncovered: 0
+
+R1-accepted.json
+accepted R1 line 7
+The item was fragile, and the item was packed with care.
+
+R1-rejected-cond1.json
+rejected R1 line 7, condition 1
+The order was rush, but the item was not packed with care.
+
+R1-accepted-cond1.json
+accepted R1 line 7, condition 1
+Flipping condition 1 ("the order is rush") makes the trigger false. The order was not rush and the item was not fragile, and the item was not packed with care.
+
+R1-rejected-cond2.json
+rejected R1 line 7, condition 2
+The item was fragile, but the item was not packed with care.
+
+R1-accepted-cond2.json
+accepted R1 line 7, condition 2
+Flipping condition 2 ("the item is fragile") makes the trigger false. The order was not rush and the item was not fragile, and the item was not packed with care.

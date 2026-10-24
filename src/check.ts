@@ -150,7 +150,7 @@ function collectHeld(spec: Spec, env: Binding, term: Term, out: string[]): void 
     const rightTrue = evalBool(term.right, spec, env) === T_TRUE;
     if (leftTrue) collectHeld(spec, env, term.left, out);
     if (rightTrue) collectHeld(spec, env, term.right, out);
-    if (!leftTrue && !rightTrue) out.push(spokenOrPast(spec, term));
+    if (!leftTrue && !rightTrue) collectActual(spec, env, term, out);
     return;
   }
   if (term.kind === "sym") {
@@ -170,7 +170,24 @@ function collectHeld(spec: Spec, env: Binding, term: Term, out: string[]): void 
       }
     }
   }
-  out.push(spokenOrPast(spec, term));
+  if (evalBool(term, spec, env) === T_TRUE) {
+    out.push(spokenOrPast(spec, term));
+    return;
+  }
+  collectActual(spec, env, term, out);
+}
+
+function collectActual(spec: Spec, env: Binding, term: Term, out: string[]): void {
+  const indexes = mentionedIndexes(null, term);
+  if (indexes.length === 0) {
+    out.push(spokenOrPast(spec, term));
+    return;
+  }
+  for (let i = 0; i < indexes.length; i++) {
+    const sym = spec.symbols[indexes[i]];
+    const code = env.code[indexes[i]];
+    out.push(describeAssignment(sym, displayCode(spec, sym, code), code === 1));
+  }
 }
 
 function spokenOrPast(spec: Spec, term: Term): string {

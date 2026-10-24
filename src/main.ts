@@ -3,13 +3,14 @@
  * User arguments start at process.argv index 2 under both Node and ScriptC.
  */
 
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { bindScenario, evaluate, formatCheckJson, formatCheckText, formatErrorJson } from "./check.ts";
 import { diffSpecs, formatDiffJson, formatDiffText } from "./diff.ts";
 import { parseProperty, parseSpec } from "./ears.ts";
 import { parseScenarioJson } from "./jsonvalue.ts";
 import { formatLintJson, formatLintText, lintSpec } from "./lint.ts";
 import { buildProblems } from "./report.ts";
+import { formatGeneratedJson, formatGeneratedText, generateScenarios, type GeneratedScenarios } from "./gentest.ts";
 import { formatScenariosJson, formatScenariosText, listScenarios } from "./scenarios.ts";
 import { analyzePolicy, formatPolicyJson, formatPolicyText } from "./policy.ts";
 import { formatEmitJson, printSmt } from "./smt.ts";
@@ -71,12 +72,13 @@ interface Flags {
   json: boolean;
   input: string;
   property: string;
+  out: string;
   positionals: string[];
   error: string;
 }
 
-function parseFlags(args: string[], allowInput: boolean, allowProperty: boolean): Flags {
-  const flags: Flags = { json: false, input: "", property: "", positionals: [], error: "" };
+function parseFlags(args: string[], allowInput: boolean, allowProperty: boolean, allowOut: boolean): Flags {
+  const flags: Flags = { json: false, input: "", property: "", out: "", positionals: [], error: "" };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--json") flags.json = true;
@@ -110,6 +112,21 @@ function parseFlags(args: string[], allowInput: boolean, allowProperty: boolean)
       }
       i++;
       flags.property = args[i];
+    } else if (arg === "--out") {
+      if (!allowOut) {
+        flags.error = "unknown option --out";
+        return flags;
+      }
+      if (flags.out.length > 0) {
+        flags.error = "repeated option --out";
+        return flags;
+      }
+      if (i + 1 >= args.length) {
+        flags.error = "missing value for --out";
+        return flags;
+      }
+      i++;
+      flags.out = args[i];
     } else if (arg.startsWith("--")) {
       flags.error = "unknown option " + arg;
       return flags;
@@ -119,7 +136,7 @@ function parseFlags(args: string[], allowInput: boolean, allowProperty: boolean)
 }
 
 function commandCheck(args: string[]): void {
-  const flags = parseFlags(args, true, false);
+  const flags = parseFlags(args, true, false, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
   if (flags.positionals.length !== 1 || flags.input.length === 0) {
     fail(flags.json, "usage: plan-verify check [--json] <spec> --input <scenario>");
@@ -144,7 +161,7 @@ function commandCheck(args: string[]): void {
 }
 
 function commandDiff(args: string[]): void {
-  const flags = parseFlags(args, false, false);
+  const flags = parseFlags(args, false, false, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
   if (flags.positionals.length !== 2) fail(flags.json, "usage: plan-verify diff [--json] <old-spec> <new-spec>");
   const oldPath = flags.positionals[0];
@@ -166,7 +183,7 @@ function commandDiff(args: string[]): void {
 }
 
 function commandEmit(args: string[]): void {
-  const flags = parseFlags(args, false, false);
+  const flags = parseFlags(args, false, false, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
   if (flags.positionals.length !== 1) fail(flags.json, "usage: plan-verify emit-smt [--json] <spec>");
   const specPath = flags.positionals[0];
@@ -181,7 +198,7 @@ function commandEmit(args: string[]): void {
 }
 
 function commandLint(args: string[]): void {
-  const flags = parseFlags(args, false, false);
+  const flags = parseFlags(args, false, false, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
   if (flags.input.length > 0 || flags.positionals.length !== 1) fail(flags.json, "usage: plan-verify lint [--json] <spec>");
   const specPath = flags.positionals[0];
@@ -210,7 +227,7 @@ function commandLint(args: string[]): void {
 }
 
 function commandReport(args: string[]): void {
-  const flags = parseFlags(args, false, false);
+  const flags = parseFlags(args, false, false, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
   if (flags.json) fail(true, "usage: plan-verify report <spec>");
   if (flags.positionals.length !== 1) fail(false, "usage: plan-verify report <spec>");
@@ -228,9 +245,9 @@ function commandReport(args: string[]): void {
 }
 
 function commandScenarios(args: string[]): void {
-  const flags = parseFlags(args, false, false);
+  const flags = parseFlags(args, false, false, true);
   if (flags.error.length > 0) fail(flags.json, flags.error);
-  if (flags.positionals.length !== 1) fail(flags.json, "usage: plan-verify scenarios [--json] <spec>");
+  if (flags.positionals.length !== 1) fail(flags.json, "usage: plan-verify scenarios [--json] <spec> [--out <dir>]");
   const specPath = flags.positionals[0];
   const specText = readText(specPath);
   if (specText === null) fail(flags.json, "cannot read " + specPath);
@@ -239,14 +256,36 @@ function commandScenarios(args: string[]): void {
   if (spaceSize(spec.spec) < 0) {
     fail(flags.json, "a symbol has an empty domain. Declare at least one allowed value.");
   }
-  const rows = listScenarios(spec.spec);
-  if (flags.json) console.log(formatScenariosJson(specPath, rows));
-  else console.log(formatScenariosText(specPath, rows));
-  process.exit(EXIT_OK);
+  if (flags.out.length === 0) {
+    const rows = listScenarios(spec.spec);
+    if (flags.json) console.log(formatScenariosJson(specPath, rows));
+    else console.log(formatScenariosText(specPath, rows));
+    process.exit(EXIT_OK);
+  }
+  const generated = generateScenarios(spec.spec);
+  const wrote = writeGenerated(flags.out, generated);
+  if (wrote.length > 0) fail(flags.json, wrote);
+  if (flags.json) console.log(formatGeneratedJson(specPath, flags.out, generated));
+  else console.log(formatGeneratedText(specPath, flags.out, generated));
+  if (generated.uncovered.length === 0) process.exit(EXIT_OK);
+  process.exit(EXIT_VIOLATIONS);
+}
+
+function writeGenerated(dir: string, generated: GeneratedScenarios): string {
+  try {
+    mkdirSync(dir, { recursive: true });
+    for (let i = 0; i < generated.files.length; i++) {
+      const file = generated.files[i];
+      writeFileSync(dir + "/" + file.file, file.body, "utf8");
+    }
+  } catch {
+    return "cannot write " + dir;
+  }
+  return "";
 }
 
 function commandPolicy(args: string[]): void {
-  const flags = parseFlags(args, false, true);
+  const flags = parseFlags(args, false, true, false);
   if (flags.error.length > 0) fail(flags.json, flags.error);
   if (flags.positionals.length !== 1) fail(flags.json, "usage: plan-verify policy [--json] <spec> [--property <file>]");
   const specPath = flags.positionals[0];
@@ -294,7 +333,7 @@ function usage(toStderr: boolean): void {
     "  plan-verify emit-smt [--json] <spec>\n" +
     "  plan-verify lint [--json] <spec>\n" +
     "  plan-verify report <spec>\n" +
-    "  plan-verify scenarios [--json] <spec>\n" +
+    "  plan-verify scenarios [--json] <spec> [--out <dir>]\n" +
     "  plan-verify policy [--json] <spec> [--property <file>]\n" +
     "  plan-verify help";
   if (toStderr) console.error(text);
