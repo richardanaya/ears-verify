@@ -1,0 +1,18 @@
+spec: examples/order-blocked.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 1
+unused: 0
+uncovered: 0
+warnings: 0
+
+vacuous R3 line 9
+R3 can never trigger. Its condition is impossible for every allowed value.
+When the gate is open or the shift is open, the Desk shall finish the job.
+Blocked by R1.
+Blocked by R2.
+Suggested fix: rewrite the condition in R3 so a real situation can make it true, or remove the requirement. Do not invent a response.

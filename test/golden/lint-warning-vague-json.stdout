@@ -9,6 +9,7 @@
   "duplicate": [],
   "vacuous": [],
   "unused": [],
+  "uncovered": [],
   "warnings": [
     {
       "id": "R1",

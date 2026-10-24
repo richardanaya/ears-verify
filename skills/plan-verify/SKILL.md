@@ -195,6 +195,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 wording line 7
@@ -235,6 +236,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 ```
 
@@ -265,7 +267,7 @@ The line has to be something a scenario can make true or false. Lint rejects the
 
 ## Testability warnings
 
-A warning names the requirement id, the line, the sentence, and a short fix. The count is `warnings`. `--json` puts the same findings in `warnings`, and `ok` stays true when warnings are the only findings. A conflict, a gap, misuse, a wording finding, a redundant requirement, a duplicate, a vacuous requirement, or unused schema still exits 1. A word the schema does not declare is a parse error and exits 2. The warning list is scanned in requirement sentences only. A word inside a declared phrase or action is skipped.
+A warning names the requirement id, the line, the sentence, and a short fix. The count is `warnings`. `--json` puts the same findings in `warnings`, and `ok` stays true when warnings are the only findings. A redundant requirement and an uncovered output, state, or enum value are separate counts. They also leave `ok` true and exit 0 when nothing else is wrong. A conflict, a gap, misuse, a wording finding, a duplicate, a vacuous requirement, or an unused input or variant still exits 1. A word the schema does not declare is a parse error and exits 2. The warning list is scanned in requirement sentences only. A word inside a declared phrase or action is skipped.
 
 ### A vague word
 
@@ -286,6 +288,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 1
 
 warning R1 line 6
@@ -319,6 +322,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 1
 
 warning R1 line 6
@@ -352,6 +356,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 2
 
 warning R1 line 6
@@ -391,6 +396,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 2
 
 warning R1 line 7
@@ -432,6 +438,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 1
 
 warning R1 line 5
@@ -455,6 +462,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 1
 
 warning R1 line 5
@@ -508,6 +516,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 ```
 
@@ -517,7 +526,7 @@ warnings: 0
 2. Add or reuse declarations. If they describe something you already named, use that name and its phrase. Bind a new phrase to the words they keep using.
 3. Write one EARS line per requirement, using the phrases. Normal triggers use `when`. Unwanted conditions use `if` ... `then`.
 4. Run `build/plan-verify lint <spec>`. Run `build/plan-verify report <spec>` for the logical problems in one plain-language list. Run `build/plan-verify scenarios <spec>` when you want an accepted and a rejected example of each trigger.
-5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Also show the candidate repairs: dropping one requirement in the set, and any rewritten line that adds one Bool, enum equality, or integer bound to one condition. Stop until they answer. Do not choose a requirement or a repair. If a requirement adds nothing, including a repeat that sits outside a conflict, ask whether they meant something the others do not already require. Do not delete it. If two requirements are the same condition and the same response, show the duplicate and ask whether the later line was meant to differ. Do not delete it. If a trigger starts with bare `not`, ask for a positive condition or a positive event. If a condition can never be true, show the suggested fix and ask them to rewrite the condition. Do not invent a response. If a state, an input, an enum variant, or an output is unused, ask whether to use it or remove it. For a gap, read the suggested fix and ask what the system shall do in that situation. Do not choose the response. For a warning, show the requirement id, the line, the sentence, and the suggested fix. A warning by itself leaves the command at exit 0. Ask the PM for the testable wording. Do not invent a bound or an output.
+5. Fix what lint reports. For a conflict, tell the PM which requirements clash, the situation, and the example, then ask which requirement should win. Also show the candidate repairs: dropping one requirement in the set, and any rewritten line that adds one Bool, enum equality, or integer bound to one condition. Stop until they answer. Do not choose a requirement or a repair. If a requirement adds nothing, including a repeat that sits outside a conflict, show which requirements imply it and ask whether they meant something those requirements do not already require. Do not delete it. That finding stays exit 0. If two requirements are the same condition and the same response, show the duplicate and ask whether the later line was meant to differ. Do not delete it. If a trigger starts with bare `not`, ask for a positive condition or a positive event. If a condition can never be true, show each Blocked by line and the suggested fix, and ask them to rewrite the condition. Do not invent a response. That finding exits 1. If an input or a never-mentioned enum variant is unused, ask whether to use it or remove it. If a state, an output, or an enum value no requirement can produce is uncovered, show that warning and ask whether to constrain it or remove it. Do not choose the value. Uncovered findings stay exit 0 when they are the only findings. For a gap, read the suggested fix and ask what the system shall do in that situation. Do not choose the response. For a warning, show the requirement id, the line, the sentence, and the suggested fix. A warning by itself leaves the command at exit 0. Ask the PM for the testable wording. Do not invent a bound or an output.
 6. When they describe a concrete story, write a flat JSON scenario with every declared name and run `build/plan-verify check <spec> --input <scenario>`. When they hope something is always true, write that hope as a property file of `P` requirements and run `build/plan-verify policy <spec> --property <file>`. A counterexample is a scenario the requirements allow and the property forbids. If you have no property yet, `policy <spec>` prints one allowed scenario and one forbidden scenario. The search tries false before true, so the first hit is not a recommendation.
 7. Report every check violation by requirement ID, line, and sentence, then the values. A passing check can still leave a gap. If lint reported one, say which output is uncovered and in what situation.
 
@@ -549,7 +558,7 @@ examples/order-fail.json
 }
 ```
 
-`lint` returns `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `duplicate`, `vacuous`, and `unused`. A conflict carries `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements`, `situation`, `requires`, `example`, `keeps`, `breaks`, `fix`, and `repairs`. A repair is `kind`, `id`, `text`, and `sentence`. `kind` is `drop` or `strengthen`. Situation and example entries are `name` and `value`. Requirements are `id`, `line`, and `sentence`. Requires entries are `id` and `text`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. Wording `kind` is `vague`, `solution`, `form`, or `negation`. A redundant requirement is `id`, `line`, `sentence`, `text`, and `fix`. An exact duplicate is `id`, `line`, `sameAs`, `sentence`, `text`, and `fix`. A vacuous requirement has the same fields as a redundant requirement. An unused entry is `name`, `kind`, `text`, and `fix`. Unused `kind` is `state`, `input`, `output`, or `variant`. Do not delete a redundant requirement, or an exact duplicate, until the PM agrees. Do not invent a response for a condition that can never be true.
+`lint` returns `ok`, `spec`, `conflicts`, `gaps`, `misuse`, `wording`, `redundant`, `duplicate`, `vacuous`, `unused`, `uncovered`, and `warnings`. A conflict carries `ids`, `minimal`, `everySituation`, `summary`, `clash`, `requirements`, `situation`, `requires`, `example`, `keeps`, `breaks`, `fix`, and `repairs`. A repair is `kind`, `id`, `text`, and `sentence`. `kind` is `drop` or `strengthen`. Situation and example entries are `name` and `value`. Requirements are `id`, `line`, and `sentence`. Requires entries are `id` and `text`. A gap is `output`, `situation`, and `text`. Misuse is `id`, `line`, `symbols`, `sentence`, and `text`. Wording is `line`, `word`, `kind`, `text`, and `context`. Wording `kind` is `vague`, `solution`, `form`, or `negation`. A redundant requirement is `id`, `line`, `sentence`, `text`, `fix`, and `impliedBy`. An exact duplicate is `id`, `line`, `sameAs`, `sentence`, `text`, and `fix`. A vacuous requirement is `id`, `line`, `sentence`, `text`, `fix`, and `because`. An unused entry is `name`, `kind`, `text`, and `fix`. Unused `kind` is `input` or `variant`. An uncovered entry is `name`, `kind` (`state`, `output`, or `variant`), `text`, and `fix`. `ok` stays true for warnings, redundant requirements, and uncovered names. Do not delete a redundant requirement, or an exact duplicate, until the PM agrees. Do not invent a response for a condition that can never be true. Show the PM each `Blocked by` line and each `impliedBy` id.
 
 <!-- verify stdout 1
 build/plan-verify
@@ -637,6 +646,7 @@ examples/order-conflict.ears.md
   "duplicate": [],
   "vacuous": [],
   "unused": [],
+  "uncovered": [],
   "warnings": []
 }
 ```
@@ -781,6 +791,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 gap order_fulfilled
@@ -804,6 +815,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 ```
 
@@ -856,6 +868,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 conflict {R2, R3}
@@ -910,6 +923,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 conflict {R1, R2}
@@ -977,6 +991,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 wording line 7
@@ -1001,6 +1016,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 misuse R4 line 6
@@ -1008,14 +1024,14 @@ misuse R4 line 6
 When payment fails, the Order System shall reject the order.
 
 redundant R4 line 6
-R4 adds nothing. Whenever the other requirements hold, R4 holds too.
+R4 adds nothing. R5 implies it. Whenever the other requirements hold, R4 holds too.
 When payment fails, the Order System shall reject the order.
 Suggested fix: remove R4, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 ```
 
 ## Vague words and solution words
 
-`examples/order-wording.ears.md` says the system "responds quickly" and stores the order "in the database". Ask what a scenario can check, and what the system must guarantee. The state `saved` is unused, because no requirement mentions it.
+`examples/order-wording.ears.md` says the system "responds quickly" and stores the order "in the database". Ask what a scenario can check, and what the system must guarantee. The state `saved` is uncovered, because no requirement mentions it.
 
 <!-- verify stdout 1
 build/plan-verify
@@ -1031,7 +1047,8 @@ wording: 2
 redundant: 0
 duplicate: 0
 vacuous: 0
-unused: 1
+unused: 0
+uncovered: 1
 warnings: 0
 
 wording line 4
@@ -1042,8 +1059,8 @@ wording line 5
 "database" names a solution. Say what the system must do, not how to build it.
 state saved: Bool "Store the order in the database." phrase "the order is saved"
 
-unused saved
-saved ("the order is saved") is a state and no requirement mentions it.
+uncovered saved
+No requirement constrains saved ("the order is saved").
 Suggested fix: use saved in a requirement, or remove it from the schema.
 ```
 
@@ -1066,6 +1083,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 gap order_cancelled
@@ -1091,6 +1109,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 gap payment_declined
@@ -1116,6 +1135,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 wording line 4
@@ -1150,6 +1170,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 conflict {R4, R5}
@@ -1204,6 +1225,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 1
+uncovered: 0
 warnings: 0
 
 conflict {R6, R7}
@@ -1388,6 +1410,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 conflict {R1, R2, R3}
@@ -1440,9 +1463,9 @@ When the order is accepted and an order is not submitted, the Order System shall
 
 ## A requirement that adds nothing
 
-When lint says a requirement adds nothing, show the sentence and the suggested fix. Ask whether they meant something the others do not already require. Do not delete it.
+When lint says a requirement adds nothing, show the sentence, the requirements that imply it, and the suggested fix. Ask whether they meant something those requirements do not already require. Do not delete it. The finding stays exit 0.
 
-<!-- verify stdout 1
+<!-- verify stdout 0
 build/plan-verify
 lint
 examples/order-redundant.ears.md
@@ -1457,10 +1480,11 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 redundant R2 line 8
-R2 adds nothing. Whenever the other requirements hold, R2 holds too.
+R2 adds nothing. R1 implies it. Whenever the other requirements hold, R2 holds too.
 When an order is submitted and inventory is available, the Order System shall fulfill the order.
 Suggested fix: remove R2, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 ```
@@ -1482,6 +1506,7 @@ redundant: 1
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 conflict {R1, R2}
@@ -1519,7 +1544,7 @@ One repair is to drop R2 and keep R1 as written.
 When an order is submitted, the Order System shall fulfill the order.
 
 redundant R5 line 12
-R5 adds nothing. Whenever the requirements outside a conflict hold, R5 holds too.
+R5 adds nothing. R4 implies it. Whenever the requirements outside a conflict hold, R5 holds too.
 When an order is submitted and inventory is available, the Order System shall close the order.
 Suggested fix: remove R5, or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.
 ```
@@ -1539,6 +1564,7 @@ redundant: 0
 duplicate: 1
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 duplicate R2 line 7
@@ -1562,6 +1588,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 wording line 6
@@ -1584,6 +1611,7 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0
 
 wording line 4
@@ -1593,7 +1621,7 @@ output order_fulfilled: Bool "Handle it as needed." phrase "fulfill the order" o
 
 ## A condition that can never be true
 
-Show the requirement and the suggested fix. A condition that contradicts itself, or that asks for a value outside the declared range, never triggers. Ask the PM to rewrite the condition. Do not invent a response. Do not also call that requirement redundant or a duplicate.
+Show the requirement, each `Blocked by` line, and the suggested fix. A condition that contradicts itself, a comparison outside a declared range, or a trigger that other always-true requirements make impossible never fires. Ask the PM to rewrite the condition. Do not invent a response. Do not also call that requirement redundant or a duplicate. This finding exits 1.
 
 <!-- verify stdout 1
 build/plan-verify
@@ -1610,22 +1638,128 @@ redundant: 0
 duplicate: 0
 vacuous: 2
 unused: 0
+uncovered: 0
 warnings: 0
 
 vacuous R1 line 7
 R1 can never trigger. Its condition is impossible for every allowed value.
 When the cart is open and the cart is not open, the Checkout shall accept the order.
+Blocked by the condition contradicts itself.
 Suggested fix: rewrite the condition in R1 so a real situation can make it true, or remove the requirement. Do not invent a response.
 
 vacuous R2 line 8
 R2 can never trigger. Its condition is impossible for every allowed value.
 When the quantity is at least 9, the Checkout shall accept the order.
+Blocked by the quantity is 1..5.
 Suggested fix: rewrite the condition in R2 so a real situation can make it true, or remove the requirement. Do not invent a response.
+```
+
+## A trigger other requirements make impossible
+
+Show the requirement, the sentence, and each `Blocked by` line. The list is the smallest set of always-true requirements, or the schema fact, that makes the trigger impossible. Ask the PM to rewrite the condition. Do not invent a response. This exits 1. `examples/order-reachable.ears.md` is a trigger that can happen, and lint is quiet.
+
+<!-- verify stdout 1
+build/plan-verify
+lint
+examples/order-blocked.ears.md
+-->
+```text
+spec: examples/order-blocked.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 1
+unused: 0
+uncovered: 0
+warnings: 0
+
+vacuous R3 line 9
+R3 can never trigger. Its condition is impossible for every allowed value.
+When the gate is open or the shift is open, the Desk shall finish the job.
+Blocked by R1.
+Blocked by R2.
+Suggested fix: rewrite the condition in R3 so a real situation can make it true, or remove the requirement. Do not invent a response.
+```
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-reachable.ears.md
+-->
+```text
+spec: examples/order-reachable.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+uncovered: 0
+warnings: 0
+```
+
+## An output, state, or enum value nothing produces
+
+`uncovered` lists a state no requirement mentions, an output no response sets, and an enum value of a constrained output that no requirement can produce. Show the name and the suggested fix. Ask whether to constrain it or remove it. Do not choose the value. This stays exit 0. `examples/order-lane.ears.md` produces every declared lane value.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-uncovered.ears.md
+-->
+```text
+spec: examples/order-uncovered.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+uncovered: 3
+warnings: 0
+
+uncovered loyalty
+No requirement constrains loyalty ("the customer is loyal").
+Suggested fix: use loyalty in a requirement, or remove it from the schema.
+
+uncovered receipt_sent
+No requirement constrains receipt_sent ("a receipt is sent").
+Suggested fix: add a shall requirement that sets receipt_sent, or remove it from the schema. Do not choose the value.
+
+uncovered Lane.refund
+No requirement can set "the lane" to refund.
+Suggested fix: add a requirement that produces refund, or remove it from Lane.
+```
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-lane.ears.md
+-->
+```text
+spec: examples/order-lane.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+uncovered: 0
+warnings: 0
 ```
 
 ## Schema the requirements never use
 
-A state or input that no requirement mentions, an enum variant that no requirement mentions, and an output that is only read are unused. An output that nobody mentions at all is a gap. An event that nobody handles is a gap. Do not choose a value for an output nothing sets.
+An input that no requirement mentions, and an enum variant that no requirement mentions, are unused. That exits 1. A state no requirement mentions, an output no response sets, and an enum value a constrained output can never produce are uncovered. That is a warning and exits 0 when it is the only finding. An output that nobody mentions at all is a gap. An event that nobody handles is a gap. Do not choose a value for an output nothing sets. When the spec already conflicts, do not treat every enum value as unreachable.
 
 <!-- verify stdout 1
 build/plan-verify
@@ -1641,24 +1775,25 @@ wording: 0
 redundant: 0
 duplicate: 0
 vacuous: 0
-unused: 4
+unused: 1
+uncovered: 3
 warnings: 0
-
-unused loyalty
-loyalty ("the customer is loyal") is a state and no requirement mentions it.
-Suggested fix: use loyalty in a requirement, or remove it from the schema.
 
 unused region
 region ("the region") is an input and no requirement mentions it.
 Suggested fix: use region in a requirement, or remove it from the schema.
 
-unused receipt_sent
-Nothing sets receipt_sent ("a receipt is sent"). Requirements mention it, but no response says what it shall be.
-Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value.
+uncovered loyalty
+No requirement constrains loyalty ("the customer is loyal").
+Suggested fix: use loyalty in a requirement, or remove it from the schema.
 
-unused Lane.refund
-Lane.refund is never mentioned.
-Suggested fix: use refund in a requirement, or remove it from Lane.
+uncovered receipt_sent
+No requirement constrains receipt_sent ("a receipt is sent").
+Suggested fix: add a shall requirement that sets receipt_sent, or remove it from the schema. Do not choose the value.
+
+uncovered Lane.refund
+No requirement can set "the lane" to refund.
+Suggested fix: add a requirement that produces refund, or remove it from Lane.
 ```
 
 <!-- verify stdout 1
@@ -1680,28 +1815,30 @@ examples/order-unused.ears.md
   "vacuous": [],
   "unused": [
     {
-      "name": "loyalty",
-      "kind": "state",
-      "text": "loyalty (\"the customer is loyal\") is a state and no requirement mentions it.",
-      "fix": "Suggested fix: use loyalty in a requirement, or remove it from the schema."
-    },
-    {
       "name": "region",
       "kind": "input",
       "text": "region (\"the region\") is an input and no requirement mentions it.",
       "fix": "Suggested fix: use region in a requirement, or remove it from the schema."
+    }
+  ],
+  "uncovered": [
+    {
+      "name": "loyalty",
+      "kind": "state",
+      "text": "No requirement constrains loyalty (\"the customer is loyal\").",
+      "fix": "Suggested fix: use loyalty in a requirement, or remove it from the schema."
     },
     {
       "name": "receipt_sent",
       "kind": "output",
-      "text": "Nothing sets receipt_sent (\"a receipt is sent\"). Requirements mention it, but no response says what it shall be.",
-      "fix": "Suggested fix: add a shall requirement that sets receipt_sent, or declare it as an input if the environment provides it. Do not choose the value."
+      "text": "No requirement constrains receipt_sent (\"a receipt is sent\").",
+      "fix": "Suggested fix: add a shall requirement that sets receipt_sent, or remove it from the schema. Do not choose the value."
     },
     {
       "name": "Lane.refund",
       "kind": "variant",
-      "text": "Lane.refund is never mentioned.",
-      "fix": "Suggested fix: use refund in a requirement, or remove it from Lane."
+      "text": "No requirement can set \"the lane\" to refund.",
+      "fix": "Suggested fix: add a requirement that produces refund, or remove it from Lane."
     }
   ],
   "warnings": []

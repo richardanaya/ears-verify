@@ -170,6 +170,7 @@ function pushVacuous(lines: string[], item: Vacuous, index: number): void {
   lines.push(displayQuote(item.sentence));
   lines.push("");
   lines.push(item.text);
+  for (let b = 0; b < item.because.length; b++) lines.push("Blocked by " + item.because[b] + ".");
   lines.push(item.fix);
 }
 

@@ -97,6 +97,7 @@ R9 line 24
 "When a member asks to take a copy home and the loan length is at least 40, the Fall Desk shall allow the loan."
 
 R9 can never trigger. Its condition is impossible for every allowed value.
+Blocked by the loan length is 1..21.
 Suggested fix: rewrite the condition in R9 so a real situation can make it true, or remove the requirement. Do not invent a response.
 
 ## 8. R11 adds nothing

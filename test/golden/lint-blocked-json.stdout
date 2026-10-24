@@ -1,0 +1,26 @@
+{
+  "ok": false,
+  "spec": "examples/order-blocked.ears.md",
+  "conflicts": [],
+  "gaps": [],
+  "misuse": [],
+  "wording": [],
+  "redundant": [],
+  "duplicate": [],
+  "vacuous": [
+    {
+      "id": "R3",
+      "line": 9,
+      "sentence": "When the gate is open or the shift is open, the Desk shall finish the job.",
+      "text": "R3 can never trigger. Its condition is impossible for every allowed value.",
+      "fix": "Suggested fix: rewrite the condition in R3 so a real situation can make it true, or remove the requirement. Do not invent a response.",
+      "because": [
+        "R1",
+        "R2"
+      ]
+    }
+  ],
+  "unused": [],
+  "uncovered": [],
+  "warnings": []
+}

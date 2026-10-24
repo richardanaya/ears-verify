@@ -7,4 +7,5 @@ redundant: 0
 duplicate: 0
 vacuous: 0
 unused: 0
+uncovered: 0
 warnings: 0

@@ -804,7 +804,10 @@ if (redundantLint.kind === "report") {
       redundantLint.report.gaps.length === 0 &&
       redundantLint.report.redundant.length === 1 &&
       redundantLint.report.redundant[0].id === "R2" &&
-      redundantLint.report.redundant[0].text === "R2 adds nothing. Whenever the other requirements hold, R2 holds too.",
+      redundantLint.report.redundant[0].text ===
+        "R2 adds nothing. R1 implies it. Whenever the other requirements hold, R2 holds too." &&
+      redundantLint.report.redundant[0].impliedBy.length === 1 &&
+      redundantLint.report.redundant[0].impliedBy[0] === "R1",
   );
 }
 
@@ -1029,6 +1032,13 @@ if (vacuousLint.kind === "report") {
   );
   check("vacuous fix", vacuousLint.report.vacuous[0].fix.indexOf("Suggested fix: rewrite the condition in R1") === 0);
   check(
+    "vacuous because",
+    vacuousLint.report.vacuous[0].because.length === 1 &&
+      vacuousLint.report.vacuous[0].because[0] === "the condition contradicts itself" &&
+      vacuousLint.report.vacuous[1].because.length === 1 &&
+      vacuousLint.report.vacuous[1].because[0] === "the quantity is 1..5",
+  );
+  check(
     "vacuous is not redundant",
     vacuousLint.report.redundant.length === 0 && vacuousLint.report.duplicate.length === 0,
   );
@@ -1064,24 +1074,126 @@ const possible = lintSpec(
 );
 check(
   "possible condition is not vacuous",
-  possible.kind === "report" && possible.report.vacuous.length === 0 && possible.report.unused.length === 0 && possible.report.gaps.length === 0,
+  possible.kind === "report" &&
+    possible.report.vacuous.length === 0 &&
+    possible.report.unused.length === 0 &&
+    possible.report.uncovered.length === 0 &&
+    possible.report.gaps.length === 0,
 );
 
 const unusedLint = lintSpec(mustSpec(readFileSync("examples/order-unused.ears.md", "utf8")));
 check("unused ran", unusedLint.kind === "report");
 if (unusedLint.kind === "report") {
   check("unused no conflict or gap", unusedLint.report.conflicts.length === 0 && unusedLint.report.gaps.length === 0 && unusedLint.report.vacuous.length === 0);
-  check("unused count", unusedLint.report.unused.length === 4);
-  check("unused state", unusedLint.report.unused[0].name === "loyalty" && unusedLint.report.unused[0].kind === "state");
-  check("unused input", unusedLint.report.unused[1].name === "region" && unusedLint.report.unused[1].kind === "input");
+  check("unused count", unusedLint.report.unused.length === 1);
+  check("unused input", unusedLint.report.unused[0].name === "region" && unusedLint.report.unused[0].kind === "input");
+  check("uncovered count", unusedLint.report.uncovered.length === 3);
+  check("uncovered state", unusedLint.report.uncovered[0].name === "loyalty" && unusedLint.report.uncovered[0].kind === "state");
   check(
-    "unused output never set",
-    unusedLint.report.unused[2].name === "receipt_sent" &&
-      unusedLint.report.unused[2].kind === "output" &&
-      unusedLint.report.unused[2].text.indexOf("Nothing sets ") === 0,
+    "uncovered output",
+    unusedLint.report.uncovered[1].name === "receipt_sent" && unusedLint.report.uncovered[1].kind === "output",
   );
-  check("unused variant", unusedLint.report.unused[3].name === "Lane.refund" && unusedLint.report.unused[3].kind === "variant");
-  check("unused fix", unusedLint.report.unused[3].fix.indexOf("Suggested fix: use refund") === 0);
+  check(
+    "uncovered variant on unused spec",
+    unusedLint.report.uncovered[2].name === "Lane.refund" &&
+      unusedLint.report.uncovered[2].kind === "variant" &&
+      unusedLint.report.uncovered[2].text.indexOf("refund") !== -1,
+  );
+  check("unused fix", unusedLint.report.unused[0].fix.indexOf("Suggested fix: use region") === 0);
+}
+
+const blockedLint = lintSpec(mustSpec(readFileSync("examples/order-blocked.ears.md", "utf8")));
+check("blocked ran", blockedLint.kind === "report");
+if (blockedLint.kind === "report") {
+  check(
+    "blocked by both always-true requirements",
+    blockedLint.report.conflicts.length === 0 &&
+      blockedLint.report.vacuous.length === 1 &&
+      blockedLint.report.vacuous[0].id === "R3" &&
+      blockedLint.report.vacuous[0].because.length === 2 &&
+      blockedLint.report.vacuous[0].because[0] === "R1" &&
+      blockedLint.report.vacuous[0].because[1] === "R2" &&
+      blockedLint.report.redundant.length === 0 &&
+      blockedLint.report.uncovered.length === 0,
+  );
+}
+const reachableLint = lintSpec(mustSpec(readFileSync("examples/order-reachable.ears.md", "utf8")));
+check(
+  "reachable trigger",
+  reachableLint.kind === "report" &&
+    reachableLint.report.vacuous.length === 0 &&
+    reachableLint.report.redundant.length === 0 &&
+    reachableLint.report.uncovered.length === 0 &&
+    reachableLint.report.conflicts.length === 0,
+);
+const uncoveredLint = lintSpec(mustSpec(readFileSync("examples/order-uncovered.ears.md", "utf8")));
+check("uncovered ran", uncoveredLint.kind === "report");
+if (uncoveredLint.kind === "report") {
+  check(
+    "uncovered state output and variant",
+    uncoveredLint.report.conflicts.length === 0 &&
+      uncoveredLint.report.unused.length === 0 &&
+      uncoveredLint.report.vacuous.length === 0 &&
+      uncoveredLint.report.uncovered.length === 3 &&
+      uncoveredLint.report.uncovered[0].name === "loyalty" &&
+      uncoveredLint.report.uncovered[0].kind === "state" &&
+      uncoveredLint.report.uncovered[1].name === "receipt_sent" &&
+      uncoveredLint.report.uncovered[1].kind === "output" &&
+      uncoveredLint.report.uncovered[2].name === "Lane.refund" &&
+      uncoveredLint.report.uncovered[2].kind === "variant",
+  );
+}
+const laneLint = lintSpec(mustSpec(readFileSync("examples/order-lane.ears.md", "utf8")));
+check(
+  "every lane value can be produced",
+  laneLint.kind === "report" && laneLint.report.uncovered.length === 0 && laneLint.report.unused.length === 0 && laneLint.report.vacuous.length === 0,
+);
+const oneBlocker = lintSpec(
+  mustSpec(
+    'output gate_open: Bool "Open." phrase "the gate is open" action "open the gate"\n' +
+      'output shift_open: Bool "Shift." phrase "the shift is open" action "open the shift"\n' +
+      'output job_done: Bool "Done." phrase "finish the job"\n\n' +
+      "R1 The Desk shall not open the gate.\n" +
+      "R2 The Desk shall not open the shift.\n" +
+      "R3 When the gate is open, the Desk shall finish the job.\n" +
+      "R4 When the gate is not open, the Desk shall not finish the job.\n",
+  ),
+);
+check("one blocker ran", oneBlocker.kind === "report");
+if (oneBlocker.kind === "report") {
+  check(
+    "minimal blocker drops the unrelated requirement",
+    oneBlocker.report.vacuous.length === 1 &&
+      oneBlocker.report.vacuous[0].id === "R3" &&
+      oneBlocker.report.vacuous[0].because.length === 1 &&
+      oneBlocker.report.vacuous[0].because[0] === "R1" &&
+      oneBlocker.report.conflicts.length === 0,
+  );
+}
+const pairImply = lintSpec(
+  mustSpec(
+    'event order_submitted: Bool "Submitted." phrase "an order is submitted"\n' +
+      'state inventory_available: Bool "Stock." phrase "inventory is available"\n' +
+      'output order_fulfilled: Bool "Fulfilled." phrase "fulfill the order"\n' +
+      'output order_closed: Bool "Closed." phrase "close the order"\n\n' +
+      "R1 When an order is submitted, the Order System shall fulfill the order.\n" +
+      "R2 When an order is submitted, the Order System shall close the order.\n" +
+      "R3 When an order is not submitted, the Order System shall not fulfill the order.\n" +
+      "R4 When an order is submitted and inventory is available, the Order System shall fulfill the order and close the order.\n",
+  ),
+);
+check("pair imply ran", pairImply.kind === "report");
+if (pairImply.kind === "report") {
+  check(
+    "two requirements imply the third",
+    pairImply.report.redundant.length === 1 &&
+      pairImply.report.redundant[0].id === "R4" &&
+      pairImply.report.redundant[0].impliedBy.length === 2 &&
+      pairImply.report.redundant[0].impliedBy[0] === "R1" &&
+      pairImply.report.redundant[0].impliedBy[1] === "R2" &&
+      pairImply.report.conflicts.length === 0 &&
+      pairImply.report.vacuous.length === 0,
+  );
 }
 
 const embedded = mustSpec(
@@ -1196,7 +1308,9 @@ if (repeatLint.kind === "report") {
       repeatLint.report.redundant.length === 1 &&
       repeatLint.report.redundant[0].id === "R5" &&
       repeatLint.report.redundant[0].text ===
-        "R5 adds nothing. Whenever the requirements outside a conflict hold, R5 holds too." &&
+        "R5 adds nothing. R4 implies it. Whenever the requirements outside a conflict hold, R5 holds too." &&
+      repeatLint.report.redundant[0].impliedBy.length === 1 &&
+      repeatLint.report.redundant[0].impliedBy[0] === "R4" &&
       repeatLint.report.duplicate.length === 0 &&
       repeatLint.report.gaps.length === 0,
   );

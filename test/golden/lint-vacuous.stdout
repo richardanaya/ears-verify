@@ -7,14 +7,17 @@ redundant: 0
 duplicate: 0
 vacuous: 2
 unused: 0
+uncovered: 0
 warnings: 0
 
 vacuous R1 line 7
 R1 can never trigger. Its condition is impossible for every allowed value.
 When the cart is open and the cart is not open, the Checkout shall accept the order.
+Blocked by the condition contradicts itself.
 Suggested fix: rewrite the condition in R1 so a real situation can make it true, or remove the requirement. Do not invent a response.
 
 vacuous R2 line 8
 R2 can never trigger. Its condition is impossible for every allowed value.
 When the quantity is at least 9, the Checkout shall accept the order.
+Blocked by the quantity is 1..5.
 Suggested fix: rewrite the condition in R2 so a real situation can make it true, or remove the requirement. Do not invent a response.

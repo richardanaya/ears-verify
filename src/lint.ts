@@ -2,17 +2,19 @@
  * Lint a spec for contradictions, uncovered outputs, events nobody handles,
  * error conditions with no response, EARS pattern mistakes, words a test
  * cannot pin down, conditions that can never be true, and schema the
- * requirements never use. Warnings (vague words, weak modals, a response
- * that names two outputs, and a result that constrains no output) are
- * advisory and do not by themselves fail the command. Contradiction reports
- * name the smallest set, the
+ * requirements never use. Unreachable requirements stay errors. Redundant
+ * requirements, outputs and states no requirement constrains, and enum
+ * values a constrained output can never produce stay warnings, along with
+ * vague words, weak modals, a response that names two outputs, and a result
+ * that constrains no output. Those warnings do not by themselves fail the
+ * command. Contradiction reports name the smallest set, the
  * situation, an example, and candidate repairs that do not pick a winner.
  */
 
-import { describeAssignment, displayCode, isDriver, literalShown, reportBool, requirementMentions, speakBound, termMentions, type Requirement, type Spec, type SymbolDecl, type Term } from "./spec.ts";
+import { describeAssignment, displayCode, findEnum, isDriver, literalShown, reportBool, requirementMentions, speakBound, termMentions, type Requirement, type Spec, type SymbolDecl, type Term } from "./spec.ts";
 import { satisfiable } from "./decide.ts";
 import { conflictKey, findRepairs, GroupCores, type Repair } from "./repair.ts";
-import { bestGap, conflictingSets, modelFor, redundantFlags, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
+import { bestGap, conflictingSets, implyingIds, modelFor, redundantFlags, scanRequirements, spaceSize, type ConflictGroup } from "./solver.ts";
 import { Binding, evalAssertion, evalBool, formatScenario, formatTerm, termsEqual, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 import { displayQuote, englishList, formatInt, pastVoice } from "./text.ts";
 
@@ -95,6 +97,7 @@ export interface Redundant {
   sentence: string;
   text: string;
   fix: string;
+  impliedBy: string[];
 }
 
 export interface Duplicate {
@@ -110,6 +113,14 @@ export interface Vacuous {
   id: string;
   line: number;
   sentence: string;
+  text: string;
+  fix: string;
+  because: string[];
+}
+
+export interface Uncovered {
+  name: string;
+  kind: string;
   text: string;
   fix: string;
 }
@@ -140,6 +151,7 @@ export interface LintReport {
   duplicate: Duplicate[];
   vacuous: Vacuous[];
   unused: Unused[];
+  uncovered: Uncovered[];
   warnings: Warning[];
 }
 
@@ -171,6 +183,7 @@ export function lintSpec(spec: Spec): LintOutcome {
     if (eventMentioned(spec, i)) continue;
     gaps.push(explainUnhandled(spec, i));
   }
+  const uncovered = findUncovered(spec, groups.length > 0);
   return {
     kind: "report",
     report: {
@@ -181,7 +194,8 @@ export function lintSpec(spec: Spec): LintOutcome {
       redundant: findRedundant(spec, groups, earlier),
       duplicate: findDuplicates(spec, earlier),
       vacuous: findVacuous(spec),
-      unused: findUnused(spec),
+      unused: findUnused(spec, uncovered),
+      uncovered: uncovered,
       warnings: findWarnings(spec),
     },
   };
@@ -481,10 +495,16 @@ function outputLabel(sym: SymbolDecl): string {
 }
 
 function findVacuous(spec: Spec): Vacuous[] {
+  const ubiquitous: number[] = [];
+  for (let i = 0; i < spec.requirements.length; i++) {
+    if (spec.requirements[i].antecedent === null) ubiquitous.push(i);
+  }
   const found: Vacuous[] = [];
   for (let i = 0; i < spec.requirements.length; i++) {
     const req = spec.requirements[i];
-    if (!requirementVacuous(spec, req)) continue;
+    if (req.antecedent === null) continue;
+    const because = unreachableBecause(spec, req, ubiquitous);
+    if (because === null) continue;
     found.push({
       id: req.id,
       line: req.line,
@@ -494,6 +514,7 @@ function findVacuous(spec: Spec): Vacuous[] {
         "Suggested fix: rewrite the condition in " +
         req.id +
         " so a real situation can make it true, or remove the requirement. Do not invent a response.",
+      because: because,
     });
   }
   return found;
@@ -501,7 +522,172 @@ function findVacuous(spec: Spec): Vacuous[] {
 
 function requirementVacuous(spec: Spec, req: Requirement): boolean {
   if (req.antecedent === null) return false;
-  return !conditionPossible(spec, req.antecedent);
+  const ubiquitous: number[] = [];
+  for (let i = 0; i < spec.requirements.length; i++) {
+    if (spec.requirements[i].antecedent === null && spec.requirements[i].id !== req.id) ubiquitous.push(i);
+  }
+  return unreachableBecause(spec, req, ubiquitous) !== null;
+}
+
+function unreachableBecause(spec: Spec, req: Requirement, ubiquitous: number[]): string[] | null {
+  if (req.antecedent === null) return null;
+  if (!conditionPossible(spec, req.antecedent)) return schemaBecause(spec, req.antecedent);
+  const others: number[] = [];
+  for (let i = 0; i < ubiquitous.length; i++) {
+    if (spec.requirements[ubiquitous[i]].id !== req.id) others.push(ubiquitous[i]);
+  }
+  if (others.length === 0) return null;
+  if (triggerPossible(spec, req.antecedent, others)) return null;
+  const kept = shrinkBlockers(spec, req.antecedent, others);
+  const because: string[] = [];
+  for (let i = 0; i < kept.length; i++) because.push(spec.requirements[kept[i]].id);
+  if (because.length === 0) because.push("the condition contradicts itself");
+  return because;
+}
+
+function schemaBecause(spec: Spec, antecedent: Term): string[] {
+  const mentioned: number[] = [];
+  collectIntSymbols(spec, antecedent, mentioned);
+  if (mentioned.length === 0) {
+    const self: string[] = [];
+    self.push("the condition contradicts itself");
+    return self;
+  }
+  if (!conditionPossible(widenInts(spec, mentioned), antecedent)) {
+    const self: string[] = [];
+    self.push("the condition contradicts itself");
+    return self;
+  }
+  const tight: number[] = [];
+  for (let i = 0; i < mentioned.length; i++) tight.push(mentioned[i]);
+  for (let i = 0; i < mentioned.length; i++) {
+    const trial: number[] = [];
+    for (let k = 0; k < tight.length; k++) {
+      if (tight[k] !== mentioned[i]) trial.push(tight[k]);
+    }
+    const widened: number[] = [];
+    for (let m = 0; m < mentioned.length; m++) {
+      let stay = false;
+      for (let t = 0; t < trial.length; t++) {
+        if (trial[t] === mentioned[m]) stay = true;
+      }
+      if (!stay) widened.push(mentioned[m]);
+    }
+    if (!conditionPossible(widenInts(spec, widened), antecedent)) {
+      tight.length = 0;
+      for (let t = 0; t < trial.length; t++) tight.push(trial[t]);
+    }
+  }
+  if (tight.length === 0) {
+    const self: string[] = [];
+    self.push("the condition contradicts itself");
+    return self;
+  }
+  const because: string[] = [];
+  for (let i = 0; i < tight.length; i++) because.push(schemaFact(spec.symbols[tight[i]]));
+  return because;
+}
+
+function schemaFact(sym: SymbolDecl): string {
+  const label = sym.phrase.length > 0 ? sym.phrase : sym.name;
+  if (sym.sort.kind === "int") return label + " is " + formatInt(sym.sort.min) + ".." + formatInt(sym.sort.max);
+  return label;
+}
+
+function collectIntSymbols(spec: Spec, term: Term, found: number[]): void {
+  if (term.kind === "sym") {
+    if (spec.symbols[term.index].sort.kind !== "int") return;
+    for (let i = 0; i < found.length; i++) {
+      if (found[i] === term.index) return;
+    }
+    found.push(term.index);
+    return;
+  }
+  if (term.kind === "not") {
+    collectIntSymbols(spec, term.term, found);
+    return;
+  }
+  if (
+    term.kind === "and" ||
+    term.kind === "or" ||
+    term.kind === "eq" ||
+    term.kind === "neq" ||
+    term.kind === "lt" ||
+    term.kind === "le" ||
+    term.kind === "gt" ||
+    term.kind === "ge" ||
+    term.kind === "add" ||
+    term.kind === "sub"
+  ) {
+    collectIntSymbols(spec, term.left, found);
+    collectIntSymbols(spec, term.right, found);
+  }
+}
+
+function widenInts(spec: Spec, indexes: number[]): Spec {
+  const symbols: SymbolDecl[] = [];
+  for (let i = 0; i < spec.symbols.length; i++) symbols.push(spec.symbols[i]);
+  for (let n = 0; n < indexes.length; n++) {
+    const at = indexes[n];
+    const sym = symbols[at];
+    if (sym.sort.kind !== "int") continue;
+    symbols[at] = copySymbol(sym, -1000000, 1000000);
+  }
+  return { enums: spec.enums, symbols: symbols, requirements: spec.requirements };
+}
+
+function copySymbol(sym: SymbolDecl, min: number, max: number): SymbolDecl {
+  return {
+    role: sym.role,
+    name: sym.name,
+    sort: { kind: "int", min: min, max: max },
+    description: sym.description,
+    phrase: sym.phrase,
+    outcomeYes: sym.outcomeYes,
+    outcomeNo: sym.outcomeNo,
+    action: sym.action,
+    says: sym.says,
+    asText: sym.asText,
+    unwanted: sym.unwanted,
+    line: sym.line,
+    source: sym.source,
+  };
+}
+
+function triggerPossible(spec: Spec, antecedent: Term, ubiquitous: number[]): boolean {
+  const holds: Requirement[] = [];
+  holds.push(probeFor(antecedent));
+  for (let i = 0; i < ubiquitous.length; i++) holds.push(spec.requirements[ubiquitous[i]]);
+  return satisfiable(spec, holds);
+}
+
+function shrinkBlockers(spec: Spec, antecedent: Term, ubiquitous: number[]): number[] {
+  const kept: number[] = [];
+  for (let i = 0; i < ubiquitous.length; i++) kept.push(ubiquitous[i]);
+  for (let i = 0; i < ubiquitous.length; i++) {
+    const trial: number[] = [];
+    for (let k = 0; k < kept.length; k++) {
+      if (kept[k] !== ubiquitous[i]) trial.push(kept[k]);
+    }
+    if (triggerPossible(spec, antecedent, trial)) continue;
+    kept.length = 0;
+    for (let k = 0; k < trial.length; k++) kept.push(trial[k]);
+  }
+  return kept;
+}
+
+function probeFor(term: Term): Requirement {
+  return {
+    id: "probe",
+    line: 0,
+    sentence: "",
+    system: "",
+    antecedent: null,
+    consequent: term,
+    hasWhen: false,
+    hasIf: false,
+    whenTerm: null,
+  };
 }
 
 function conditionPossible(spec: Spec, term: Term): boolean {
@@ -521,29 +707,12 @@ function conditionPossible(spec: Spec, term: Term): boolean {
   return satisfiable(spec, holds);
 }
 
-function findUnused(spec: Spec): Unused[] {
+function findUnused(spec: Spec, uncovered: Uncovered[]): Unused[] {
   const found: Unused[] = [];
   for (let i = 0; i < spec.symbols.length; i++) {
     const sym = spec.symbols[i];
-    if (sym.role === "event") continue;
-    const mentioned = symbolMentioned(spec, i);
-    if (sym.role === "output") {
-      if (!mentioned) continue;
-      if (!consequentMentions(spec, i)) {
-        const label = symbolLabel(sym);
-        found.push({
-          name: sym.name,
-          kind: "output",
-          text: "Nothing sets " + label + ". Requirements mention it, but no response says what it shall be.",
-          fix:
-            "Suggested fix: add a shall requirement that sets " +
-            sym.name +
-            ", or declare it as an input if the environment provides it. Do not choose the value.",
-        });
-      }
-      continue;
-    }
-    if (mentioned) continue;
+    if (sym.role === "event" || sym.role === "state" || sym.role === "output") continue;
+    if (symbolMentioned(spec, i)) continue;
     const label = symbolLabel(sym);
     found.push({
       name: sym.name,
@@ -558,6 +727,7 @@ function findUnused(spec: Spec): Unused[] {
       const variant = decl.variants[v];
       if (variantMentioned(spec, decl.name, variant)) continue;
       const name = decl.name + "." + variant;
+      if (uncoveredHas(uncovered, name)) continue;
       found.push({
         name: name,
         kind: "variant",
@@ -636,21 +806,108 @@ function findRedundant(spec: Spec, groups: ConflictGroup[], earlier: number[]): 
     if (!flags[i]) continue;
     const req = spec.requirements[i];
     if (requirementVacuous(spec, req)) continue;
+    const impliedBy = implyingIds(spec, i, eligible);
     const held = narrowed
       ? "Whenever the requirements outside a conflict hold, "
       : "Whenever the other requirements hold, ";
+    const who = impliesClause(impliedBy);
     found.push({
       id: req.id,
       line: req.line,
       sentence: req.sentence,
-      text: req.id + " adds nothing. " + held + req.id + " holds too.",
+      text: req.id + " adds nothing. " + who + held + req.id + " holds too.",
       fix:
         "Suggested fix: remove " +
         req.id +
         ", or ask whether it was meant to say something the others do not already require. Do not delete it until the PM agrees.",
+      impliedBy: impliedBy,
     });
   }
   return found;
+}
+
+function impliesClause(ids: string[]): string {
+  if (ids.length === 0) return "The other requirements imply it. ";
+  if (ids.length === 1) return ids[0] + " implies it. ";
+  return englishList(ids) + " imply it. ";
+}
+
+function findUncovered(spec: Spec, hasConflict: boolean): Uncovered[] {
+  const found: Uncovered[] = [];
+  for (let i = 0; i < spec.symbols.length; i++) {
+    const sym = spec.symbols[i];
+    if (sym.role === "state") {
+      if (symbolMentioned(spec, i)) continue;
+      const label = symbolLabel(sym);
+      found.push({
+        name: sym.name,
+        kind: "state",
+        text: "No requirement constrains " + label + ".",
+        fix: "Suggested fix: use " + sym.name + " in a requirement, or remove it from the schema.",
+      });
+      continue;
+    }
+    if (sym.role !== "output") continue;
+    if (consequentMentions(spec, i)) continue;
+    const label = symbolLabel(sym);
+    found.push({
+      name: sym.name,
+      kind: "output",
+      text: "No requirement constrains " + label + ".",
+      fix:
+        "Suggested fix: add a shall requirement that sets " +
+        sym.name +
+        ", or remove it from the schema. Do not choose the value.",
+    });
+  }
+  if (hasConflict) return found;
+  let needValues = false;
+  for (let i = 0; i < spec.symbols.length; i++) {
+    const sym = spec.symbols[i];
+    if (sym.role !== "output" || sym.sort.kind !== "enum") continue;
+    if (!consequentMentions(spec, i)) continue;
+    needValues = true;
+  }
+  if (!needValues) return found;
+  if (!satisfiable(spec, spec.requirements)) return found;
+  for (let i = 0; i < spec.symbols.length; i++) {
+    const sym = spec.symbols[i];
+    if (sym.role !== "output" || sym.sort.kind !== "enum") continue;
+    if (!consequentMentions(spec, i)) continue;
+    const decl = findEnum(spec, sym.sort.enumName);
+    if (decl === null) continue;
+    for (let v = 0; v < decl.variants.length; v++) {
+      if (canProduce(spec, i, decl.name, decl.variants[v], v)) continue;
+      const name = decl.name + "." + decl.variants[v];
+      found.push({
+        name: name,
+        kind: "variant",
+        text: "No requirement can set " + outputLabel(sym) + " to " + decl.variants[v] + ".",
+        fix: "Suggested fix: add a requirement that produces " + decl.variants[v] + ", or remove it from " + decl.name + ".",
+      });
+    }
+  }
+  return found;
+}
+
+function uncoveredHas(found: Uncovered[], name: string): boolean {
+  for (let i = 0; i < found.length; i++) {
+    if (found[i].name === name) return true;
+  }
+  return false;
+}
+
+function canProduce(spec: Spec, outputIndex: number, enumName: string, variant: string, variantIndex: number): boolean {
+  const sym = spec.symbols[outputIndex];
+  const probe = probeFor({
+    kind: "eq",
+    left: { kind: "sym", name: sym.name, index: outputIndex, phrase: sym.phrase },
+    right: { kind: "enum", enumName: enumName, variant: variant, index: variantIndex },
+  });
+  const holds: Requirement[] = [];
+  for (let i = 0; i < spec.requirements.length; i++) holds.push(spec.requirements[i]);
+  holds.push(probe);
+  return satisfiable(spec, holds);
 }
 
 function findDuplicates(spec: Spec, earlier: number[]): Duplicate[] {
@@ -1309,6 +1566,7 @@ export function formatLintText(specPath: string, report: LintReport): string {
   lines.push("duplicate: " + formatInt(report.duplicate.length));
   lines.push("vacuous: " + formatInt(report.vacuous.length));
   lines.push("unused: " + formatInt(report.unused.length));
+  lines.push("uncovered: " + formatInt(report.uncovered.length));
   lines.push("warnings: " + formatInt(report.warnings.length));
   for (let i = 0; i < report.conflicts.length; i++) {
     const conflict = report.conflicts[i];
@@ -1379,12 +1637,20 @@ export function formatLintText(specPath: string, report: LintReport): string {
     lines.push("vacuous " + item.id + " line " + formatInt(item.line));
     lines.push(item.text);
     lines.push(item.sentence);
+    for (let b = 0; b < item.because.length; b++) lines.push("Blocked by " + item.because[b] + ".");
     lines.push(item.fix);
   }
   for (let i = 0; i < report.unused.length; i++) {
     const item = report.unused[i];
     lines.push("");
     lines.push("unused " + item.name);
+    lines.push(item.text);
+    lines.push(item.fix);
+  }
+  for (let i = 0; i < report.uncovered.length; i++) {
+    const item = report.uncovered[i];
+    lines.push("");
+    lines.push("uncovered " + item.name);
     lines.push(item.text);
     lines.push(item.fix);
   }
@@ -1444,7 +1710,14 @@ export function formatLintJson(specPath: string, report: LintReport): string {
   const redundant = [];
   for (let i = 0; i < report.redundant.length; i++) {
     const item = report.redundant[i];
-    redundant.push({ id: item.id, line: item.line, sentence: item.sentence, text: item.text, fix: item.fix });
+    redundant.push({
+      id: item.id,
+      line: item.line,
+      sentence: item.sentence,
+      text: item.text,
+      fix: item.fix,
+      impliedBy: item.impliedBy,
+    });
   }
   const duplicate = [];
   for (let i = 0; i < report.duplicate.length; i++) {
@@ -1461,12 +1734,24 @@ export function formatLintJson(specPath: string, report: LintReport): string {
   const vacuous = [];
   for (let i = 0; i < report.vacuous.length; i++) {
     const item = report.vacuous[i];
-    vacuous.push({ id: item.id, line: item.line, sentence: item.sentence, text: item.text, fix: item.fix });
+    vacuous.push({
+      id: item.id,
+      line: item.line,
+      sentence: item.sentence,
+      text: item.text,
+      fix: item.fix,
+      because: item.because,
+    });
   }
   const unused = [];
   for (let i = 0; i < report.unused.length; i++) {
     const item = report.unused[i];
     unused.push({ name: item.name, kind: item.kind, text: item.text, fix: item.fix });
+  }
+  const uncovered = [];
+  for (let i = 0; i < report.uncovered.length; i++) {
+    const item = report.uncovered[i];
+    uncovered.push({ name: item.name, kind: item.kind, text: item.text, fix: item.fix });
   }
   const warnings = [];
   for (let i = 0; i < report.warnings.length; i++) {
@@ -1486,7 +1771,6 @@ export function formatLintJson(specPath: string, report: LintReport): string {
     gaps.length === 0 &&
     misuse.length === 0 &&
     wording.length === 0 &&
-    redundant.length === 0 &&
     duplicate.length === 0 &&
     vacuous.length === 0 &&
     unused.length === 0;
@@ -1502,6 +1786,7 @@ export function formatLintJson(specPath: string, report: LintReport): string {
       duplicate: duplicate,
       vacuous: vacuous,
       unused: unused,
+      uncovered: uncovered,
       warnings: warnings,
     },
     null,

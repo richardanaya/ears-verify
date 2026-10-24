@@ -16,7 +16,7 @@
 
 import { codeAt, domainSize, isDriver, requirementMentions, termMentions, type Requirement, type Spec, type Term } from "./spec.ts";
 import { driverWide, firstUnsatDrivers, minimumModel, satisfiable, TheoryQuery } from "./decide.ts";
-import { Binding, evalAssertion, evalBool, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
+import { Binding, evalAssertion, evalBool, termsEqual, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 
 const PRODUCT_CAP = 9007199254740991;
 const GAP_WALK_LIMIT = 100000;
@@ -423,6 +423,63 @@ export function redundantFlags(spec: Spec, eligible: boolean[]): boolean[] {
     if (minimumModel(spec, others, fails, null, 0, null, false) === null) flags[i] = true;
   }
   return flags;
+}
+
+/** Requirement ids that imply requirements[index]. Empty when it is not redundant. */
+export function implyingIds(spec: Spec, index: number, eligible: boolean[]): string[] {
+  const pool: number[] = [];
+  for (let i = 0; i < spec.requirements.length; i++) {
+    if (i === index) continue;
+    if (i < eligible.length && eligible[i]) pool.push(i);
+  }
+  const same: number[] = [];
+  const rest: number[] = [];
+  const target = spec.requirements[index].consequent;
+  for (let p = 0; p < pool.length; p++) {
+    const at = pool[p];
+    if (termsEqual(spec.requirements[at].consequent, target)) same.push(at);
+    else rest.push(at);
+  }
+  for (let p = 0; p < same.length; p++) {
+    const one: number[] = [];
+    one.push(same[p]);
+    if (subsetImplies(spec, one, index)) return idsOf(spec, one);
+  }
+  for (let p = 0; p < rest.length; p++) {
+    const one: number[] = [];
+    one.push(rest[p]);
+    if (subsetImplies(spec, one, index)) return idsOf(spec, one);
+  }
+  const kept: number[] = [];
+  for (let p = 0; p < pool.length; p++) kept.push(pool[p]);
+  for (let p = 0; p < pool.length; p++) {
+    const drop = pool[p];
+    const trial: number[] = [];
+    for (let k = 0; k < kept.length; k++) {
+      if (kept[k] !== drop) trial.push(kept[k]);
+    }
+    if (trial.length === 0) continue;
+    if (subsetImplies(spec, trial, index)) {
+      kept.length = 0;
+      for (let k = 0; k < trial.length; k++) kept.push(trial[k]);
+    }
+  }
+  return idsOf(spec, kept);
+}
+
+function subsetImplies(spec: Spec, indexes: number[], target: number): boolean {
+  if (indexes.length === 0) return false;
+  const others = reqsOf(spec, indexes);
+  if (!satisfiable(spec, others)) return false;
+  const fails: Requirement[] = [];
+  fails.push(spec.requirements[target]);
+  return minimumModel(spec, others, fails, null, 0, null, false) === null;
+}
+
+function idsOf(spec: Spec, indexes: number[]): string[] {
+  const ids: string[] = [];
+  for (let i = 0; i < indexes.length; i++) ids.push(spec.requirements[indexes[i]].id);
+  return ids;
 }
 
 export function bestGap(spec: Spec, outputIndex: number): Binding | null {
