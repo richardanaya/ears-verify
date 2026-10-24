@@ -201,6 +201,89 @@ export function lintSpec(spec: Spec): LintOutcome {
   };
 }
 
+/**
+ * Conflict ids and gap texts for diff. Repairs and the other lint lists are
+ * not part of a diff, so this skips them. Summaries match lintSpec.
+ */
+export function lintFacts(spec: Spec): LintOutcome {
+  if (spaceSize(spec) < 0) {
+    return {
+      kind: "error",
+      message: "a symbol has an empty domain. Declare at least one allowed value.",
+    };
+  }
+  const groups = conflictingSets(spec);
+  const conflicts: Conflict[] = [];
+  for (let i = 0; i < groups.length; i++) conflicts.push(conflictFacts(spec, groups[i]));
+  const gaps: Gap[] = [];
+  for (let i = 0; i < spec.symbols.length; i++) {
+    if (isDriver(spec.symbols[i])) continue;
+    const situation = bestGap(spec, i);
+    if (situation === null) continue;
+    gaps.push(explainGap(spec, i, situation));
+  }
+  for (let i = 0; i < spec.symbols.length; i++) {
+    if (spec.symbols[i].role !== "event") continue;
+    if (eventMentioned(spec, i)) continue;
+    gaps.push(explainUnhandled(spec, i));
+  }
+  const empty: Misuse[] = [];
+  const noWords: Wording[] = [];
+  const noRedundant: Redundant[] = [];
+  const noDuplicate: Duplicate[] = [];
+  const noVacuous: Vacuous[] = [];
+  const noUnused: Unused[] = [];
+  const noUncovered: Uncovered[] = [];
+  const noWarnings: Warning[] = [];
+  return {
+    kind: "report",
+    report: {
+      conflicts: conflicts,
+      gaps: gaps,
+      misuse: empty,
+      wording: noWords,
+      redundant: noRedundant,
+      duplicate: noDuplicate,
+      vacuous: noVacuous,
+      unused: noUnused,
+      uncovered: noUncovered,
+      warnings: noWarnings,
+    },
+  };
+}
+
+function conflictFacts(spec: Spec, group: ConflictGroup): Conflict {
+  const ids: string[] = [];
+  const lines: number[] = [];
+  const sentences: string[] = [];
+  for (let i = 0; i < group.indexes.length; i++) {
+    const req = spec.requirements[group.indexes[i]];
+    ids.push(req.id);
+    lines.push(req.line);
+    sentences.push(req.sentence);
+  }
+  const none: NameValue[] = [];
+  const noRepairs: Repair[] = [];
+  return {
+    ids: ids,
+    lines: lines,
+    sentences: sentences,
+    minimal: group.minimal,
+    everySituation: false,
+    situation: none,
+    requires: none,
+    example: none,
+    exampleJson: "",
+    keeps: [],
+    breaks: "",
+    summary: summaryText(ids, group.minimal),
+    clash: "",
+    fix: "",
+    keepsSentence: "",
+    repairs: noRepairs,
+  };
+}
+
 /** Vague words that are warnings. Words already in WORD_RULES stay wording findings. */
 const VAGUE_WARNINGS: string[] = [
   "appropriately",

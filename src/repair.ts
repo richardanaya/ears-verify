@@ -61,11 +61,15 @@ export class GroupCores {
   spec: Spec;
   parts: Requirement[][] | null;
   saved: string[][];
+  memoKeys: string[];
+  memoUnsat: boolean[];
 
   constructor(spec: Spec) {
     this.spec = spec;
     this.parts = null;
     this.saved = [];
+    this.memoKeys = [];
+    this.memoUnsat = [];
     if (spec.requirements.length <= 12) return;
     const parts = independentGroups(spec, spec.requirements);
     if (parts === null || parts.length <= 1) return;
@@ -314,12 +318,15 @@ function verified(
     for (let j = 0; j < originalKeys.length; j++) {
       if (originalKeys[j] === keys[i]) known = true;
     }
-    if (!known && !alreadyUnsat(spec, keys[i])) return false;
+    if (!known && !alreadyUnsat(spec, keys[i], cores)) return false;
   }
   return true;
 }
 
-function alreadyUnsat(spec: Spec, key: string): boolean {
+function alreadyUnsat(spec: Spec, key: string, cores: GroupCores): boolean {
+  for (let i = 0; i < cores.memoKeys.length; i++) {
+    if (cores.memoKeys[i] === key) return cores.memoUnsat[i];
+  }
   const ids: string[] = [];
   let start = 0;
   for (let i = 0; i <= key.length; i++) {
@@ -337,8 +344,15 @@ function alreadyUnsat(spec: Spec, key: string): boolean {
     if (found === null) return false;
     holds.push(found);
   }
-  if (holds.length === 0) return false;
-  return firstUnsatDrivers(spec, holds) !== null;
+  if (holds.length === 0) {
+    cores.memoKeys.push(key);
+    cores.memoUnsat.push(false);
+    return false;
+  }
+  const unsat = firstUnsatDrivers(spec, holds) !== null;
+  cores.memoKeys.push(key);
+  cores.memoUnsat.push(unsat);
+  return unsat;
 }
 
 function patchedKeys(spec: Spec, cores: GroupCores): string[] {

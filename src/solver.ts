@@ -15,7 +15,7 @@
  */
 
 import { codeAt, domainSize, isDriver, requirementMentions, termMentions, type Requirement, type Spec, type Term } from "./spec.ts";
-import { driverWide, firstUnsatDrivers, minimumModel, satisfiable, TheoryQuery } from "./decide.ts";
+import { driverBefore, driverWide, firstUnsatDrivers, minimumModel, satisfiable, splitGroups, TheoryQuery } from "./decide.ts";
 import { Binding, evalAssertion, evalBool, termsEqual, T_FALSE, T_TRUE, T_UNKNOWN } from "./term.ts";
 
 const PRODUCT_CAP = 9007199254740991;
@@ -959,8 +959,94 @@ function harvestCores(spec: Spec, all: number[], env: Binding, cores: ConflictGr
  * in the least bad situation still in the pool, then that core is removed.
  * A later core that needs a requirement from an earlier one is not reported.
  */
-function coresLarge(spec: Spec): ConflictGroup[] {
+class FoundCore {
+  indexes: number[];
+  bad: Binding;
+
+  constructor(indexes: number[], bad: Binding) {
+    this.indexes = indexes;
+    this.bad = bad;
+  }
+}
+
+class CoreQueue {
+  items: FoundCore[];
+  cursor: number;
+
+  constructor() {
+    this.items = [];
+    this.cursor = 0;
+  }
+}
+
+/**
+ * Wide specs that split by output search each group on its own drivers.
+ * The cores are merged by the same least-bad situation order the full walk uses.
+ * A shared situation keeps the later requirements, which is what deletion from
+ * the front leaves behind.
+ */
+function coresOf(found: FoundCore[]): ConflictGroup[] {
   const cores: ConflictGroup[] = [];
+  for (let i = 0; i < found.length; i++) cores.push({ indexes: found[i].indexes, minimal: true });
+  return cores;
+}
+
+function coresLarge(spec: Spec): ConflictGroup[] {
+  const groups = splitGroups(spec, spec.requirements);
+  if (groups === null || groups.length <= 1) return coresOf(coresLargeFlat(spec));
+  const queues: CoreQueue[] = [];
+  for (let g = 0; g < groups.length; g++) {
+    const holds = groups[g].holds;
+    const part: Spec = { enums: spec.enums, symbols: spec.symbols, requirements: holds };
+    const local = coresLargeFlat(part);
+    const queue = new CoreQueue();
+    for (let i = 0; i < local.length; i++) {
+      const indexes: number[] = [];
+      for (let k = 0; k < local[i].indexes.length; k++) {
+        const req = holds[local[i].indexes[k]];
+        const at = requirementIndex(spec, req);
+        if (at >= 0) indexes.push(at);
+      }
+      queue.items.push(new FoundCore(indexes, local[i].bad));
+    }
+    if (queue.items.length > 0) queues.push(queue);
+  }
+  const cores: ConflictGroup[] = [];
+  while (queues.length > 0) {
+    let best = 0;
+    for (let i = 1; i < queues.length; i++) {
+      if (queueBefore(spec, queues[i], queues[best])) best = i;
+    }
+    const queue = queues[best];
+    const item = queue.items[queue.cursor];
+    if (!hasCore(cores, item.indexes)) cores.push({ indexes: item.indexes, minimal: true });
+    queue.cursor = queue.cursor + 1;
+    if (queue.cursor < queue.items.length) continue;
+    for (let i = best; i < queues.length - 1; i++) queues[i] = queues[i + 1];
+    queues.pop();
+  }
+  return cores;
+}
+
+function queueBefore(spec: Spec, left: CoreQueue, right: CoreQueue): boolean {
+  const a = left.items[left.cursor];
+  const b = right.items[right.cursor];
+  if (driverBefore(spec, a.bad, b.bad)) return true;
+  if (driverBefore(spec, b.bad, a.bad)) return false;
+  const ai = a.indexes.length === 0 ? -1 : a.indexes[0];
+  const bi = b.indexes.length === 0 ? -1 : b.indexes[0];
+  return ai > bi;
+}
+
+function requirementIndex(spec: Spec, req: Requirement): number {
+  for (let i = 0; i < spec.requirements.length; i++) {
+    if (spec.requirements[i] === req) return i;
+  }
+  return -1;
+}
+
+function coresLargeFlat(spec: Spec): FoundCore[] {
+  const found: FoundCore[] = [];
   let pool: number[] = [];
   for (let i = 0; i < spec.requirements.length; i++) pool.push(i);
   const cache = new TheoryCache(spec);
@@ -970,12 +1056,12 @@ function coresLarge(spec: Spec): ConflictGroup[] {
     const local = minimizeSituation(pool, bad, cache);
     const global = minimizeGlobal(local, cache);
     if (global.length === 0) break;
-    if (!hasCore(cores, global)) cores.push({ indexes: global, minimal: true });
+    found.push(new FoundCore(global, bad));
     const next = subtractIndexes(pool, global);
     if (next.length === pool.length) break;
     pool = next;
   }
-  return cores;
+  return found;
 }
 
 function minimizeSituation(indexes: number[], env: Binding, cache: TheoryCache): number[] {

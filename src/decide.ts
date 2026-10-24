@@ -1690,6 +1690,22 @@ export function independentGroups(spec: Spec, holds: Requirement[]): Requirement
   return out;
 }
 
+export interface SplitGroup {
+  holds: Requirement[];
+  drivers: number[];
+}
+
+/** Output groups with the drivers each one reads. Null when a split would be unsound. */
+export function splitGroups(spec: Spec, holds: Requirement[]): SplitGroup[] | null {
+  const groups = factorize(spec, holds);
+  if (groups === null) return null;
+  const out: SplitGroup[] = [];
+  for (let i = 0; i < groups.length; i++) {
+    out.push({ holds: groups[i].holds, drivers: groups[i].drivers });
+  }
+  return out;
+}
+
 function factorize(spec: Spec, holds: Requirement[]): FactorGroup[] | null {
   const buckets: Requirement[][] = [];
   for (let i = 0; i < spec.symbols.length; i++) buckets.push([]);
@@ -1749,7 +1765,7 @@ function mentionedDrivers(spec: Spec, holds: Requirement[]): number[] {
   return drivers;
 }
 
-function driverBefore(spec: Spec, left: Binding, right: Binding): boolean {
+export function driverBefore(spec: Spec, left: Binding, right: Binding): boolean {
   for (let i = 0; i < spec.symbols.length; i++) {
     if (!isDriver(spec.symbols[i])) continue;
     if (left.code[i] < right.code[i]) return true;
