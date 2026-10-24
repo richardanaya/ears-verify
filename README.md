@@ -135,6 +135,8 @@ The native ScriptC binary and the same code under Node 24 are timed with `npm ru
 | plan-to-problems | 23 | 18 | 122 |
 | gen-25 | 28 | 22 | 144 |
 | gen-50 | 100 | 76 | 210 |
-| gen-100 | 398 | 290 | 499 |
+| gen-100 | 298 | 209 | 312 |
+| gen-100 diff, same spec | 74 | 64 | 167 |
+| gen-100 diff, one requirement negated | 118 | 89 | 224 |
 
-The full history is in [the performance notes](docs/performance.md).
+The gen-100 rows are the middle of three runs. `gen-100 diff` compares that spec with itself, then with R1's approval sentence negated. The full history is in [the performance notes](docs/performance.md).

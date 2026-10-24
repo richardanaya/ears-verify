@@ -75,7 +75,11 @@ The unreachable check, the minimal set of requirements that imply another, and e
 
 ## Semantic diff
 
-`diff` runs the same solver on the shared schema. A formula that already has to hold is already satisfied, so the acceptance search skips it and an unchanged `gen-100` is two lints plus the report. On this VM the default binary diffed `bench/specs/gen-100.ears.md` against itself in 793 ms, 777 ms, and 810 ms, exit 0. Node did that in 779 ms, 708 ms, and 706 ms. Replacing `the Amber Desk shall approve the amber request.` in R1 with `the Amber Desk shall not approve the amber request.` exited 1 in 776 ms, 780 ms, and 790 ms native, and 737 ms, 731 ms, and 739 ms on Node. Both directions name R1. Node and the default binary printed the same bytes for the unchanged pair and for the negated copy.
+`diff` asks the solver for conflict ids, gap texts, and one witness each way. Repair search stays on `lint`. A wide spec searches each output group on that group's drivers, then merges the cores in the same least-bad situation order as the full walk. An unchanged pair of specs lints once.
+
+On this VM, before that change, the default binary diffed `bench/specs/gen-100.ears.md` against itself in 793 ms, 777 ms, and 810 ms, exit 0. Node did that in 779 ms, 708 ms, and 706 ms. After the change the default binary did it in 77 ms, 74 ms, and 74 ms. The release binary did it in 52 ms, 64 ms, and 66 ms. Node did it in 191 ms, 167 ms, and 166 ms. Replacing `the Amber Desk shall approve the amber request.` in R1 with `the Amber Desk shall not approve the amber request.` exited 1. Before, that was 776 ms, 780 ms, and 790 ms native, and 737 ms, 731 ms, and 739 ms on Node. After, the default binary did it in 118 ms, 117 ms, and 147 ms, the release binary in 89 ms, 97 ms, and 75 ms, and Node in 246 ms, 224 ms, and 199 ms. Both directions name R1. Node and the default binary printed the same bytes for the unchanged pair and for the negated copy.
+
+The same group search speeds `lint` of `gen-100`. Three default runs were 357 ms, 298 ms, and 298 ms. Three release runs were 222 ms, 209 ms, and 208 ms. Three Node runs were 316 ms, 303 ms, and 312 ms. The report text is the same.
 
 ## Next
 

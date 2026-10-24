@@ -9,7 +9,7 @@
  */
 
 import { evaluateRequirements, type Violation } from "./check.ts";
-import { lintSpec, type Conflict, type Gap } from "./lint.ts";
+import { lintFacts, type Conflict, type Gap } from "./lint.ts";
 import { findEnum, findSymbol, displayCode, type EnumDecl, type Requirement, type Sort, type Spec, type SymbolDecl, type Term } from "./spec.ts";
 import { firstMatching } from "./solver.ts";
 import { formatScenario, termsEqual, type Binding } from "./term.ts";
@@ -130,10 +130,40 @@ export function diffMeaningChanged(report: DiffReport): boolean {
   return report.oldAcceptsNewRejectsFound || report.newAcceptsOldRejectsFound || report.skipped.length > 0;
 }
 
+function sameLintInput(left: Spec, right: Spec): boolean {
+  if (left.enums.length !== right.enums.length) return false;
+  if (left.symbols.length !== right.symbols.length) return false;
+  if (left.requirements.length !== right.requirements.length) return false;
+  for (let i = 0; i < left.enums.length; i++) {
+    const a = left.enums[i];
+    const b = right.enums[i];
+    if (a.name !== b.name || a.variants.length !== b.variants.length) return false;
+    for (let v = 0; v < a.variants.length; v++) {
+      if (a.variants[v] !== b.variants[v]) return false;
+    }
+  }
+  for (let i = 0; i < left.symbols.length; i++) {
+    const a = left.symbols[i];
+    const b = right.symbols[i];
+    if (a.role !== b.role || a.name !== b.name) return false;
+    if (a.sort.kind !== b.sort.kind) return false;
+    if (a.sort.kind === "int" && b.sort.kind === "int" && (a.sort.min !== b.sort.min || a.sort.max !== b.sort.max)) return false;
+    if (a.sort.kind === "enum" && b.sort.kind === "enum" && a.sort.enumName !== b.sort.enumName) return false;
+  }
+  for (let i = 0; i < left.requirements.length; i++) {
+    const a = left.requirements[i];
+    const b = right.requirements[i];
+    if (a.id !== b.id || a.sentence !== b.sentence) return false;
+    if (!termsSame(a.antecedent, b.antecedent)) return false;
+    if (!termsEqual(a.consequent, b.consequent)) return false;
+  }
+  return true;
+}
+
 export function diffSpecs(oldPath: string, oldSpec: Spec, newPath: string, newSpec: Spec): DiffOutcome {
-  const lintOld = lintSpec(oldSpec);
+  const lintOld = lintFacts(oldSpec);
   if (lintOld.kind === "error") return { kind: "error", message: oldPath + ": " + lintOld.message };
-  const lintNew = lintSpec(newSpec);
+  const lintNew = sameLintInput(oldSpec, newSpec) ? lintOld : lintFacts(newSpec);
   if (lintNew.kind === "error") return { kind: "error", message: newPath + ": " + lintNew.message };
 
   const aligned = alignSchema(oldPath, oldSpec, newPath, newSpec);
