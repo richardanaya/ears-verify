@@ -1,0 +1,18 @@
+spec: examples/order-vacuous.ears.md
+out: build/sc-vacuous
+scenarios: 2
+uncovered: 2
+
+R3-accepted.json
+accepted R3 line 9
+The order was accepted.
+
+R3-rejected.json
+rejected R3 line 9
+The order was not accepted.
+
+uncovered R1
+The trigger is impossible for every allowed value.
+
+uncovered R2
+The trigger is impossible for every allowed value.

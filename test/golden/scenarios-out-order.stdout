@@ -1,0 +1,24 @@
+spec: examples/order.ears.md
+out: build/sc-order
+scenarios: 5
+uncovered: 0
+
+R1-accepted.json
+accepted R1 line 7
+An order was submitted and inventory was available, and the order was fulfilled.
+
+R1-rejected-cond1.json
+rejected R1 line 7, condition 1
+An order was submitted and inventory was available, but the order was not fulfilled.
+
+R1-accepted-cond1.json
+accepted R1 line 7, condition 1
+Flipping condition 1 ("an order is submitted") makes the trigger false. An order was not submitted and inventory was available, and the order was not fulfilled.
+
+R1-rejected-cond2.json
+rejected R1 line 7, condition 2
+An order was submitted and inventory was available, but the order was not fulfilled.
+
+R1-accepted-cond2.json
+accepted R1 line 7, condition 2
+Flipping condition 2 ("inventory is available") makes the trigger false. An order was submitted and inventory was not available, and the order was not fulfilled.

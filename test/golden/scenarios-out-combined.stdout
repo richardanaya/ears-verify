@@ -1,0 +1,39 @@
+spec: examples/order-combined.ears.md
+out: build/sc-combined
+scenarios: 8
+uncovered: 1
+
+R1.2-accepted.json
+accepted R1.2 line 10
+Inventory was available, an order was submitted, the quantity was at least 1, and the region was set to us, and the quantity was 1 and the number shipped was 1.
+
+R1.2-rejected-cond1.json
+rejected R1.2 line 10, condition 1
+Inventory was available, an order was submitted, the quantity was at least 1, and the region was set to us, but the quantity was 1 and the number shipped was 2.
+
+R1.2-accepted-cond1.json
+accepted R1.2 line 10, condition 1
+Flipping condition 1 ("inventory is available") makes the trigger false. Inventory was not available, an order was submitted, the quantity was at least 1, and the region was set to us, and the quantity was 1 and the number shipped was 1.
+
+R1.2-rejected-cond2.json
+rejected R1.2 line 10, condition 2
+Inventory was available, an order was submitted, the quantity was at least 1, and the region was set to us, but the quantity was 1 and the number shipped was 2.
+
+R1.2-accepted-cond2.json
+accepted R1.2 line 10, condition 2
+Flipping condition 2 ("an order is submitted") makes the trigger false. Inventory was available, an order was not submitted, the quantity was at least 1, and the region was set to us, and the quantity was 1 and the number shipped was 1.
+
+R1.2-rejected-cond3.json
+rejected R1.2 line 10, condition 3
+Inventory was available, an order was submitted, the quantity was at least 1, and the region was set to us, but the quantity was 1 and the number shipped was 2.
+
+R1.2-rejected-cond4.json
+rejected R1.2 line 10, condition 4
+Inventory was available, an order was submitted, the quantity was at least 1, and the region was set to us, but the quantity was 1 and the number shipped was 2.
+
+R1.2-accepted-cond4.json
+accepted R1.2 line 10, condition 4
+Flipping condition 4 ("the region is us") makes the trigger false. Inventory was available, an order was submitted, the quantity was at least 1, and the region was set to eu, and the quantity was 1 and the number shipped was 1.
+
+uncovered R1.2, condition 3
+condition 3 ("the quantity is at least 1") cannot be false while the other conditions let it decide the trigger, so it cannot flip the outcome.

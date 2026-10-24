@@ -3,7 +3,7 @@
  * and golden CLI tests. Unit tests and each CLI case run once under Node
  * and once as the native binary; stdout, stderr, and exit status must match
  * each other and the checked-in golden files. Samples in docs/reference.md,
- * docs/lint.md, docs/json.md, and skills/plan-verify/SKILL.md marked with
+ * docs/lint.md, docs/json.md, docs/scenarios.md, and skills/plan-verify/SKILL.md marked with
  * `<!-- verify stdout|stderr <exit>` are run under Node and build/plan-verify
  * and must match the fenced bytes.
  *
@@ -248,6 +248,7 @@ function runGoldenCli(): void {
     { name: "scenarios", args: ["scenarios", "examples/order.ears.md"] },
     { name: "scenarios-json", args: ["scenarios", "--json", "examples/order.ears.md"] },
     { name: "scenarios-status", args: ["scenarios", "examples/order-status.ears.md"] },
+    { name: "scenarios-out-missing", args: ["scenarios", "examples/order.ears.md", "--out"] },
     { name: "lint-wide", args: ["lint", "examples/order-wide.ears.md"] },
     { name: "malformed-spec", args: ["check", "test/fixtures/malformed.ears.md", "--input", "examples/order-pass.json"] },
     { name: "unknown-phrase", args: ["lint", "test/fixtures/unknown-phrase.ears.md"] },
@@ -289,9 +290,12 @@ function runGoldenCli(): void {
     comparePair(item.name, nodeResult, binResult);
   }
 
+  checkGenerated();
+
   checkDocSamples("docs-reference", "docs/reference.md", false);
   checkDocSamples("docs-lint", "docs/lint.md", false);
   checkDocSamples("docs-json", "docs/json.md", false);
+  checkDocSamples("docs-scenarios", "docs/scenarios.md", false);
   checkDocSamples("skill", "skills/plan-verify/SKILL.md", true);
   checkPlanToProblems();
 
@@ -301,6 +305,141 @@ function runGoldenCli(): void {
   }
   console.log("all tests passed");
   process.exit(0);
+}
+
+function checkGenerated(): void {
+  const jobs: { name: string; spec: string; args: string[] }[] = [
+    {
+      name: "scenarios-out-order",
+      spec: "examples/order.ears.md",
+      args: ["scenarios", "examples/order.ears.md", "--out", "build/sc-order"],
+    },
+    {
+      name: "scenarios-out-order-json",
+      spec: "examples/order.ears.md",
+      args: ["scenarios", "--json", "examples/order.ears.md", "--out", "build/sc-order-json"],
+    },
+    {
+      name: "scenarios-out-or",
+      spec: "examples/order-or.ears.md",
+      args: ["scenarios", "examples/order-or.ears.md", "--out", "build/sc-or"],
+    },
+    {
+      name: "scenarios-out-covered",
+      spec: "examples/order-covered.ears.md",
+      args: ["scenarios", "examples/order-covered.ears.md", "--out", "build/sc-covered"],
+    },
+    {
+      name: "scenarios-out-vacuous",
+      spec: "examples/order-vacuous.ears.md",
+      args: ["scenarios", "examples/order-vacuous.ears.md", "--out", "build/sc-vacuous"],
+    },
+    {
+      name: "scenarios-out-combined",
+      spec: "examples/order-combined.ears.md",
+      args: ["scenarios", "examples/order-combined.ears.md", "--out", "build/sc-combined"],
+    },
+  ];
+  let orderBodies = "";
+  for (let i = 0; i < jobs.length; i++) {
+    const job = jobs[i];
+    const dir = outDirOf(job.args);
+    const nodeResult = nodeRun("src/main.ts", job.args);
+    const nodeNames = scenarioFileNames(nodeResult.stdout);
+    const nodeBodies: string[] = [];
+    for (let n = 0; n < nodeNames.length; n++) {
+      nodeBodies.push(readFileSync(dir + "/" + nodeNames[n], "utf8"));
+    }
+    const binResult = run(nativeBin, job.args);
+    comparePair(job.name, nodeResult, binResult);
+    const binNames = scenarioFileNames(binResult.stdout);
+    if (nodeNames.length === 0 || nodeNames.length !== binNames.length) {
+      fail(job.name + " file count " + String(nodeNames.length));
+      continue;
+    }
+    let joined = "";
+    for (let n = 0; n < nodeNames.length; n++) {
+      if (nodeNames[n] !== binNames[n]) fail(job.name + " file name " + nodeNames[n]);
+      const body = readFileSync(dir + "/" + binNames[n], "utf8");
+      if (body !== nodeBodies[n]) fail(job.name + " file bytes " + binNames[n]);
+      if (joined.length > 0) joined += "\n";
+      joined += binNames[n] + "\n" + body;
+      checkOneScenario(job.spec, dir, binNames[n]);
+    }
+    if (job.name === "scenarios-out-order") orderBodies = joined;
+    if (job.name === "scenarios-out-order-json" && joined !== orderBodies) fail("scenarios json files differ from text files");
+  }
+}
+
+function outDirOf(args: string[]): string {
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--out" && i + 1 < args.length) return args[i + 1];
+  }
+  return "";
+}
+
+function scenarioFileNames(stdout: string): string[] {
+  const names: string[] = [];
+  const marker = '"file": "';
+  let from = 0;
+  while (from < stdout.length) {
+    const at = stdout.indexOf(marker, from);
+    if (at < 0) break;
+    const start = at + marker.length;
+    const end = stdout.indexOf('"', start);
+    if (end < 0) break;
+    names.push(stdout.slice(start, end));
+    from = end + 1;
+  }
+  if (names.length > 0) return names;
+  let lineStart = 0;
+  for (let i = 0; i <= stdout.length; i++) {
+    if (i === stdout.length || stdout.charCodeAt(i) === 10) {
+      let line = stdout.slice(lineStart, i);
+      if (line.length > 0 && line.charCodeAt(line.length - 1) === 13) line = line.slice(0, line.length - 1);
+      if (line.length > 5 && line.indexOf(" ") < 0 && line.slice(line.length - 5) === ".json") names.push(line);
+      lineStart = i + 1;
+    }
+  }
+  return names;
+}
+
+function scenarioId(file: string): string {
+  const dot = file.indexOf(".json");
+  const name = dot < 0 ? file : file.slice(0, dot);
+  const marks = ["-accepted-cond", "-rejected-cond", "-accepted", "-rejected"];
+  for (let i = 0; i < marks.length; i++) {
+    const at = name.indexOf(marks[i]);
+    if (at > 0) return name.slice(0, at);
+  }
+  return name;
+}
+
+function checkOneScenario(spec: string, dir: string, file: string): void {
+  const args = ["check", spec, "--input", dir + "/" + file];
+  const nodeResult = nodeRun("src/main.ts", args);
+  const binResult = run(nativeBin, args);
+  if (
+    nodeResult.status !== binResult.status ||
+    nodeResult.stdout !== binResult.stdout ||
+    nodeResult.stderr !== binResult.stderr
+  ) {
+    fail("check " + file + " node/native differ");
+    return;
+  }
+  const rejected = file.indexOf("-rejected") >= 0;
+  if (rejected) {
+    const header = "\n" + scenarioId(file) + " line ";
+    if (nodeResult.status !== 1 || nodeResult.stdout.indexOf("violations: 1\n") < 0 || nodeResult.stdout.indexOf(header) < 0) {
+      fail("check " + file + " expected exactly " + scenarioId(file));
+      console.error(nodeResult.stdout);
+    }
+    return;
+  }
+  if (nodeResult.status !== 0 || nodeResult.stdout.indexOf("violations: 0\n") < 0) {
+    fail("check " + file + " expected acceptance");
+    console.error(nodeResult.stdout);
+  }
 }
 
 function checkPlanToProblems(): void {

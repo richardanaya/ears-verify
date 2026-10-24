@@ -5,6 +5,6 @@ usage:
   plan-verify emit-smt [--json] <spec>
   plan-verify lint [--json] <spec>
   plan-verify report <spec>
-  plan-verify scenarios [--json] <spec>
+  plan-verify scenarios [--json] <spec> [--out <dir>]
   plan-verify policy [--json] <spec> [--property <file>]
   plan-verify help

@@ -7,7 +7,7 @@ description: Use when a product manager is stating or revising requirements. Tur
 
 You are in a conversation with a product manager. They are telling you what a system should do, often in a few passes, sometimes contradicting what they said earlier. Turn what they say into EARS requirements with the grammar below, then run plan-verify.
 
-Lint is implemented, and it is the check that matters. When it reports a conflict, explain it in plain words: which requirements clash, under what situation, the example scenario, and the suggested fix. Ask which requirement should win. Do not choose one, and do not paper over the clash with a new sentence they did not ask for. A requirement that adds nothing stays until the PM agrees to remove it. `scenarios` prints accepted and rejected examples so you can check that you heard them correctly.
+Lint is implemented, and it is the check that matters. When it reports a conflict, explain it in plain words: which requirements clash, under what situation, the example scenario, and the suggested fix. Ask which requirement should win. Do not choose one, and do not paper over the clash with a new sentence they did not ask for. A requirement that adds nothing stays until the PM agrees to remove it. `scenarios` prints accepted and rejected examples so you can check that you heard them correctly. `scenarios --out` writes a file for each case, including each condition that flips the outcome.
 
 `help` lists every command:
 
@@ -22,7 +22,7 @@ usage:
   plan-verify emit-smt [--json] <spec>
   plan-verify lint [--json] <spec>
   plan-verify report <spec>
-  plan-verify scenarios [--json] <spec>
+  plan-verify scenarios [--json] <spec> [--out <dir>]
   plan-verify policy [--json] <spec> [--property <file>]
   plan-verify help
 ```
@@ -1968,6 +1968,144 @@ examples/order.ears.md
   ]
 }
 ```
+
+## From a spec to scenario files
+
+Write the requirement in EARS. `examples/order.ears.md` says that when an order is submitted and inventory is available, the Order System shall fulfill the order.
+
+Lint that file. A gap is a situation with no response. Ask what the system shall do there.
+
+<!-- verify stdout 1
+build/plan-verify
+lint
+examples/order.ears.md
+-->
+```text
+spec: examples/order.ears.md
+conflicts: 0
+gaps: 1
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+uncovered: 0
+warnings: 0
+
+gap order_fulfilled
+Nothing says whether the order was fulfilled when an order was submitted and inventory was not available. Suggested fix: add a requirement for this situation, and ask what the system shall do. Do not choose the response.
+```
+
+`examples/order-covered.ears.md` is the fix: the order is not fulfilled when inventory is missing, and it is not fulfilled when no order was submitted. Lint is clean.
+
+<!-- verify stdout 0
+build/plan-verify
+lint
+examples/order-covered.ears.md
+-->
+```text
+spec: examples/order-covered.ears.md
+conflicts: 0
+gaps: 0
+misuse: 0
+wording: 0
+redundant: 0
+duplicate: 0
+vacuous: 0
+unused: 0
+uncovered: 0
+warnings: 0
+```
+
+Generate one file per case. `R1-accepted.json` keeps the trigger true and the response true. `R1-rejected-cond2.json` lets condition 2 decide the trigger and breaks R1 alone. `R1-accepted-cond2.json` flips that condition so the trigger is false and every requirement holds. The same names are written for R2 and R3.
+
+<!-- verify stdout 0
+build/plan-verify
+scenarios
+examples/order-covered.ears.md
+--out
+build/skill-scenarios
+-->
+```text
+spec: examples/order-covered.ears.md
+out: build/skill-scenarios
+scenarios: 13
+uncovered: 0
+
+R1-accepted.json
+accepted R1 line 7
+An order was submitted and inventory was available, and the order was fulfilled.
+
+R1-rejected-cond1.json
+rejected R1 line 7, condition 1
+An order was submitted and inventory was available, but the order was not fulfilled.
+
+R1-accepted-cond1.json
+accepted R1 line 7, condition 1
+Flipping condition 1 ("an order is submitted") makes the trigger false. An order was not submitted and inventory was available, and the order was not fulfilled.
+
+R1-rejected-cond2.json
+rejected R1 line 7, condition 2
+An order was submitted and inventory was available, but the order was not fulfilled.
+
+R1-accepted-cond2.json
+accepted R1 line 7, condition 2
+Flipping condition 2 ("inventory is available") makes the trigger false. An order was submitted and inventory was not available, and the order was not fulfilled.
+
+R2-accepted.json
+accepted R2 line 8
+An order was submitted and inventory was not available, and the order was not fulfilled.
+
+R2-rejected-cond1.json
+rejected R2 line 8, condition 1
+An order was submitted and inventory was not available, but the order was fulfilled.
+
+R2-accepted-cond1.json
+accepted R2 line 8, condition 1
+Flipping condition 1 ("an order is submitted") makes the trigger false. An order was not submitted and inventory was not available, and the order was not fulfilled.
+
+R2-rejected-cond2.json
+rejected R2 line 8, condition 2
+An order was submitted and inventory was not available, but the order was fulfilled.
+
+R2-accepted-cond2.json
+accepted R2 line 8, condition 2
+Flipping condition 2 ("not inventory is available") makes the trigger false. An order was submitted and inventory was available, and the order was fulfilled.
+
+R3-accepted.json
+accepted R3 line 9
+An order was not submitted, and the order was not fulfilled.
+
+R3-rejected-cond1.json
+rejected R3 line 9, condition 1
+An order was not submitted, but the order was fulfilled.
+
+R3-accepted-cond1.json
+accepted R3 line 9, condition 1
+Flipping condition 1 ("not an order is submitted") makes the trigger false. An order was submitted, and the order was not fulfilled.
+```
+
+Feed a rejected file back to `check`. The report names that requirement.
+
+<!-- verify stdout 1
+build/plan-verify
+check
+examples/order-covered.ears.md
+--input
+build/skill-scenarios/R1-rejected-cond2.json
+-->
+```text
+spec: examples/order-covered.ears.md
+scenario: build/skill-scenarios/R1-rejected-cond2.json
+violations: 1
+
+R1 line 7
+When an order is submitted and inventory is available, the Order System shall fulfill the order.
+An order was submitted and inventory was available, but the order was not fulfilled.
+```
+
+A generated file is an example for checking what you heard. A condition listed as uncovered is one the solver could not show flipping the outcome, and the sentence says why. `examples/order-vacuous.ears.md` and `examples/order-combined.ears.md` are those reports. The file names and the manifest are in `docs/scenarios.md`.
 
 ## What you do not do
 

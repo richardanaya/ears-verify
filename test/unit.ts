@@ -11,10 +11,11 @@ import { parseScenarioJson } from "../src/jsonvalue.ts";
 import { lintSpec } from "../src/lint.ts";
 import { buildProblems } from "../src/report.ts";
 import type { Requirement, Spec } from "../src/spec.ts";
+import { formatGeneratedJson, generateScenarios, type GeneratedScenarios } from "../src/gentest.ts";
 import { listScenarios } from "../src/scenarios.ts";
 import { printSmt } from "../src/smt.ts";
 import { spaceSize } from "../src/solver.ts";
-import { formatTerm } from "../src/term.ts";
+import { evalBool, formatTerm, T_FALSE, T_TRUE } from "../src/term.ts";
 import { runSoundness } from "./soundness.ts";
 
 let passed = 0;
@@ -1596,6 +1597,131 @@ if (orRepair.kind === "report") {
   }
   check("or repair parenthesizes the old condition", paren);
 }
+
+function requirementById(spec: Spec, id: string): Requirement | null {
+  for (let i = 0; i < spec.requirements.length; i++) {
+    if (spec.requirements[i].id === id) return spec.requirements[i];
+  }
+  return null;
+}
+
+function roundGenerated(label: string, spec: Spec): GeneratedScenarios {
+  const report = generateScenarios(spec);
+  for (let i = 0; i < report.files.length; i++) {
+    const file = report.files[i];
+    const json = parseScenarioJson(file.body);
+    check(label + " " + file.file + " parses", json.ok);
+    if (!json.ok) continue;
+    const bound = bindScenario(spec, json.object);
+    check(label + " " + file.file + " binds", bound.ok);
+    if (!bound.ok) continue;
+    const violations = evaluate(spec, bound.env);
+    const req = requirementById(spec, file.id);
+    if (file.kind === "rejected") {
+      check(label + " " + file.file + " one break", violations.length === 1 && violations[0].id === file.id);
+      if (req !== null && req.antecedent !== null) {
+        check(label + " " + file.file + " trigger on", evalBool(req.antecedent, spec, bound.env) === T_TRUE);
+      }
+    } else {
+      check(label + " " + file.file + " holds", violations.length === 0);
+      if (req !== null && req.antecedent !== null) {
+        const trigger = evalBool(req.antecedent, spec, bound.env);
+        if (file.condition === 0) check(label + " " + file.file + " trigger on", trigger === T_TRUE);
+        else check(label + " " + file.file + " trigger off", trigger === T_FALSE);
+      }
+    }
+  }
+  return report;
+}
+
+function generatedBody(report: GeneratedScenarios, name: string): string {
+  for (let i = 0; i < report.files.length; i++) {
+    if (report.files[i].file === name) return report.files[i].body;
+  }
+  return "";
+}
+
+function generatedText(report: GeneratedScenarios, name: string): string {
+  for (let i = 0; i < report.files.length; i++) {
+    if (report.files[i].file === name) return report.files[i].text;
+  }
+  return "";
+}
+
+function uncoveredText(report: GeneratedScenarios, id: string, condition: number): string {
+  for (let i = 0; i < report.uncovered.length; i++) {
+    const item = report.uncovered[i];
+    if (item.id === id && item.condition === condition) return item.text;
+  }
+  return "";
+}
+
+const orderGenerated = roundGenerated("order files", order);
+check("order file count", orderGenerated.files.length === 5 && orderGenerated.uncovered.length === 0);
+check(
+  "order accepted body",
+  generatedBody(orderGenerated, "R1-accepted.json").indexOf('"order_fulfilled": true') >= 0 &&
+    generatedBody(orderGenerated, "R1-accepted.json").indexOf('"order_submitted": true') >= 0,
+);
+check(
+  "order rejected bodies match for and",
+  generatedBody(orderGenerated, "R1-rejected-cond1.json") === generatedBody(orderGenerated, "R1-rejected-cond2.json") &&
+    generatedBody(orderGenerated, "R1-rejected-cond1.json").indexOf('"order_fulfilled": false') >= 0,
+);
+check(
+  "order flips differ",
+  generatedBody(orderGenerated, "R1-accepted-cond1.json") !== generatedBody(orderGenerated, "R1-accepted-cond2.json") &&
+    generatedBody(orderGenerated, "R1-accepted-cond1.json").indexOf('"order_submitted": false') >= 0 &&
+    generatedBody(orderGenerated, "R1-accepted-cond2.json").indexOf('"inventory_available": false') >= 0,
+);
+check("order manifest ok", formatGeneratedJson("examples/order.ears.md", "out", orderGenerated).indexOf('"ok": true') >= 0);
+
+const orGenerated = roundGenerated("or files", mustSpec(readFileSync("examples/order-or.ears.md", "utf8")));
+check("or file count", orGenerated.files.length === 5 && orGenerated.uncovered.length === 0);
+check(
+  "or rejected bodies differ",
+  generatedBody(orGenerated, "R1-rejected-cond1.json") !== generatedBody(orGenerated, "R1-rejected-cond2.json") &&
+    generatedBody(orGenerated, "R1-rejected-cond1.json").indexOf('"rush_order": true') >= 0 &&
+    generatedBody(orGenerated, "R1-rejected-cond1.json").indexOf('"fragile_item": false') >= 0 &&
+    generatedBody(orGenerated, "R1-rejected-cond2.json").indexOf('"rush_order": false') >= 0 &&
+    generatedBody(orGenerated, "R1-rejected-cond2.json").indexOf('"fragile_item": true') >= 0,
+);
+
+const coveredGenerated = roundGenerated("covered files", mustSpec(readFileSync("examples/order-covered.ears.md", "utf8")));
+check("covered file count", coveredGenerated.files.length === 13 && coveredGenerated.uncovered.length === 0);
+
+const vacuousGenerated = roundGenerated("vacuous files", mustSpec(readFileSync("examples/order-vacuous.ears.md", "utf8")));
+check(
+  "vacuous only ubiquitous",
+  vacuousGenerated.files.length === 2 &&
+    vacuousGenerated.files[0].file === "R3-accepted.json" &&
+    vacuousGenerated.files[1].file === "R3-rejected.json" &&
+    uncoveredText(vacuousGenerated, "R1", 0) === "The trigger is impossible for every allowed value." &&
+    uncoveredText(vacuousGenerated, "R2", 0) === "The trigger is impossible for every allowed value.",
+);
+
+const combinedGenerated = roundGenerated("combined files", mustSpec(readFileSync("examples/order-combined.ears.md", "utf8")));
+check(
+  "combined region flip",
+  generatedBody(combinedGenerated, "R1.2-accepted-cond4.json").indexOf('"region": "eu"') >= 0 &&
+    generatedText(combinedGenerated, "R1.2-accepted-cond4.json").indexOf("set to eu") >= 0 &&
+    generatedText(combinedGenerated, "R1.2-accepted-cond4.json").indexOf("set to us") < 0,
+);
+check(
+  "combined quantity cannot flip",
+  combinedGenerated.uncovered.length === 1 &&
+    uncoveredText(combinedGenerated, "R1.2", 3) ===
+      'condition 3 ("the quantity is at least 1") cannot be false while the other conditions let it decide the trigger, so it cannot flip the outcome.',
+);
+
+const conflictGenerated = roundGenerated("conflict files", mustSpec(readFileSync("examples/order-conflict.ears.md", "utf8")));
+check("conflict has no R2 accepted file", generatedBody(conflictGenerated, "R2-accepted.json").length === 0);
+check(
+  "conflict uncovered",
+  uncoveredText(conflictGenerated, "R2", 0) === "Keeping the other requirements leaves no scenario where this trigger is true." &&
+    uncoveredText(conflictGenerated, "R3", 0) === "Keeping the other requirements leaves no scenario where this trigger is true." &&
+    uncoveredText(conflictGenerated, "R1", 1).indexOf("No scenario keeps every requirement while condition 1") === 0,
+);
 
 const soundnessSpecs = runSoundness();
 check("soundness specs", soundnessSpecs === 1010);
